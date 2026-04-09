@@ -399,7 +399,7 @@ function renderProjectMenu(container) {
     <section class="pm-section">
       <div class="pm-welcome">
         <img src="${logoSrc}" alt="The Masterbook" class="pm-welcome-logo" />
-        <p class="pm-welcome-text">Welcome to The Masterbook!</p>
+        <p class="pm-welcome-text">Welcome to Masterbook!</p>
       </div>
       <div class="pm-header">
         <h2 class="pm-title">Project Menu</h2>
