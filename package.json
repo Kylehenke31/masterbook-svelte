@@ -4,6 +4,8 @@
   "description": "The Masterbook — Production Management Desktop App",
   "main": "electron/main.js",
   "scripts": {
+    "dev": "vite",
+    "build:svelte": "vite build",
     "start": "electron .",
     "build": "electron-builder --mac",
     "build:dmg": "electron-builder --mac dmg",
@@ -13,8 +15,11 @@
   "license": "UNLICENSED",
   "private": true,
   "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^7.0.0",
     "electron": "^35.0.0",
-    "electron-builder": "^26.0.0"
+    "electron-builder": "^26.0.0",
+    "svelte": "^5.55.2",
+    "vite": "^8.0.7"
   },
   "build": {
     "appId": "com.masterbook.app",
@@ -42,9 +47,20 @@
     "dmg": {
       "title": "The Masterbook",
       "contents": [
-        { "x": 130, "y": 220 },
-        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
       ]
     }
+  },
+  "dependencies": {
+    "pdf-lib": "^1.17.1"
   }
 }
