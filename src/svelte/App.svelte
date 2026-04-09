@@ -10,6 +10,8 @@
   import Vendors from './routes/Vendors.svelte';
   import ProjectSetup from './routes/ProjectSetup.svelte';
   import Personnel from './routes/Personnel.svelte';
+  import ScriptOrder from './routes/ScriptOrder.svelte';
+  import ShootingSchedule from './routes/ShootingSchedule.svelte';
 
   let route;
   currentRoute.subscribe(r => route = r);
@@ -38,6 +40,10 @@
       <Home />
     {:else if route === 'crew'}
       <Personnel />
+    {:else if route === 'script-order'}
+      <ScriptOrder />
+    {:else if route === 'shooting-schedule'}
+      <ShootingSchedule />
     {:else if route === 'elements-report'}
       <ElementsReport />
     {:else if route === 'insurance'}
