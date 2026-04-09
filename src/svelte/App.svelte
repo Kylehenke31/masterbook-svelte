@@ -1,42 +1,224 @@
 <script>
   import { onMount } from 'svelte';
   import { currentRoute } from './stores/router.js';
+  import {
+    projectStore, refreshProjectStore,
+    getProject, migrateToMultiProject,
+    getRegistry, getActiveProjectId,
+    switchProject, projectFolderName,
+    snapshotProject, restoreProject, setActiveProjectId,
+    PROJECT_DATA_KEYS,
+  } from './stores/project.js';
+  import { hydrate } from '../../src/data.js';
 
-  // Placeholder route components — will be replaced as we migrate each feature
-  import Home from './routes/Home.svelte';
+  import Home           from './routes/Home.svelte';
   import ElementsReport from './routes/ElementsReport.svelte';
-  import Insurance from './routes/Insurance.svelte';
-  import Files from './routes/Files.svelte';
-  import Vendors from './routes/Vendors.svelte';
-  import ProjectSetup from './routes/ProjectSetup.svelte';
-  import Personnel from './routes/Personnel.svelte';
-  import ScriptOrder from './routes/ScriptOrder.svelte';
+  import Insurance      from './routes/Insurance.svelte';
+  import Files          from './routes/Files.svelte';
+  import Vendors        from './routes/Vendors.svelte';
+  import ProjectSetup   from './routes/ProjectSetup.svelte';
+  import ProjectSettings from './routes/ProjectSettings.svelte';
+  import Personnel      from './routes/Personnel.svelte';
+  import ScriptOrder    from './routes/ScriptOrder.svelte';
   import ShootingSchedule from './routes/ShootingSchedule.svelte';
+  import Calendar       from './routes/Calendar.svelte';
+  import Schedules      from './routes/Schedules.svelte';
+  import DooDs          from './routes/DooDs.svelte';
+  import OneLiner       from './routes/OneLiner.svelte';
+  import Breakdowns     from './routes/Breakdowns.svelte';
+  import PurchaseLog    from './routes/PurchaseLog.svelte';
+  import SubmissionForm from './routes/SubmissionForm.svelte';
+  import CallSheet      from './routes/CallSheet.svelte';
+  import Budget         from './routes/Budget.svelte';
 
+  /* ── Routing ── */
   let route;
-  currentRoute.subscribe(r => route = r);
+  currentRoute.subscribe(r => {
+    route = r;
+    showDropdown = false; // close dropdown on every navigation
+    refreshProjectStore();
+  });
+
+  /* ── Project state (reactive via store) ── */
+  let _project = null;
+  projectStore.subscribe(p => { _project = p; });
+
+  /* ── Profile dropdown ── */
+  let showDropdown = false;
+  let dropdownRegistry = [];
+  let dropdownActiveId = null;
+
+  function openDropdown() {
+    dropdownRegistry = getRegistry().filter(r => !r._archived);
+    dropdownActiveId = getActiveProjectId();
+    showDropdown = true;
+  }
+
+  function closeDropdown() { showDropdown = false; }
+
+  function handleSwitchProject(targetId) {
+    closeDropdown();
+    if (targetId !== getActiveProjectId()) {
+      switchProject(targetId);
+      hydrate();
+    }
+    window.location.hash = '#log';
+  }
+
+  function handleNewProject() {
+    closeDropdown();
+    sessionStorage.setItem('pm-intent', 'create');
+    window.location.hash = '#home';
+  }
+
+  /* ── Derived header values ── */
+  function _hasProject() {
+    return !!_project?.title && !_project?._archived;
+  }
+  function _headerTitle() {
+    return _hasProject() ? projectFolderName(_project) : 'Set Up Project';
+  }
+  function _headerTarget() {
+    return _hasProject() ? '#settings' : '#setup';
+  }
+  function _initials() {
+    const name  = _project?.defaultSubmitter || '';
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    if (parts[0]) return parts[0].slice(0, 2).toUpperCase();
+    return '?';
+  }
+
+  /**
+   * Routes that require an active non-archived project.
+   * Navigating to these without a project → redirect to #home.
+   */
+  const REQUIRES_PROJECT = new Set([
+    'log', 'submit', 'crew', 'calendar', 'schedules', 'breakdowns',
+    'one-liner', 'script-order', 'shooting-schedule', 'elements-report',
+    'day-out-of-days', 'budget', 'budget-lines', 'hot-costs', 'call-sheet',
+    'insurance', 'vendors', 'files', 'settings',
+  ]);
+
+  function resolveRoute() {
+    const hash = window.location.hash.slice(1);
+    const p    = getProject();
+    const hasProject = !!p?.title && !p._archived;
+
+    // Archived project: only allow home and setup
+    if (p?._archived && hash !== 'home' && hash !== 'setup') {
+      window.location.hash = '#home';
+      return; // hashchange will fire again → resolveRoute will re-run
+    }
+
+    // No project: block protected routes
+    if (!hasProject && REQUIRES_PROJECT.has(hash)) {
+      window.location.hash = '#home';
+      return;
+    }
+
+    // Smart default: empty hash → log (project exists) or home (no project)
+    if (!hash) {
+      currentRoute.set(hasProject ? 'log' : 'home');
+      return;
+    }
+
+    currentRoute.set(hash);
+  }
 
   onMount(() => {
-    const update = () => currentRoute.set(window.location.hash.slice(1) || 'home');
-    window.addEventListener('hashchange', update);
-    update();
-    return () => window.removeEventListener('hashchange', update);
+    // Restore persisted theme before first paint
+    const saved = localStorage.getItem('movie-ledger-theme');
+    if (saved === 'light' || saved === 'dark') {
+      document.documentElement.dataset.theme = saved;
+    }
+
+    // One-time migration: wrap legacy single project into multi-project registry
+    migrateToMultiProject();
+    refreshProjectStore();
+
+    window.addEventListener('hashchange', resolveRoute);
+    resolveRoute();
+    return () => window.removeEventListener('hashchange', resolveRoute);
   });
 </script>
+
+<!-- Close profile dropdown on outside click -->
+<svelte:window onclick={(e) => {
+  if (showDropdown && !e.target.closest('.profile-wrap')) closeDropdown();
+}} />
 
 <div class="app-shell">
   <header class="app-header">
     <nav class="app-nav">
-      <a href="#log"      class:active={route === 'log'}>Purchase Log</a>
-      <a href="#calendar" class:active={route === 'calendar'}>Calendar</a>
-      <a href="#crew"     class:active={route === 'crew'}>Personnel</a>
-      <a href="#vendors"  class:active={route === 'vendors'}>Vendors</a>
+      <a href="#log"       class:active={route === 'log'}>Purchase Log</a>
+      <a href="#submit"    class:active={route === 'submit'}>+ New</a>
+      <a href="#calendar"  class:active={route === 'calendar'}>Calendar</a>
+      <a href="#schedules" class:active={route === 'schedules'}>Schedules</a>
+      <a href="#crew"      class:active={route === 'crew'}>Personnel</a>
+      <a href="#vendors"   class:active={route === 'vendors'}>Vendors</a>
+      <a href="#budget"    class:active={route === 'budget' || route === 'budget-lines' || route === 'hot-costs'}>Budget</a>
     </nav>
-    <span class="header-project-title">The Masterbook</span>
+
+    <!-- Project title → settings or initial setup -->
+    <button
+      class="header-project-title"
+      class:has-project={_hasProject()}
+      title={_headerTitle()}
+      onclick={() => { window.location.hash = _headerTarget(); }}
+    >{_headerTitle()}</button>
+
+    <!-- Profile button + dropdown -->
+    <div class="profile-wrap">
+      <button
+        class="btn btn--icon btn--profile"
+        aria-label="User profile"
+        title="User profile"
+        onclick={showDropdown ? closeDropdown : openDropdown}
+      >{_initials()}</button>
+
+      {#if showDropdown}
+        <div class="profile-dropdown" role="menu">
+          <div class="pd-user">{_project?.defaultSubmitter || 'User'}</div>
+          <div class="pd-divider"></div>
+          <div class="pd-label">Projects</div>
+          <div class="pd-projects">
+            {#each dropdownRegistry as r (r.id)}
+              <button
+                class="pd-project-btn"
+                class:pd-project-btn--active={r.id === dropdownActiveId}
+                role="menuitem"
+                onclick={() => handleSwitchProject(r.id)}
+              >
+                <span class="pd-project-name">{r.productionNumber ? `${r.productionNumber}_${r.title}` : r.title}</span>
+                <span class="pd-project-meta">{r.budgetTemplate === 'feature' ? 'Feature/TV' : 'Commercial'}</span>
+                {#if r.id === dropdownActiveId}<span class="pd-active-dot"></span>{/if}
+              </button>
+            {:else}
+              <div class="pd-empty">No projects</div>
+            {/each}
+          </div>
+          <div class="pd-divider"></div>
+          <button class="pd-action-btn" role="menuitem" onclick={handleNewProject}>+ New Project</button>
+          {#if _hasProject()}
+            <button class="pd-action-btn" role="menuitem"
+              onclick={() => { closeDropdown(); window.location.hash = '#settings'; }}>
+              Project Settings
+            </button>
+          {/if}
+        </div>
+      {/if}
+    </div>
   </header>
 
-  <main class="app-main" class:app-main--full={route === 'crew'}>
-    {#if route === 'home' || !route}
+  <main class="app-main" class:app-main--full={route === 'crew' || route === 'budget-lines'}>
+    {#if route === 'log'}
+      <PurchaseLog />
+    {:else if route === 'submit'}
+      <SubmissionForm onDone={() => { window.location.hash = '#log'; }} />
+    {:else if route === 'call-sheet'}
+      <CallSheet />
+    {:else if route === 'home' || !route}
       <Home />
     {:else if route === 'crew'}
       <Personnel />
@@ -44,6 +226,16 @@
       <ScriptOrder />
     {:else if route === 'shooting-schedule'}
       <ShootingSchedule />
+    {:else if route === 'calendar'}
+      <Calendar />
+    {:else if route === 'schedules'}
+      <Schedules />
+    {:else if route === 'day-out-of-days'}
+      <DooDs />
+    {:else if route === 'one-liner'}
+      <OneLiner />
+    {:else if route === 'breakdowns'}
+      <Breakdowns />
     {:else if route === 'elements-report'}
       <ElementsReport />
     {:else if route === 'insurance'}
@@ -52,8 +244,16 @@
       <Files />
     {:else if route === 'vendors'}
       <Vendors />
-    {:else if route === 'setup' || route === 'settings'}
+    {:else if route === 'budget'}
+      <Budget view="overview" />
+    {:else if route === 'budget-lines'}
+      <Budget view="lines" />
+    {:else if route === 'hot-costs'}
+      <Budget view="hot-costs" />
+    {:else if route === 'setup'}
       <ProjectSetup />
+    {:else if route === 'settings'}
+      <ProjectSettings />
     {:else}
       <div class="coming-soon">
         <h2>#{route}</h2>
@@ -77,7 +277,7 @@
   .app-header {
     display: flex;
     align-items: center;
-    gap: 24px;
+    gap: 16px;
     padding: 0 24px;
     height: 52px;
     background: var(--surface-1, #1a1a1a);
@@ -107,12 +307,174 @@
     background: var(--surface-2, #2a2a2a);
   }
 
+  /* Project title button */
   .header-project-title {
     margin-left: auto;
     font-size: 0.875rem;
     color: var(--text-muted, #888);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 240px;
+    transition: color 0.15s, background 0.15s;
   }
 
+  .header-project-title:hover {
+    background: var(--surface-2, #2a2a2a);
+  }
+
+  .header-project-title.has-project {
+    color: var(--text, #eee);
+  }
+
+  /* Profile wrap + button */
+  .profile-wrap {
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  .btn--profile {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--surface-2, #2a2a2a);
+    border: 1px solid var(--border, #333);
+    color: var(--text, #eee);
+    font-size: 0.75rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, border-color 0.15s;
+  }
+
+  .btn--profile:hover {
+    background: var(--surface-3, #3a3a3a);
+    border-color: var(--accent, #c9a84c);
+  }
+
+  /* Profile dropdown */
+  .profile-dropdown {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    min-width: 220px;
+    background: var(--surface-1, #1a1a1a);
+    border: 1px solid var(--border, #333);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    z-index: 200;
+    overflow: hidden;
+  }
+
+  .pd-user {
+    padding: 10px 14px 6px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text, #eee);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .pd-divider {
+    height: 1px;
+    background: var(--border, #333);
+    margin: 4px 0;
+  }
+
+  .pd-label {
+    padding: 4px 14px 2px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted, #888);
+  }
+
+  .pd-projects {
+    max-height: 200px;
+    overflow-y: auto;
+    padding: 2px 0;
+  }
+
+  .pd-project-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    padding: 7px 14px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    color: var(--text-muted, #888);
+    font-size: 0.8rem;
+    transition: background 0.1s, color 0.1s;
+    position: relative;
+  }
+
+  .pd-project-btn:hover {
+    background: var(--surface-2, #2a2a2a);
+    color: var(--text, #eee);
+  }
+
+  .pd-project-btn--active {
+    color: var(--text, #eee);
+  }
+
+  .pd-project-name {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .pd-project-meta {
+    font-size: 0.7rem;
+    color: var(--text-muted, #888);
+    flex-shrink: 0;
+  }
+
+  .pd-active-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent, #c9a84c);
+    flex-shrink: 0;
+  }
+
+  .pd-empty {
+    padding: 8px 14px;
+    font-size: 0.8rem;
+    color: var(--text-muted, #888);
+  }
+
+  .pd-action-btn {
+    display: block;
+    width: 100%;
+    padding: 8px 14px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    color: var(--text-muted, #888);
+    font-size: 0.8rem;
+    transition: background 0.1s, color 0.1s;
+  }
+
+  .pd-action-btn:hover {
+    background: var(--surface-2, #2a2a2a);
+    color: var(--text, #eee);
+  }
+
+  /* Main content */
   .app-main {
     flex: 1;
     padding: 24px;
