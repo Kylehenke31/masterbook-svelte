@@ -1,0 +1,50 @@
+{
+  "name": "the-masterbook",
+  "version": "0.1.0-alpha",
+  "description": "The Masterbook — Production Management Desktop App",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --mac",
+    "build:dmg": "electron-builder --mac dmg",
+    "build:zip": "electron-builder --mac zip"
+  },
+  "author": "Kyle Henke",
+  "license": "UNLICENSED",
+  "private": true,
+  "devDependencies": {
+    "electron": "^35.0.0",
+    "electron-builder": "^26.0.0"
+  },
+  "build": {
+    "appId": "com.masterbook.app",
+    "productName": "The Masterbook",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "electron/**/*",
+      "src/**/*",
+      "assets/**/*",
+      "vendor/**/*",
+      "index.html"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "icon": "assets/icon.icns",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
+    },
+    "dmg": {
+      "title": "The Masterbook",
+      "contents": [
+        { "x": 130, "y": 220 },
+        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+      ]
+    }
+  }
+}
