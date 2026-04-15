@@ -176,28 +176,22 @@
   </div>
   <div class="macro-sidebar-items">
 
+    <button class="macro-btn" class:macro-active={routeGroup(route) === 'budget'}
+      onclick={() => { window.location.hash = '#budget'; }} title="Budget">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="20" height="20">
+        <rect x="2" y="3" width="20" height="4" rx="1"/>
+        <rect x="2" y="9" width="20" height="4" rx="1"/>
+        <rect x="2" y="15" width="20" height="4" rx="1"/>
+      </svg>
+      <span class="macro-label">Budget</span>
+    </button>
+
     <button class="macro-btn" class:macro-active={routeGroup(route) === 'schedules'}
       onclick={() => { window.location.hash = '#schedules'; }} title="Schedules">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="20" height="20">
         <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>
       </svg>
-      <span class="macro-label">Sched</span>
-    </button>
-
-    <button class="macro-btn" class:macro-active={routeGroup(route) === 'budget'}
-      onclick={() => { window.location.hash = '#budget'; }} title="Budget">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="20" height="20">
-        <path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>
-      </svg>
-      <span class="macro-label">Budget</span>
-    </button>
-
-    <button class="macro-btn" class:macro-active={routeGroup(route) === 'creative'}
-      onclick={() => { window.location.hash = '#creative'; }} title="Creative">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="20" height="20">
-        <circle cx="12" cy="12" r="3"/><path d="M12 1v3M12 20v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M1 12h3M20 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/>
-      </svg>
-      <span class="macro-label">Creative</span>
+      <span class="macro-label">Schedules</span>
     </button>
 
     <button class="macro-btn" class:macro-active={routeGroup(route) === 'callsheet'}
@@ -206,15 +200,7 @@
         <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/>
         <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
       </svg>
-      <span class="macro-label">Call Sht</span>
-    </button>
-
-    <button class="macro-btn" class:macro-active={routeGroup(route) === 'vendors'}
-      onclick={() => { window.location.hash = '#vendors'; }} title="Vendors">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="20" height="20">
-        <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
-      </svg>
-      <span class="macro-label">Vendors</span>
+      <span class="macro-label">Call Sheet</span>
     </button>
 
     <button class="macro-btn" class:macro-active={routeGroup(route) === 'insurance'}
@@ -222,7 +208,15 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="20" height="20">
         <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
       </svg>
-      <span class="macro-label">Ins.</span>
+      <span class="macro-label">Insurance</span>
+    </button>
+
+    <button class="macro-btn" class:macro-active={routeGroup(route) === 'creative'}
+      onclick={() => { window.location.hash = '#creative'; }} title="Creative">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="20" height="20">
+        <path d="M9 18h6M10 22h4M12 2a7 7 0 017 7c0 2.5-1.3 4.7-3.3 6L15 17H9l-.7-2C6.3 13.7 5 11.5 5 9a7 7 0 017-7z"/>
+      </svg>
+      <span class="macro-label">Creative</span>
     </button>
 
     <button class="macro-btn" class:macro-active={routeGroup(route) === 'files'}
@@ -239,13 +233,10 @@
 <div class="app-shell">
   <header class="app-header">
     <nav class="app-nav">
-      <a href="#log"       class:active={route === 'log'}>Purchase Log</a>
-      <a href="#submit"    class:active={route === 'submit'}>+ New</a>
-      <a href="#calendar"  class:active={route === 'calendar'}>Calendar</a>
-      <a href="#schedules" class:active={route === 'schedules'}>Schedules</a>
-      <a href="#crew"      class:active={route === 'crew'}>Personnel</a>
-      <a href="#vendors"   class:active={route === 'vendors'}>Vendors</a>
-      <a href="#budget"    class:active={route === 'budget' || route === 'budget-lines' || route === 'hot-costs'}>Budget</a>
+      <a href="#log"      class:active={route === 'log'}>Purchase Log</a>
+      <a href="#calendar" class:active={route === 'calendar'}>Calendar</a>
+      <a href="#crew"     class:active={route === 'crew'}>Personnel</a>
+      <a href="#vendors"  class:active={route === 'vendors'}>Vendors</a>
     </nav>
 
     <!-- Project title → settings or initial setup -->

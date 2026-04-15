@@ -3262,7 +3262,7 @@ textarea {
   left: 0;
   top: 0;
   bottom: 0;
-  width: 56px;
+  width: 64px;
   background: var(--bg-surface);
   border-right: 1px solid var(--border);
   display: flex;
@@ -3294,7 +3294,7 @@ textarea {
   align-items: center;
   gap: 3px;
   padding: 8px 4px;
-  width: 48px;
+  width: 56px;
   border: none;
   background: transparent;
   color: var(--text-secondary);
@@ -3319,16 +3319,17 @@ textarea {
   object-fit: contain;
 }
 .macro-label {
-  font-size: 8px;
+  font-size: 7.5px;
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   line-height: 1;
+  white-space: nowrap;
 }
 
 /* Push #app content right of sidebar */
 #app {
-  margin-left: 56px;
+  margin-left: 64px;
 }
 
 /* ============================================================
