@@ -164,7 +164,7 @@
   /* ── Action handler ── */
   function handleAction(action, id, fromQueue=false) {
     if(action==='delete'){if(confirm('Delete this record permanently?')){deletePurchase(id);refreshView();if(fromQueue)renderQueueRows();}}
-    else if(action==='void'){const p=getPurchaseById(id),msg=p&&p.status==='Approved'?`VOID submission "${p.folder} — ${p.vendor}"?\n\nThis will remove all data from the budget and logs.`:p?`VOID submission "${p.folder??''} — ${p.vendor??''}"?`:'VOID?';if(confirm(msg)){voidPurchase(id);refreshView();if(fromQueue)renderQueueRows();window.dispatchEvent(new Event('ledger-data-changed'));}}
+    else if(action==='void'){const p=getPurchaseById(id),msg=p&&p.status==='Approved'?`VOID submission "${p.folder} — ${p.vendor}"?\n\nThis will remove all data from the budget and logs. The folder will be renamed with VOID. This action CANNOT be undone.`:p?`VOID submission "${p.folder??''} — ${p.vendor??''}"?\n\nThe folder will be renamed with VOID. This action CANNOT be undone.`:'VOID?';if(confirm(msg)){voidPurchase(id);refreshView();if(fromQueue)renderQueueRows();window.dispatchEvent(new Event('ledger-data-changed'));}}
     else if(action==='approve'){if(confirm('Approve this record?')){approvePurchase(id);refreshView();if(fromQueue)renderQueueRows();}}
     else if(action==='return'){if(confirm('Send this record back for correction?')){sendBackPurchase(id);refreshView();if(fromQueue)renderQueueRows();}}
     else if(action==='toggle-paid'){togglePaid(id);refreshView();if(fromQueue)renderQueueRows();}
