@@ -35,6 +35,11 @@
   import CreativeLocations from './routes/CreativeLocations.svelte';
   import CreativeStub     from './routes/CreativeStub.svelte';
 
+  /* ── Profile dropdown ── */
+  let showDropdown = false;
+  let dropdownRegistry = [];
+  let dropdownActiveId = null;
+
   /* ── Routing ── */
   let route;
   currentRoute.subscribe(r => {
@@ -46,11 +51,6 @@
   /* ── Project state (reactive via store) ── */
   let _project = null;
   projectStore.subscribe(p => { _project = p; });
-
-  /* ── Profile dropdown ── */
-  let showDropdown = false;
-  let dropdownRegistry = [];
-  let dropdownActiveId = null;
 
   function openDropdown() {
     dropdownRegistry = getRegistry().filter(r => !r._archived);
