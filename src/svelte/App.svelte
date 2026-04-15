@@ -30,6 +30,10 @@
   import SubmissionForm from './routes/SubmissionForm.svelte';
   import CallSheet      from './routes/CallSheet.svelte';
   import Budget         from './routes/Budget.svelte';
+  import Creative         from './routes/Creative.svelte';
+  import CreativeCamera   from './routes/CreativeCamera.svelte';
+  import CreativeLocations from './routes/CreativeLocations.svelte';
+  import CreativeStub     from './routes/CreativeStub.svelte';
 
   /* ── Routing ── */
   let route;
@@ -98,7 +102,24 @@
     'one-liner', 'script-order', 'shooting-schedule', 'elements-report',
     'day-out-of-days', 'budget', 'budget-lines', 'hot-costs', 'call-sheet',
     'insurance', 'vendors', 'files', 'settings',
+    'creative', 'creative-camera', 'creative-locations',
+    'creative-prod-design', 'creative-costume', 'creative-property',
+    'creative-hair-makeup', 'creative-stunts', 'creative-continuity',
   ]);
+
+  /** Which top-level "group" (macro sidebar section) is the current route in? */
+  function routeGroup(r) {
+    if (!r) return '';
+    if (['schedules','breakdowns','one-liner','script-order','shooting-schedule',
+         'elements-report','day-out-of-days'].includes(r)) return 'schedules';
+    if (['budget','budget-lines','hot-costs'].includes(r)) return 'budget';
+    if (r.startsWith('creative')) return 'creative';
+    if (r === 'call-sheet') return 'callsheet';
+    if (r === 'vendors') return 'vendors';
+    if (r === 'insurance') return 'insurance';
+    if (r === 'files') return 'files';
+    return r;
+  }
 
   function resolveRoute() {
     const hash = window.location.hash.slice(1);
@@ -147,6 +168,73 @@
 <svelte:window onclick={(e) => {
   if (showDropdown && !e.target.closest('.profile-wrap')) closeDropdown();
 }} />
+
+<!-- Macro sidebar (far-left icon rail) -->
+<aside class="macro-sidebar">
+  <div class="macro-sidebar-top">
+    <span style="font-size:1.1rem;font-weight:800;color:var(--gold,#c9a84c);letter-spacing:-0.03em;">M</span>
+  </div>
+  <div class="macro-sidebar-items">
+
+    <button class="macro-btn" class:macro-active={routeGroup(route) === 'schedules'}
+      onclick={() => { window.location.hash = '#schedules'; }} title="Schedules">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="20" height="20">
+        <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>
+      </svg>
+      <span class="macro-label">Sched</span>
+    </button>
+
+    <button class="macro-btn" class:macro-active={routeGroup(route) === 'budget'}
+      onclick={() => { window.location.hash = '#budget'; }} title="Budget">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="20" height="20">
+        <path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>
+      </svg>
+      <span class="macro-label">Budget</span>
+    </button>
+
+    <button class="macro-btn" class:macro-active={routeGroup(route) === 'creative'}
+      onclick={() => { window.location.hash = '#creative'; }} title="Creative">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="20" height="20">
+        <circle cx="12" cy="12" r="3"/><path d="M12 1v3M12 20v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M1 12h3M20 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/>
+      </svg>
+      <span class="macro-label">Creative</span>
+    </button>
+
+    <button class="macro-btn" class:macro-active={routeGroup(route) === 'callsheet'}
+      onclick={() => { window.location.hash = '#call-sheet'; }} title="Call Sheet">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="20" height="20">
+        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/>
+        <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+      </svg>
+      <span class="macro-label">Call Sht</span>
+    </button>
+
+    <button class="macro-btn" class:macro-active={routeGroup(route) === 'vendors'}
+      onclick={() => { window.location.hash = '#vendors'; }} title="Vendors">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="20" height="20">
+        <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
+      </svg>
+      <span class="macro-label">Vendors</span>
+    </button>
+
+    <button class="macro-btn" class:macro-active={routeGroup(route) === 'insurance'}
+      onclick={() => { window.location.hash = '#insurance'; }} title="Insurance">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="20" height="20">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+      </svg>
+      <span class="macro-label">Ins.</span>
+    </button>
+
+    <button class="macro-btn" class:macro-active={routeGroup(route) === 'files'}
+      onclick={() => { window.location.hash = '#files'; }} title="Files">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="20" height="20">
+        <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
+      </svg>
+      <span class="macro-label">Files</span>
+    </button>
+
+  </div>
+</aside>
 
 <div class="app-shell">
   <header class="app-header">
@@ -250,6 +338,24 @@
       <Budget view="lines" />
     {:else if route === 'hot-costs'}
       <Budget view="hot-costs" />
+    {:else if route === 'creative'}
+      <Creative />
+    {:else if route === 'creative-camera'}
+      <CreativeCamera />
+    {:else if route === 'creative-locations'}
+      <CreativeLocations />
+    {:else if route === 'creative-prod-design'}
+      <CreativeStub deptId="prod-design" />
+    {:else if route === 'creative-costume'}
+      <CreativeStub deptId="costume" />
+    {:else if route === 'creative-property'}
+      <CreativeStub deptId="property" />
+    {:else if route === 'creative-hair-makeup'}
+      <CreativeStub deptId="hair-makeup" />
+    {:else if route === 'creative-stunts'}
+      <CreativeStub deptId="stunts" />
+    {:else if route === 'creative-continuity'}
+      <CreativeStub deptId="continuity" />
     {:else if route === 'setup'}
       <ProjectSetup />
     {:else if route === 'settings'}
