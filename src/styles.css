@@ -5622,12 +5622,8 @@ tr:hover .cse-row-del { opacity: 0.6; }
 /* Start / Wrap accent */
 .cal-cell--start { border-left: 3px solid #5a7a3a; }
 .cal-cell--wrap  { border-left: 3px solid #4a6d8c; }
-/* Today ring */
-.cal-cell--today .cal-day-num {
-  background: #7a3828; color: #f5e8e4; border-radius: 50%;
-  width: 22px; height: 22px; display: inline-flex;
-  align-items: center; justify-content: center; font-weight: 700;
-}
+/* Today */
+.cal-cell--today .cal-day-num { color: #7a3828; font-weight: 700; }
 
 .cal-day-header { display: flex; align-items: center; gap: 4px; margin-bottom: 2px; }
 .cal-day-num { font-size: 11px; font-weight: 600; }
