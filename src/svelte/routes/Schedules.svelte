@@ -397,7 +397,7 @@
     padding: 14px 14px 12px;
     border: 1px solid var(--border, #333);
     border-radius: 8px;
-    background: var(--surface-2, #1e1e1e);
+    background: var(--bg-elevated, #1e1e1e);
     opacity: 0.55;
     position: relative;
   }
@@ -413,7 +413,7 @@
   .sched-card-desc  { font-size: 0.75rem; color: var(--text-muted, #888); }
   .sched-card-badge {
     font-size: 0.65rem; padding: 2px 6px; border-radius: 4px;
-    background: var(--surface-1, #1a1a1a); color: var(--text-muted, #888);
+    background: var(--bg-surface, #1a1a1a); color: var(--text-muted, #888);
     align-self: flex-start;
   }
   .sched-card-badge--ready { background: var(--gold, #c9a84c); color: #000; }
@@ -424,7 +424,7 @@
   .prep-right   { flex: 1; min-height: 400px; }
 
   .prep-info-card {
-    background: var(--surface-2, #1e1e1e);
+    background: var(--bg-elevated, #1e1e1e);
     border: 1px solid var(--border, #333);
     border-radius: 6px;
     padding: 12px 14px;

@@ -502,7 +502,7 @@
     font-size: 0.6rem;
     font-weight: 700;
     letter-spacing: 0.06em;
-    background: var(--surface-2, #2a2a2a);
+    background: var(--bg-elevated, #2a2a2a);
     color: var(--text-muted, #888);
     border: 1px solid var(--border, #333);
     border-radius: 3px;
@@ -545,11 +545,11 @@
     justify-content: center;
     cursor: pointer;
     overflow: hidden;
-    background: var(--surface-2, #2a2a2a);
+    background: var(--bg-elevated, #2a2a2a);
   }
 
   :global(.pi-logo-label:hover) {
-    border-color: var(--accent, #c9a84c);
+    border-color: var(--gold, #c9a84c);
   }
 
   :global(.pi-logo-img) {

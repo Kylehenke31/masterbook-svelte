@@ -312,7 +312,7 @@
   .setup-subtitle  { font-size: 0.85rem; color: var(--text-muted, #888); }
 
   .setup-card {
-    background: var(--surface-1, #161616);
+    background: var(--bg-surface, #161616);
     border: 1px solid var(--border, #2a2a2a);
     border-radius: 8px;
     padding: 20px;
@@ -357,10 +357,10 @@
   .field input,
   .field select,
   .field textarea {
-    background: var(--surface-2, #1e1e1e);
+    background: var(--bg-elevated, #1e1e1e);
     border: 1px solid var(--border, #333);
     border-radius: 5px;
-    color: var(--text, #eee);
+    color: var(--text-primary, #eee);
     font-size: 0.875rem;
     padding: 7px 10px;
     font-family: inherit;
@@ -369,7 +369,7 @@
 
   .field input:focus,
   .field select:focus,
-  .field textarea:focus { outline: none; border-color: var(--accent, #6a8a6a); }
+  .field textarea:focus { outline: none; border-color: var(--gold, #6a8a6a); }
 
   .field input.invalid,
   .field select.invalid { border-color: var(--earth-red, #b84f4f); }
@@ -386,7 +386,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    background: var(--surface-2, #1e1e1e);
+    background: var(--bg-elevated, #1e1e1e);
     border: 1px solid var(--border, #2a2a2a);
     border-radius: 6px;
     padding: 10px 12px;
@@ -409,5 +409,5 @@
   }
 
   .setup-save-group { display: flex; align-items: center; gap: 12px; }
-  .setup-save-status { font-size: 0.85rem; color: var(--accent, #6a8a6a); }
+  .setup-save-status { font-size: 0.85rem; color: var(--gold, #6a8a6a); }
 </style>

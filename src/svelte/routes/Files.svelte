@@ -175,13 +175,13 @@
   .files-search {
     width: 100%;
     padding: 7px 32px 7px 34px;
-    background: var(--surface-2, #1e1e1e);
+    background: var(--bg-elevated, #1e1e1e);
     border: 1px solid var(--border, #333);
     border-radius: 6px;
-    color: var(--text, #eee);
+    color: var(--text-primary, #eee);
     font-size: 0.875rem;
   }
-  .files-search:focus { outline: none; border-color: var(--accent, #6a8a6a); }
+  .files-search:focus { outline: none; border-color: var(--gold, #6a8a6a); }
 
   .files-search-clear {
     position: absolute;

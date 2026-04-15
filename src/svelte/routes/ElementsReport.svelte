@@ -104,6 +104,7 @@
 
   // ── Print ──────────────────────────────────────────────────
   function openPrintView() {
+    const e = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     const projectName = getProjectName();
     const usage = getUsage();
     const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
@@ -111,16 +112,16 @@
     let bodyHTML = '';
     for (const dept of deptsWithElements) {
       const els = (byDept[dept] || []).slice().sort((a, b) => a.name.localeCompare(b.name));
-      bodyHTML += `<div class="dept-group"><h3 class="dept-title">${dept}</h3>`;
+      bodyHTML += `<div class="dept-group"><h3 class="dept-title">${e(dept)}</h3>`;
       bodyHTML += `<table class="el-table"><thead><tr><th>Element</th><th>Scenes</th></tr></thead><tbody>`;
       for (const el of els) {
         const s = (usage[el.id] || []).join(', ') || '—';
-        bodyHTML += `<tr><td class="el-name">${el.name}</td><td class="el-scenes">${s}</td></tr>`;
+        bodyHTML += `<tr><td class="el-name">${e(el.name)}</td><td class="el-scenes">${e(s)}</td></tr>`;
       }
       bodyHTML += '</tbody></table></div>';
     }
 
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Elements — ${projectName}</title>
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Elements — ${e(projectName)}</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:Arial,Helvetica,sans-serif;font-size:10px;color:#000;background:#fff}
@@ -136,8 +137,8 @@ body{font-family:Arial,Helvetica,sans-serif;font-size:10px;color:#000;background
 .el-scenes{font-size:9px;color:#555;padding:2px 4px;border-bottom:0.5px solid #ddd}
 </style></head><body>
 <div class="hdr">
-  <div class="hdr-title">${projectName} — ELEMENTS REPORT</div>
-  <div class="hdr-sub">${today}</div>
+  <div class="hdr-title">${e(projectName)} — ELEMENTS REPORT</div>
+  <div class="hdr-sub">${e(today)}</div>
 </div>
 ${bodyHTML}
 <script>window.onload=function(){window.print()}<\/script>
@@ -271,7 +272,7 @@ ${bodyHTML}
     background: transparent;
     border: 1px solid transparent;
     border-radius: 4px;
-    color: var(--text, #eee);
+    color: var(--text-primary, #eee);
     font-size: 0.875rem;
     padding: 3px 6px;
     width: 220px;
@@ -284,8 +285,8 @@ ${bodyHTML}
 
   .er-name:focus {
     outline: none;
-    border-color: var(--accent, #6a8a6a);
-    background: var(--surface-2, #1e1e1e);
+    border-color: var(--gold, #6a8a6a);
+    background: var(--bg-elevated, #1e1e1e);
   }
 
   .er-scenes {

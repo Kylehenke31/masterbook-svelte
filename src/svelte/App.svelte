@@ -377,7 +377,7 @@
     gap: 16px;
     padding: 0 24px;
     height: 52px;
-    background: var(--surface-1, #1a1a1a);
+    background: var(--bg-surface, #1a1a1a);
     border-bottom: 1px solid var(--border, #333);
     position: sticky;
     top: 0;
@@ -400,8 +400,8 @@
 
   .app-nav a:hover,
   .app-nav a.active {
-    color: var(--text, #eee);
-    background: var(--surface-2, #2a2a2a);
+    color: var(--text-primary, #eee);
+    background: var(--bg-elevated, #2a2a2a);
   }
 
   /* Project title button */
@@ -422,11 +422,11 @@
   }
 
   .header-project-title:hover {
-    background: var(--surface-2, #2a2a2a);
+    background: var(--bg-elevated, #2a2a2a);
   }
 
   .header-project-title.has-project {
-    color: var(--text, #eee);
+    color: var(--text-primary, #eee);
   }
 
   /* Profile wrap + button */
@@ -439,9 +439,9 @@
     width: 32px;
     height: 32px;
     border-radius: 50%;
-    background: var(--surface-2, #2a2a2a);
+    background: var(--bg-elevated, #2a2a2a);
     border: 1px solid var(--border, #333);
-    color: var(--text, #eee);
+    color: var(--text-primary, #eee);
     font-size: 0.75rem;
     font-weight: 700;
     cursor: pointer;
@@ -452,8 +452,8 @@
   }
 
   .btn--profile:hover {
-    background: var(--surface-3, #3a3a3a);
-    border-color: var(--accent, #c9a84c);
+    background: var(--bg-hover, #3a3a3a);
+    border-color: var(--gold, #c9a84c);
   }
 
   /* Profile dropdown */
@@ -462,7 +462,7 @@
     top: calc(100% + 8px);
     right: 0;
     min-width: 220px;
-    background: var(--surface-1, #1a1a1a);
+    background: var(--bg-surface, #1a1a1a);
     border: 1px solid var(--border, #333);
     border-radius: 8px;
     box-shadow: 0 8px 24px rgba(0,0,0,0.4);
@@ -474,7 +474,7 @@
     padding: 10px 14px 6px;
     font-size: 0.875rem;
     font-weight: 600;
-    color: var(--text, #eee);
+    color: var(--text-primary, #eee);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -518,12 +518,12 @@
   }
 
   .pd-project-btn:hover {
-    background: var(--surface-2, #2a2a2a);
-    color: var(--text, #eee);
+    background: var(--bg-elevated, #2a2a2a);
+    color: var(--text-primary, #eee);
   }
 
   .pd-project-btn--active {
-    color: var(--text, #eee);
+    color: var(--text-primary, #eee);
   }
 
   .pd-project-name {
@@ -543,7 +543,7 @@
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background: var(--accent, #c9a84c);
+    background: var(--gold, #c9a84c);
     flex-shrink: 0;
   }
 
@@ -567,8 +567,8 @@
   }
 
   .pd-action-btn:hover {
-    background: var(--surface-2, #2a2a2a);
-    color: var(--text, #eee);
+    background: var(--bg-elevated, #2a2a2a);
+    color: var(--text-primary, #eee);
   }
 
   /* Main content */
@@ -602,6 +602,6 @@
 
   .coming-soon h2 {
     font-size: 1.5rem;
-    color: var(--text, #eee);
+    color: var(--text-primary, #eee);
   }
 </style>

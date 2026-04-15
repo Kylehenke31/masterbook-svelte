@@ -311,10 +311,10 @@ ${pagesHTML}
   .ss-hint { font-size: 0.8rem; color: var(--text-muted, #888); }
 
   .ss-draft-select {
-    background: var(--surface-2, #1e1e1e);
+    background: var(--bg-elevated, #1e1e1e);
     border: 1px solid var(--border, #333);
     border-radius: 5px;
-    color: var(--text, #eee);
+    color: var(--text-primary, #eee);
     font-size: 0.875rem;
     padding: 5px 8px;
   }

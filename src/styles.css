@@ -5563,7 +5563,7 @@ tr:hover .cse-row-del { opacity: 0.6; }
 /* Certificate preview */
 .ins-cert-preview {
   min-height: 400px;
-  background: var(--bg-surface, #0e0e14);
+  background: var(--bg-surface);
   display: flex; align-items: center; justify-content: center;
 }
 .ins-cert-iframe {
@@ -5610,7 +5610,7 @@ tr:hover .cse-row-del { opacity: 0.6; }
 .cal-cell {
   vertical-align: top; height: 100px; min-width: 100px;
   border: 1px solid var(--border); padding: 4px 5px; position: relative;
-  background: var(--bg-surface, #0e0e14);
+  background: var(--bg-surface);
   transition: background 0.15s;
 }
 .cal-cell:hover { background: var(--bg-hover); }
@@ -5897,7 +5897,7 @@ tr:hover .cse-row-del { opacity: 0.6; }
 .sched-card-badge {
   font-size: 9px; text-transform: uppercase; letter-spacing: 0.05em;
   padding: 3px 8px; border-radius: 10px;
-  background: rgba(255,255,255,0.06); color: var(--text-muted);
+  background: var(--bg-elevated); color: var(--text-muted);
 }
 .sched-card-badge--ready {
   background: rgba(90, 122, 58, 0.22); color: #7da052;

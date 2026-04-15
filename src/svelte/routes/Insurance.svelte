@@ -245,7 +245,7 @@
   .ins-vendor-count {
     font-size: 0.75rem;
     color: var(--text-muted, #888);
-    background: var(--surface-2, #2a2a2a);
+    background: var(--bg-elevated, #2a2a2a);
     padding: 1px 6px;
     border-radius: 10px;
   }
@@ -266,8 +266,8 @@
     transition: background 0.12s;
   }
 
-  .ins-vendor-item:hover      { background: var(--surface-2, #2a2a2a); }
-  .ins-vendor--active         { background: var(--surface-2, #2a2a2a); outline: 1px solid var(--accent, #6a8a6a); }
+  .ins-vendor-item:hover      { background: var(--bg-elevated, #2a2a2a); }
+  .ins-vendor--active         { background: var(--bg-elevated, #2a2a2a); outline: 1px solid var(--gold, #6a8a6a); }
 
   .ins-vendor-name { font-size: 0.875rem; }
   .ins-vendor-type { font-size: 0.75rem; color: var(--text-muted, #888); }
@@ -294,7 +294,7 @@
     border: 1px solid var(--border, #333);
     border-radius: 6px;
     overflow: hidden;
-    background: var(--surface-2, #1a1a1a);
+    background: var(--bg-elevated, #1a1a1a);
     height: 520px;
   }
 

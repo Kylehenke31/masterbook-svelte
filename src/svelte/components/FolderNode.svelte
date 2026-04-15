@@ -97,7 +97,7 @@
     cursor: pointer;
     transition: background 0.1s;
   }
-  .files-row:hover    { background: var(--surface-2, #222); }
+  .files-row:hover    { background: var(--bg-elevated, #222); }
   .files-row--top     { font-weight: 600; }
 
   .files-chevron {
@@ -116,7 +116,7 @@
 
   .files-badge {
     font-size: 0.7rem;
-    background: var(--surface-2, #2a2a2a);
+    background: var(--bg-elevated, #2a2a2a);
     color: var(--text-muted, #888);
     padding: 1px 6px;
     border-radius: 10px;
@@ -134,7 +134,7 @@
   .files-file-name {
     flex: 1;
     font-size: 0.8rem;
-    color: var(--accent, #7a9a7a);
+    color: var(--gold, #7a9a7a);
     text-decoration: none;
     white-space: nowrap;
     overflow: hidden;
@@ -176,7 +176,7 @@
     transition: color 0.12s, border-color 0.12s;
   }
   .files-upload-btn:hover {
-    color: var(--text, #eee);
-    border-color: var(--accent, #6a8a6a);
+    color: var(--text-primary, #eee);
+    border-color: var(--gold, #6a8a6a);
   }
 </style>

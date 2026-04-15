@@ -133,6 +133,7 @@
               <th>Address</th>
               <th>Quotes</th>
               <th>Notes</th>
+              <th class="vnd-th-folder"></th>
               <th></th>
             </tr>
           </thead>
@@ -150,6 +151,9 @@
                 </td>
                 <td class="vnd-trunc" title={v.quotes}>{v.quotes || ''}</td>
                 <td class="vnd-trunc" title={v.notes}>{v.notes || ''}</td>
+                <td class="vnd-folder-cell" onclick={e => e.stopPropagation()}>
+                  <button class="btn btn--ghost btn--xs vnd-folder-btn" title="Open vendor subfolder" disabled>📁</button>
+                </td>
                 <td class="vnd-actions-cell" onclick={e => e.stopPropagation()}>
                   <button class="btn btn--ghost btn--xs" onclick={() => openForm(i)} title="Edit">✎</button>
                   <button class="btn btn--ghost btn--xs btn--danger-text" onclick={() => deleteVendor(i)} title="Delete">✕</button>
@@ -236,6 +240,12 @@
         </div>
       </div>
 
+      <div class="vnd-form-row vnd-form-row--folder">
+        <label class="vnd-field-label">Vendor Subfolder</label>
+        <button class="btn btn--ghost btn--sm vnd-folder-link" disabled>Open Subfolder</button>
+        <span class="vnd-folder-note">File structure not yet configured</span>
+      </div>
+
       <div class="vnd-form-actions">
         <button class="btn btn--primary" onclick={saveForm}>{editIdx === null ? 'Add Vendor' : 'Save Changes'}</button>
         <button class="btn btn--ghost" onclick={closeForm}>Cancel</button>
@@ -292,7 +302,7 @@
   }
 
   .sortable { cursor: pointer; user-select: none; }
-  .sortable:hover { color: var(--text, #eee); }
+  .sortable:hover { color: var(--text-primary, #eee); }
 
   .vnd-table tbody td {
     padding: 8px 10px;
@@ -301,7 +311,7 @@
   }
 
   .vnd-row { cursor: pointer; transition: background 0.1s; }
-  .vnd-row:hover { background: var(--surface-2, #1e1e1e); }
+  .vnd-row:hover { background: var(--bg-elevated, #1e1e1e); }
 
   .vnd-type       { color: var(--text-muted, #888); font-size: 0.8rem; }
   .vnd-name-cell  { font-weight: 500; }
@@ -350,17 +360,17 @@
   }
 
   .vnd-input {
-    background: var(--surface-2, #1e1e1e);
+    background: var(--bg-elevated, #1e1e1e);
     border: 1px solid var(--border, #333);
     border-radius: 5px;
-    color: var(--text, #eee);
+    color: var(--text-primary, #eee);
     font-size: 0.875rem;
     padding: 7px 10px;
     transition: border-color 0.15s;
     font-family: inherit;
   }
 
-  .vnd-input:focus      { outline: none; border-color: var(--accent, #6a8a6a); }
+  .vnd-input:focus      { outline: none; border-color: var(--gold, #6a8a6a); }
   .vnd-input--error     { border-color: var(--earth-red, #b84f4f); }
   .vnd-textarea         { resize: vertical; }
   .vnd-field-error      { font-size: 0.75rem; color: var(--earth-red, #b84f4f); }
