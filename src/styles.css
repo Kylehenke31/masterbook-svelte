@@ -3318,6 +3318,10 @@ textarea {
   height: auto;
   object-fit: contain;
 }
+/* Show night logo in dark mode (default), day logo in light mode */
+.sidebar-logo--light { display: none; }
+[data-theme="light"] .sidebar-logo--dark  { display: none; }
+[data-theme="light"] .sidebar-logo--light { display: block; }
 .macro-label {
   font-size: 7.5px;
   font-weight: 700;

@@ -12,7 +12,8 @@
   const deptLabel = dept?.label ?? deptId;
 
   /* ── Tabs ── */
-  let activeTab = $state('creative');
+  let activeTab   = $state('creative');
+  let deckSubView = $state('uploads'); // 'uploads' | 'builder'
 
   /* ── Creative Deck ── */
   let slides        = $state([]);
@@ -23,18 +24,22 @@
   let elements    = $state([]);
   let annotations = $state({});
 
+  /* ── Creative Deck Documents ── */
+  let deckDocs = $state([]);
+
   /* ── Load / Save ── */
   function load() {
     const d = loadDept(deptId);
     slides      = d.creativeDeck?.slides      ?? [];
     annotations = d.elementsDeck?.annotations ?? {};
+    deckDocs    = d.creativeDeck?.documents   ?? [];
     elements    = getElementsForDept(deptId);
     if (selectedSlide !== null && selectedSlide >= slides.length) selectedSlide = null;
   }
 
   function persist() {
     const d = loadDept(deptId);
-    d.creativeDeck  = { slides };
+    d.creativeDeck  = { slides, documents: deckDocs };
     d.elementsDeck  = { annotations };
     saveDept(deptId, d);
   }
@@ -90,6 +95,30 @@
     persist();
   }
 
+  /* ── Creative Deck Document actions ── */
+  function addDeckDoc(e) {
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      deckDocs = [...deckDocs, {
+        id: crypto.randomUUID(),
+        filename: file.name,
+        label: file.name.replace(/\.[^.]+$/, ''),
+        data: ev.target.result,
+        uploadedAt: new Date().toISOString(),
+      }];
+      persist();
+    };
+    reader.readAsDataURL(file); e.target.value = '';
+  }
+  function removeDeckDoc(id) {
+    if (!confirm('Remove this document?')) return;
+    deckDocs = deckDocs.filter(d => d.id !== id); persist();
+  }
+  function updateDeckDocLabel(id, value) {
+    deckDocs = deckDocs.map(d => d.id === id ? { ...d, label: value } : d); persist();
+  }
+
   /* ── Elements Deck actions ── */
   function getAnnotation(elId) {
     return annotations[elId] ?? { notes: '', status: 'pending', flag: false };
@@ -114,81 +143,133 @@
 
   <!-- ── CREATIVE DECK ── -->
   {#if activeTab === 'creative'}
-    <div class="crs-pane">
-      <div class="crs-deck-layout">
-        <!-- Slide list -->
-        <div class="crs-slide-list">
-          <div class="crs-slide-add">
-            <input
-              class="crs-input"
-              placeholder="New slide title…"
-              bind:value={newSlideTitle}
-              onkeydown={e => e.key === 'Enter' && addSlide()}
-            />
-            <button class="crs-btn-add" onclick={addSlide}>Add</button>
-          </div>
-          {#each slides as slide, i}
-            <div
-              class="crs-slide-item"
-              class:crs-slide-item--active={selectedSlide === i}
-              role="button"
-              tabindex="0"
-              onclick={() => { selectedSlide = i; }}
-              onkeydown={e => e.key === 'Enter' && (selectedSlide = i)}
-            >
-              <span class="crs-slide-num">{i + 1}</span>
-              <span class="crs-slide-title">{slide.title}</span>
-              <button class="crs-slide-del" onclick={e => { e.stopPropagation(); removeSlide(i); }} title="Remove">×</button>
-            </div>
-          {:else}
-            <div class="crs-empty">No slides yet. Add one above.</div>
-          {/each}
+    <!-- Sub-view toggle -->
+    <div class="crs-subview-bar">
+      <button class="crs-subview-btn" class:crs-subview-btn--active={deckSubView === 'uploads'}
+        onclick={() => deckSubView = 'uploads'}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        Uploaded Documents
+      </button>
+      <button class="crs-subview-btn" class:crs-subview-btn--active={deckSubView === 'builder'}
+        onclick={() => deckSubView = 'builder'}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+        Build in Masterbook
+      </button>
+    </div>
+
+    {#if deckSubView === 'uploads'}
+      <!-- Uploaded documents -->
+      <div class="crs-doc-section">
+        <div class="crs-doc-hdr">
+          <span class="crs-doc-title">Uploaded Documents</span>
+          <label class="crs-doc-upload-btn">
+            + Upload Document
+            <input type="file" accept="application/pdf,image/*" hidden onchange={addDeckDoc} />
+          </label>
         </div>
-
-        <!-- Slide detail -->
-        <div class="crs-slide-detail">
-          {#if selectedSlide !== null && slides[selectedSlide]}
-            {@const slide = slides[selectedSlide]}
-            <h3 class="crs-slide-heading">{slide.title}</h3>
-
-            <!-- Image grid -->
-            <div class="crs-img-grid">
-              {#each slide.images ?? [] as img (img.id)}
-                <div class="crs-img-card">
-                  <img src={img.data} alt={img.filename} class="crs-img-thumb" />
-                  <input
-                    class="crs-caption-input"
-                    placeholder="Caption…"
-                    value={img.caption}
-                    oninput={e => updateCaption(selectedSlide, img.id, e.target.value)}
-                  />
-                  <button class="crs-img-del" onclick={() => removeImage(selectedSlide, img.id)} title="Remove image">×</button>
+        {#if deckDocs.length}
+          <div class="crs-doc-list">
+            {#each deckDocs as doc (doc.id)}
+              <div class="crs-doc-item">
+                <div class="crs-doc-icon">
+                  {#if doc.data?.startsWith('data:image')}
+                    <img src={doc.data} alt={doc.filename} class="crs-doc-thumb" />
+                  {:else}
+                    <div class="crs-doc-pdf-icon">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="22" height="22"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>
+                      <span>PDF</span>
+                    </div>
+                  {/if}
                 </div>
-              {/each}
-              <label class="crs-img-add" title="Add image">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="24" height="24">
-                  <rect x="3" y="3" width="18" height="18" rx="2"/>
-                  <path d="M12 8v8M8 12h8"/>
-                </svg>
-                <input type="file" accept="image/*" style="display:none" onchange={e => addImage(selectedSlide, e)} />
-              </label>
-            </div>
+                <div class="crs-doc-info">
+                  <input class="crs-doc-label" type="text" value={doc.label}
+                    oninput={e => updateDeckDocLabel(doc.id, e.target.value)} placeholder="Document label…" />
+                  <span class="crs-doc-filename">{doc.filename}</span>
+                </div>
+                <div class="crs-doc-actions">
+                  <a href={doc.data} download={doc.filename} class="crs-doc-btn">Download</a>
+                  <button class="crs-doc-btn crs-doc-btn--danger" onclick={() => removeDeckDoc(doc.id)}>Remove</button>
+                </div>
+              </div>
+            {/each}
+          </div>
+        {:else}
+          <div class="crs-doc-empty">No documents yet. Upload PDFs or images built in external software.</div>
+        {/if}
+      </div>
 
-            <!-- Notes -->
-            <label class="crs-field-label">Notes</label>
-            <textarea
-              class="crs-textarea"
-              rows="4"
-              placeholder="Slide notes…"
-              value={slide.notes}
-              oninput={e => updateSlideNotes(selectedSlide, e.target.value)}
-            ></textarea>
-          {:else}
-            <div class="crs-placeholder">Select a slide or create a new one.</div>
-          {/if}
+    {:else}
+      <!-- Built-in slide builder -->
+      <div class="crs-pane">
+        <div class="crs-deck-layout">
+          <div class="crs-slide-list">
+            <div class="crs-slide-add">
+              <input
+                class="crs-input"
+                placeholder="New slide title…"
+                bind:value={newSlideTitle}
+                onkeydown={e => e.key === 'Enter' && addSlide()}
+              />
+              <button class="crs-btn-add" onclick={addSlide}>Add</button>
+            </div>
+            {#each slides as slide, i}
+              <div
+                class="crs-slide-item"
+                class:crs-slide-item--active={selectedSlide === i}
+                role="button"
+                tabindex="0"
+                onclick={() => { selectedSlide = i; }}
+                onkeydown={e => e.key === 'Enter' && (selectedSlide = i)}
+              >
+                <span class="crs-slide-num">{i + 1}</span>
+                <span class="crs-slide-title">{slide.title}</span>
+                <button class="crs-slide-del" onclick={e => { e.stopPropagation(); removeSlide(i); }} title="Remove">×</button>
+              </div>
+            {:else}
+              <div class="crs-empty">No slides yet. Add one above.</div>
+            {/each}
+          </div>
+
+          <div class="crs-slide-detail">
+            {#if selectedSlide !== null && slides[selectedSlide]}
+              {@const slide = slides[selectedSlide]}
+              <h3 class="crs-slide-heading">{slide.title}</h3>
+              <div class="crs-img-grid">
+                {#each slide.images ?? [] as img (img.id)}
+                  <div class="crs-img-card">
+                    <img src={img.data} alt={img.filename} class="crs-img-thumb" />
+                    <input
+                      class="crs-caption-input"
+                      placeholder="Caption…"
+                      value={img.caption}
+                      oninput={e => updateCaption(selectedSlide, img.id, e.target.value)}
+                    />
+                    <button class="crs-img-del" onclick={() => removeImage(selectedSlide, img.id)} title="Remove image">×</button>
+                  </div>
+                {/each}
+                <label class="crs-img-add" title="Add image">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="24" height="24">
+                    <rect x="3" y="3" width="18" height="18" rx="2"/>
+                    <path d="M12 8v8M8 12h8"/>
+                  </svg>
+                  <input type="file" accept="image/*" style="display:none" onchange={e => addImage(selectedSlide, e)} />
+                </label>
+              </div>
+              <label class="crs-field-label">Notes</label>
+              <textarea
+                class="crs-textarea"
+                rows="4"
+                placeholder="Slide notes…"
+                value={slide.notes}
+                oninput={e => updateSlideNotes(selectedSlide, e.target.value)}
+              ></textarea>
+            {:else}
+              <div class="crs-placeholder">Select a slide or create a new one.</div>
+            {/if}
+          </div>
         </div>
       </div>
-    </div>
+    {/if}
 
   <!-- ── ELEMENTS DECK ── -->
   {:else if activeTab === 'elements'}
@@ -586,4 +667,141 @@
   }
 
   .crs-el-notes:focus { outline: none; border-color: var(--gold, #c9a84c); }
+
+  /* ── Sub-view toggle bar ── */
+  .crs-subview-bar {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 20px;
+  }
+  .crs-subview-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 16px;
+    font-size: 0.825rem;
+    font-weight: 500;
+    background: var(--bg-surface, #1e1e1e);
+    border: 1px solid var(--border, #333);
+    border-radius: 6px;
+    color: var(--text-secondary, #888);
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s, border-color 0.12s;
+  }
+  .crs-subview-btn:hover { background: var(--bg-elevated, #2a2a2a); color: var(--text-primary, #eee); }
+  .crs-subview-btn--active {
+    background: rgba(201,168,76,0.1);
+    border-color: var(--gold, #c9a84c);
+    color: var(--gold, #c9a84c);
+  }
+
+  /* ── Document section ── */
+  .crs-doc-section {
+    margin-top: 24px;
+    border: 1px solid var(--border, #333);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .crs-doc-hdr {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    background: var(--bg-surface, #1e1e1e);
+    border-bottom: 1px solid var(--border, #333);
+  }
+  .crs-doc-title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-secondary, #888);
+  }
+  .crs-doc-upload-btn {
+    padding: 5px 12px;
+    font-size: 0.775rem;
+    background: var(--bg-elevated, #2a2a2a);
+    border: 1px solid var(--border, #333);
+    border-radius: 5px;
+    color: var(--text-primary, #eee);
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+  .crs-doc-upload-btn:hover { background: var(--bg-hover, #333); }
+  .crs-doc-list { display: flex; flex-direction: column; }
+  .crs-doc-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border, #2a2a2a);
+  }
+  .crs-doc-item:last-child { border-bottom: none; }
+  .crs-doc-thumb {
+    width: 48px;
+    height: 48px;
+    object-fit: cover;
+    border-radius: 4px;
+    border: 1px solid var(--border, #333);
+  }
+  .crs-doc-pdf-icon {
+    width: 48px;
+    height: 48px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-elevated, #2a2a2a);
+    border: 1px solid var(--border, #333);
+    border-radius: 4px;
+    color: var(--text-secondary, #888);
+    font-size: 0.65rem;
+    gap: 2px;
+  }
+  .crs-doc-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .crs-doc-label {
+    padding: 4px 8px;
+    background: var(--bg-elevated, #2a2a2a);
+    border: 1px solid var(--border, #333);
+    border-radius: 4px;
+    color: var(--text-primary, #eee);
+    font-size: 0.825rem;
+    width: 100%;
+    max-width: 360px;
+  }
+  .crs-doc-label:focus { outline: none; border-color: var(--gold, #c9a84c); }
+  .crs-doc-filename {
+    font-size: 0.7rem;
+    color: var(--text-secondary, #888);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .crs-doc-actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .crs-doc-btn {
+    padding: 4px 10px;
+    font-size: 0.775rem;
+    background: var(--bg-elevated, #2a2a2a);
+    border: 1px solid var(--border, #333);
+    border-radius: 5px;
+    color: var(--text-primary, #eee);
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    transition: background 0.1s;
+  }
+  .crs-doc-btn:hover { background: var(--bg-hover, #333); }
+  .crs-doc-btn--danger:hover { border-color: #e55; color: #e55; }
+  .crs-doc-empty {
+    padding: 16px 14px;
+    font-size: 0.8rem;
+    color: var(--text-secondary, #888);
+    font-style: italic;
+  }
 </style>

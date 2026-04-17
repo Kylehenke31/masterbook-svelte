@@ -8,7 +8,9 @@
   const DEPT = 'camera';
 
   /* ── Tab state ── */
-  let activeTab = $state('deck');   // 'deck' | 'elements' | 'shotlist' | 'reports'
+  let activeTab       = $state('deck');     // 'deck' | 'elements' | 'shotlist' | 'reports'
+  let deckSubView     = $state('uploads'); // 'uploads' | 'builder'
+  let shotListSubView = $state('uploads'); // 'uploads' | 'builder'
 
   /* ── Creative Deck ── */
   let slides        = $state([]);
@@ -28,12 +30,18 @@
   /* ── Camera Reports ── */
   let reports = $state([]);
 
+  /* ── Document uploads ── */
+  let deckDocs     = $state([]);
+  let shotListDocs = $state([]);
+
   function _load() {
     const d     = loadDept(DEPT);
-    slides      = d.creativeDeck?.slides    ?? [];
-    annotations = d.elementsDeck?.annotations ?? {};
-    shotList    = d.shotList    ?? {};
-    reports     = d.cameraReports ?? [];
+    slides      = d.creativeDeck?.slides       ?? [];
+    annotations = d.elementsDeck?.annotations  ?? {};
+    shotList    = d.shotList                   ?? {};
+    reports     = d.cameraReports              ?? [];
+    deckDocs     = d.creativeDeck?.documents   ?? [];
+    shotListDocs = d.shotListDocuments         ?? [];
     elements    = getElementsForDept(DEPT);
     shootScenes = getShootOrderScenes();
     if (slides.length && !selectedSlide) selectedSlide = slides[0].id;
@@ -41,10 +49,11 @@
 
   function _save() {
     saveDept(DEPT, {
-      creativeDeck:  { slides },
-      elementsDeck:  { annotations },
+      creativeDeck:      { slides, documents: deckDocs },
+      elementsDeck:      { annotations },
       shotList,
-      cameraReports: reports,
+      shotListDocuments: shotListDocs,
+      cameraReports:     reports,
     });
   }
 
@@ -160,6 +169,45 @@
     _save();
   }
 
+  /* ─────────── Document uploads ─────────── */
+  function _makeDoc(file, dataUrl) {
+    return {
+      id: crypto.randomUUID(),
+      filename: file.name,
+      label: file.name.replace(/\.[^.]+$/, ''),
+      data: dataUrl,
+      uploadedAt: new Date().toISOString(),
+    };
+  }
+
+  function addDeckDoc(e) {
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => { deckDocs = [...deckDocs, _makeDoc(file, ev.target.result)]; _save(); };
+    reader.readAsDataURL(file); e.target.value = '';
+  }
+  function removeDeckDoc(id) {
+    if (!confirm('Remove this document?')) return;
+    deckDocs = deckDocs.filter(d => d.id !== id); _save();
+  }
+  function updateDeckDoc(id, value) {
+    deckDocs = deckDocs.map(d => d.id === id ? { ...d, label: value } : d); _save();
+  }
+
+  function addShotListDoc(e) {
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => { shotListDocs = [...shotListDocs, _makeDoc(file, ev.target.result)]; _save(); };
+    reader.readAsDataURL(file); e.target.value = '';
+  }
+  function removeShotListDoc(id) {
+    if (!confirm('Remove this document?')) return;
+    shotListDocs = shotListDocs.filter(d => d.id !== id); _save();
+  }
+  function updateShotListDoc(id, value) {
+    shotListDocs = shotListDocs.map(d => d.id === id ? { ...d, label: value } : d); _save();
+  }
+
   onMount(_load);
 </script>
 
@@ -182,80 +230,133 @@
 
     <!-- ══════════ CREATIVE DECK ══════════ -->
     {#if activeTab === 'deck'}
-      <div class="deck-layout">
-        <!-- Slide list -->
-        <div class="deck-sidebar">
-          <button class="btn-add-slide" onclick={addSlide}>+ Add Slide</button>
-          {#each slides as s (s.id)}
-            <div
-              class="deck-slide-thumb"
-              class:deck-slide-thumb--active={selectedSlide === s.id}
-              role="button"
-              tabindex="0"
-              onclick={() => selectedSlide = s.id}
-              onkeydown={e => e.key === 'Enter' && (selectedSlide = s.id)}
-            >
-              {#if s.image}
-                <img src={s.image} alt={s.title} class="deck-thumb-img" />
-              {:else}
-                <div class="deck-thumb-blank"></div>
-              {/if}
-              <span class="deck-thumb-title">{s.title || 'Untitled'}</span>
-              <button class="deck-thumb-del" onclick={e => { e.stopPropagation(); removeSlide(s.id); }} title="Delete slide">✕</button>
-            </div>
-          {:else}
-            <p class="deck-empty">No slides yet.<br>Click "+ Add Slide" to start.</p>
-          {/each}
-        </div>
+      <!-- Sub-view toggle -->
+      <div class="subview-bar">
+        <button class="subview-btn" class:subview-btn--active={deckSubView === 'uploads'}
+          onclick={() => deckSubView = 'uploads'}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Uploaded Documents
+        </button>
+        <button class="subview-btn" class:subview-btn--active={deckSubView === 'builder'}
+          onclick={() => deckSubView = 'builder'}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+          Build in Masterbook
+        </button>
+      </div>
 
-        <!-- Slide editor -->
-        <div class="deck-editor">
-          {#if selectedSlide}
-            {@const slide = slides.find(s => s.id === selectedSlide)}
-            {#if slide}
-              <!-- Image area -->
-              <div class="deck-img-area">
-                {#if slide.image}
-                  <img src={slide.image} alt={slide.title} class="deck-img-preview" />
-                  <div class="deck-img-actions">
-                    <label class="btn-sm">Replace Image<input type="file" accept="image/*" hidden onchange={e => handleSlideImage(slide.id, e)}></label>
-                    <button class="btn-sm btn-ghost" onclick={() => removeSlideImage(slide.id)}>Remove</button>
+      {#if deckSubView === 'uploads'}
+        <!-- Uploaded documents -->
+        <div class="doc-section">
+          <div class="doc-section-hdr">
+            <span class="doc-section-title">Uploaded Documents</span>
+            <label class="doc-upload-btn">
+              + Upload Document
+              <input type="file" accept="application/pdf,image/*" hidden onchange={addDeckDoc} />
+            </label>
+          </div>
+          {#if deckDocs.length}
+            <div class="doc-list">
+              {#each deckDocs as doc (doc.id)}
+                <div class="doc-item">
+                  <div class="doc-icon">
+                    {#if doc.data?.startsWith('data:image')}
+                      <img src={doc.data} alt={doc.filename} class="doc-thumb" />
+                    {:else}
+                      <div class="doc-pdf-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="24" height="24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>
+                        <span>PDF</span>
+                      </div>
+                    {/if}
                   </div>
-                {:else}
-                  <label class="deck-img-upload">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="32" height="32"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-                    <span>Click to upload image</span>
-                    <input type="file" accept="image/*" hidden onchange={e => handleSlideImage(slide.id, e)}>
-                  </label>
-                {/if}
-              </div>
-
-              <!-- Fields -->
-              <div class="deck-fields">
-                <label class="deck-field">
-                  <span class="deck-field-label">Title</span>
-                  <input class="deck-input" type="text" value={slide.title}
-                    oninput={e => updateSlide(slide.id, 'title', e.target.value)} placeholder="Slide title…" />
-                </label>
-                <label class="deck-field">
-                  <span class="deck-field-label">Description / Notes</span>
-                  <textarea class="deck-textarea" rows="4" value={slide.body}
-                    oninput={e => updateSlide(slide.id, 'body', e.target.value)} placeholder="Creative notes, references, intent…"></textarea>
-                </label>
-                <label class="deck-field">
-                  <span class="deck-field-label">Production Notes</span>
-                  <textarea class="deck-textarea deck-textarea--sm" rows="2" value={slide.notes}
-                    oninput={e => updateSlide(slide.id, 'notes', e.target.value)} placeholder="Internal notes…"></textarea>
-                </label>
-              </div>
-            {/if}
-          {:else}
-            <div class="deck-no-selection">
-              {#if slides.length}Select a slide to edit it.{:else}Add your first slide to get started.{/if}
+                  <div class="doc-info">
+                    <input class="doc-label-input" type="text" value={doc.label}
+                      oninput={e => updateDeckDoc(doc.id, e.target.value)} placeholder="Document label…" />
+                    <span class="doc-filename">{doc.filename}</span>
+                  </div>
+                  <div class="doc-actions">
+                    <a href={doc.data} download={doc.filename} class="btn-sm">Download</a>
+                    <button class="btn-sm btn-ghost btn-danger" onclick={() => removeDeckDoc(doc.id)}>Remove</button>
+                  </div>
+                </div>
+              {/each}
             </div>
+          {:else}
+            <div class="doc-empty">No documents uploaded yet. Upload PDFs or images built in external software.</div>
           {/if}
         </div>
-      </div>
+
+      {:else}
+        <!-- Built-in slide builder -->
+        <div class="deck-layout">
+          <div class="deck-sidebar">
+            <button class="btn-add-slide" onclick={addSlide}>+ Add Slide</button>
+            {#each slides as s (s.id)}
+              <div
+                class="deck-slide-thumb"
+                class:deck-slide-thumb--active={selectedSlide === s.id}
+                role="button"
+                tabindex="0"
+                onclick={() => selectedSlide = s.id}
+                onkeydown={e => e.key === 'Enter' && (selectedSlide = s.id)}
+              >
+                {#if s.image}
+                  <img src={s.image} alt={s.title} class="deck-thumb-img" />
+                {:else}
+                  <div class="deck-thumb-blank"></div>
+                {/if}
+                <span class="deck-thumb-title">{s.title || 'Untitled'}</span>
+                <button class="deck-thumb-del" onclick={e => { e.stopPropagation(); removeSlide(s.id); }} title="Delete slide">✕</button>
+              </div>
+            {:else}
+              <p class="deck-empty">No slides yet.<br>Click "+ Add Slide" to start.</p>
+            {/each}
+          </div>
+
+          <div class="deck-editor">
+            {#if selectedSlide}
+              {@const slide = slides.find(s => s.id === selectedSlide)}
+              {#if slide}
+                <div class="deck-img-area">
+                  {#if slide.image}
+                    <img src={slide.image} alt={slide.title} class="deck-img-preview" />
+                    <div class="deck-img-actions">
+                      <label class="btn-sm">Replace Image<input type="file" accept="image/*" hidden onchange={e => handleSlideImage(slide.id, e)}></label>
+                      <button class="btn-sm btn-ghost" onclick={() => removeSlideImage(slide.id)}>Remove</button>
+                    </div>
+                  {:else}
+                    <label class="deck-img-upload">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="32" height="32"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                      <span>Click to upload image</span>
+                      <input type="file" accept="image/*" hidden onchange={e => handleSlideImage(slide.id, e)}>
+                    </label>
+                  {/if}
+                </div>
+                <div class="deck-fields">
+                  <label class="deck-field">
+                    <span class="deck-field-label">Title</span>
+                    <input class="deck-input" type="text" value={slide.title}
+                      oninput={e => updateSlide(slide.id, 'title', e.target.value)} placeholder="Slide title…" />
+                  </label>
+                  <label class="deck-field">
+                    <span class="deck-field-label">Description / Notes</span>
+                    <textarea class="deck-textarea" rows="4" value={slide.body}
+                      oninput={e => updateSlide(slide.id, 'body', e.target.value)} placeholder="Creative notes, references, intent…"></textarea>
+                  </label>
+                  <label class="deck-field">
+                    <span class="deck-field-label">Production Notes</span>
+                    <textarea class="deck-textarea deck-textarea--sm" rows="2" value={slide.notes}
+                      oninput={e => updateSlide(slide.id, 'notes', e.target.value)} placeholder="Internal notes…"></textarea>
+                  </label>
+                </div>
+              {/if}
+            {:else}
+              <div class="deck-no-selection">
+                {#if slides.length}Select a slide to edit it.{:else}Add your first slide to get started.{/if}
+              </div>
+            {/if}
+          </div>
+        </div>
+      {/if}
 
     <!-- ══════════ ELEMENTS DECK ══════════ -->
     {:else if activeTab === 'elements'}
@@ -301,76 +402,130 @@
 
     <!-- ══════════ SHOT LIST ══════════ -->
     {:else if activeTab === 'shotlist'}
-      <div class="shotlist">
-        <div class="shotlist-header">
-          <p class="shotlist-hint">Scenes are pulled from your active One-Liner shoot order.</p>
-        </div>
-        {#if shootScenes.length}
-          {#each shootScenes as scene (scene.sceneNum)}
-            {@const shots = shotList[scene.sceneNum]?.shots ?? []}
-            <div class="sl-scene" class:sl-scene--expanded={expandedScene === scene.sceneNum}>
-              <!-- Scene header row -->
-              <button class="sl-scene-hdr" onclick={() => toggleExpand(scene.sceneNum)}>
-                <span class="sl-scene-num">{scene.sceneNum || '?'}</span>
-                <span class="sl-scene-meta">{[scene.intExt, scene.location, scene.dayNight].filter(Boolean).join(' · ')}</span>
-                <span class="sl-scene-desc">{scene.description || ''}</span>
-                <span class="sl-scene-shotcount">{shots.length} shot{shots.length !== 1 ? 's' : ''}</span>
-                <svg class="sl-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-                  <polyline points={expandedScene === scene.sceneNum ? '18 15 12 9 6 15' : '6 9 12 15 18 9'}/>
-                </svg>
-              </button>
-
-              {#if expandedScene === scene.sceneNum}
-                <div class="sl-shots">
-                  {#if shots.length}
-                    <table class="sl-table">
-                      <thead>
-                        <tr>
-                          <th>#</th><th>Size</th><th>Lens</th><th>Movement</th><th>Description</th><th>Notes</th><th>✓</th><th></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {#each shots as shot (shot.id)}
-                          <tr class:sl-row--done={shot.completed}>
-                            <td class="sl-td-num">{shot.num}</td>
-                            <td>
-                              <select class="sl-select" value={shot.size}
-                                onchange={e => updateShot(scene.sceneNum, shot.id, 'size', e.target.value)}>
-                                {#each SHOT_SIZES as sz}<option value={sz}>{sz}</option>{/each}
-                              </select>
-                            </td>
-                            <td><input class="sl-input" type="text" value={shot.lens} placeholder="35mm"
-                              oninput={e => updateShot(scene.sceneNum, shot.id, 'lens', e.target.value)}></td>
-                            <td>
-                              <select class="sl-select" value={shot.movement}
-                                onchange={e => updateShot(scene.sceneNum, shot.id, 'movement', e.target.value)}>
-                                {#each SHOT_MOVES as mv}<option value={mv}>{mv}</option>{/each}
-                              </select>
-                            </td>
-                            <td><input class="sl-input sl-input--wide" type="text" value={shot.description} placeholder="Shot description…"
-                              oninput={e => updateShot(scene.sceneNum, shot.id, 'description', e.target.value)}></td>
-                            <td><input class="sl-input" type="text" value={shot.notes} placeholder="Notes…"
-                              oninput={e => updateShot(scene.sceneNum, shot.id, 'notes', e.target.value)}></td>
-                            <td><input type="checkbox" checked={shot.completed}
-                              onchange={e => updateShot(scene.sceneNum, shot.id, 'completed', e.target.checked)}></td>
-                            <td><button class="sl-del" onclick={() => removeShot(scene.sceneNum, shot.id)} title="Delete shot">✕</button></td>
-                          </tr>
-                        {/each}
-                      </tbody>
-                    </table>
-                  {/if}
-                  <button class="sl-add-shot" onclick={() => addShot(scene.sceneNum)}>+ Add Shot</button>
-                </div>
-              {/if}
-            </div>
-          {/each}
-        {:else}
-          <div class="cr-empty">
-            <p>No scenes in your shoot order yet.</p>
-            <p>Build your shoot order in the <a href="#one-liner">One-Liner</a> module first.</p>
-          </div>
-        {/if}
+      <!-- Sub-view toggle -->
+      <div class="subview-bar">
+        <button class="subview-btn" class:subview-btn--active={shotListSubView === 'uploads'}
+          onclick={() => shotListSubView = 'uploads'}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Uploaded Documents
+        </button>
+        <button class="subview-btn" class:subview-btn--active={shotListSubView === 'builder'}
+          onclick={() => shotListSubView = 'builder'}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+          Build in Masterbook
+        </button>
       </div>
+
+      {#if shotListSubView === 'uploads'}
+        <!-- Uploaded shot list documents -->
+        <div class="doc-section">
+          <div class="doc-section-hdr">
+            <span class="doc-section-title">Uploaded Documents</span>
+            <label class="doc-upload-btn">
+              + Upload Document
+              <input type="file" accept="application/pdf,image/*" hidden onchange={addShotListDoc} />
+            </label>
+          </div>
+          {#if shotListDocs.length}
+            <div class="doc-list">
+              {#each shotListDocs as doc (doc.id)}
+                <div class="doc-item">
+                  <div class="doc-icon">
+                    {#if doc.data?.startsWith('data:image')}
+                      <img src={doc.data} alt={doc.filename} class="doc-thumb" />
+                    {:else}
+                      <div class="doc-pdf-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="24" height="24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>
+                        <span>PDF</span>
+                      </div>
+                    {/if}
+                  </div>
+                  <div class="doc-info">
+                    <input class="doc-label-input" type="text" value={doc.label}
+                      oninput={e => updateShotListDoc(doc.id, e.target.value)} placeholder="Document label…" />
+                    <span class="doc-filename">{doc.filename}</span>
+                  </div>
+                  <div class="doc-actions">
+                    <a href={doc.data} download={doc.filename} class="btn-sm">Download</a>
+                    <button class="btn-sm btn-ghost btn-danger" onclick={() => removeShotListDoc(doc.id)}>Remove</button>
+                  </div>
+                </div>
+              {/each}
+            </div>
+          {:else}
+            <div class="doc-empty">No documents uploaded yet. Upload a shot list PDF built in external software.</div>
+          {/if}
+        </div>
+
+      {:else}
+        <!-- Built-in shot list builder -->
+        <div class="shotlist">
+          <div class="shotlist-header">
+            <p class="shotlist-hint">Scenes are pulled from your active One-Liner shoot order.</p>
+          </div>
+          {#if shootScenes.length}
+            {#each shootScenes as scene (scene.sceneNum)}
+              {@const shots = shotList[scene.sceneNum]?.shots ?? []}
+              <div class="sl-scene" class:sl-scene--expanded={expandedScene === scene.sceneNum}>
+                <button class="sl-scene-hdr" onclick={() => toggleExpand(scene.sceneNum)}>
+                  <span class="sl-scene-num">{scene.sceneNum || '?'}</span>
+                  <span class="sl-scene-meta">{[scene.intExt, scene.location, scene.dayNight].filter(Boolean).join(' · ')}</span>
+                  <span class="sl-scene-desc">{scene.description || ''}</span>
+                  <span class="sl-scene-shotcount">{shots.length} shot{shots.length !== 1 ? 's' : ''}</span>
+                  <svg class="sl-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                    <polyline points={expandedScene === scene.sceneNum ? '18 15 12 9 6 15' : '6 9 12 15 18 9'}/>
+                  </svg>
+                </button>
+                {#if expandedScene === scene.sceneNum}
+                  <div class="sl-shots">
+                    {#if shots.length}
+                      <table class="sl-table">
+                        <thead>
+                          <tr><th>#</th><th>Size</th><th>Lens</th><th>Movement</th><th>Description</th><th>Notes</th><th>✓</th><th></th></tr>
+                        </thead>
+                        <tbody>
+                          {#each shots as shot (shot.id)}
+                            <tr class:sl-row--done={shot.completed}>
+                              <td class="sl-td-num">{shot.num}</td>
+                              <td>
+                                <select class="sl-select" value={shot.size}
+                                  onchange={e => updateShot(scene.sceneNum, shot.id, 'size', e.target.value)}>
+                                  {#each SHOT_SIZES as sz}<option value={sz}>{sz}</option>{/each}
+                                </select>
+                              </td>
+                              <td><input class="sl-input" type="text" value={shot.lens} placeholder="35mm"
+                                oninput={e => updateShot(scene.sceneNum, shot.id, 'lens', e.target.value)}></td>
+                              <td>
+                                <select class="sl-select" value={shot.movement}
+                                  onchange={e => updateShot(scene.sceneNum, shot.id, 'movement', e.target.value)}>
+                                  {#each SHOT_MOVES as mv}<option value={mv}>{mv}</option>{/each}
+                                </select>
+                              </td>
+                              <td><input class="sl-input sl-input--wide" type="text" value={shot.description} placeholder="Shot description…"
+                                oninput={e => updateShot(scene.sceneNum, shot.id, 'description', e.target.value)}></td>
+                              <td><input class="sl-input" type="text" value={shot.notes} placeholder="Notes…"
+                                oninput={e => updateShot(scene.sceneNum, shot.id, 'notes', e.target.value)}></td>
+                              <td><input type="checkbox" checked={shot.completed}
+                                onchange={e => updateShot(scene.sceneNum, shot.id, 'completed', e.target.checked)}></td>
+                              <td><button class="sl-del" onclick={() => removeShot(scene.sceneNum, shot.id)} title="Delete shot">✕</button></td>
+                            </tr>
+                          {/each}
+                        </tbody>
+                      </table>
+                    {/if}
+                    <button class="sl-add-shot" onclick={() => addShot(scene.sceneNum)}>+ Add Shot</button>
+                  </div>
+                {/if}
+              </div>
+            {/each}
+          {:else}
+            <div class="cr-empty">
+              <p>No scenes in your shoot order yet.</p>
+              <p>Build your shoot order in the <a href="#one-liner">One-Liner</a> module first.</p>
+            </div>
+          {/if}
+        </div>
+      {/if}
 
     <!-- ══════════ CAMERA REPORTS ══════════ -->
     {:else if activeTab === 'reports'}
@@ -862,4 +1017,128 @@
   .btn-sm:hover { background: var(--bg-hover, #333); }
   .btn-ghost { background: transparent; }
   .btn-danger:hover { border-color: #e55; color: #e55; }
+
+  /* ── Sub-view toggle bar ── */
+  .subview-bar {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 20px;
+  }
+  .subview-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 16px;
+    font-size: 0.825rem;
+    font-weight: 500;
+    background: var(--bg-surface, #1a1a1a);
+    border: 1px solid var(--border, #333);
+    border-radius: 6px;
+    color: var(--text-secondary, #888);
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s, border-color 0.12s;
+  }
+  .subview-btn:hover { background: var(--bg-elevated, #2a2a2a); color: var(--text-primary, #eee); }
+  .subview-btn--active {
+    background: rgba(201,168,76,0.1);
+    border-color: var(--gold, #c9a84c);
+    color: var(--gold, #c9a84c);
+  }
+
+  /* ── Document upload section ── */
+  .doc-section {
+    margin-top: 24px;
+    border: 1px solid var(--border, #333);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .doc-section-hdr {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    background: var(--bg-surface, #1a1a1a);
+    border-bottom: 1px solid var(--border, #333);
+  }
+  .doc-section-title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-secondary, #888);
+  }
+  .doc-upload-btn {
+    padding: 5px 12px;
+    font-size: 0.775rem;
+    background: var(--bg-elevated, #2a2a2a);
+    border: 1px solid var(--border, #333);
+    border-radius: 5px;
+    color: var(--text-primary, #eee);
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+  .doc-upload-btn:hover { background: var(--bg-hover, #333); }
+  .doc-list { display: flex; flex-direction: column; }
+  .doc-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border, #2a2a2a);
+  }
+  .doc-item:last-child { border-bottom: none; }
+  .doc-icon { flex-shrink: 0; }
+  .doc-thumb {
+    width: 48px;
+    height: 48px;
+    object-fit: cover;
+    border-radius: 4px;
+    border: 1px solid var(--border, #333);
+  }
+  .doc-pdf-icon {
+    width: 48px;
+    height: 48px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-elevated, #2a2a2a);
+    border: 1px solid var(--border, #333);
+    border-radius: 4px;
+    color: var(--text-secondary, #888);
+    font-size: 0.65rem;
+    gap: 2px;
+  }
+  .doc-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .doc-label-input {
+    padding: 4px 8px;
+    background: var(--bg-elevated, #2a2a2a);
+    border: 1px solid var(--border, #333);
+    border-radius: 4px;
+    color: var(--text-primary, #eee);
+    font-size: 0.825rem;
+    width: 100%;
+    max-width: 360px;
+  }
+  .doc-label-input:focus { outline: none; border-color: var(--gold, #c9a84c); }
+  .doc-filename {
+    font-size: 0.7rem;
+    color: var(--text-secondary, #888);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .doc-actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .doc-empty {
+    padding: 16px 14px;
+    font-size: 0.8rem;
+    color: var(--text-secondary, #888);
+    font-style: italic;
+  }
 </style>

@@ -172,7 +172,8 @@
 <!-- Macro sidebar (far-left icon rail) -->
 <aside class="macro-sidebar">
   <div class="macro-sidebar-top">
-    <span style="font-size:1.1rem;font-weight:800;color:var(--gold,#c9a84c);letter-spacing:-0.03em;">M</span>
+    <img src="/logo-night.png" class="sidebar-logo sidebar-logo--dark" alt="Masterbook" />
+    <img src="/logo-day.png"   class="sidebar-logo sidebar-logo--light" alt="Masterbook" />
   </div>
   <div class="macro-sidebar-items">
 
