@@ -1,14 +1,10 @@
 <script>
-  import { onMount } from 'svelte';
-
-  let container;
-
   /* ── Storage Keys ── */
-  const CREW_KEY     = 'movie-ledger-crew';
-  const CAST_KEY     = 'movie-ledger-cast';
-  const DAYTYPES_KEY = 'movie-ledger-crew-daytypes';
-  const CS_KEY       = 'movie-ledger-callsheets';
-  const BD_KEY       = 'movie-ledger-breakdowns';
+  const CREW_KEY      = 'movie-ledger-crew';
+  const CAST_KEY      = 'movie-ledger-cast';
+  const DAYTYPES_KEY  = 'movie-ledger-crew-daytypes';
+  const CS_KEY        = 'movie-ledger-callsheets';
+  const BD_KEY        = 'movie-ledger-breakdowns';
   const EMAIL_TPL_KEY = 'movie-ledger-cs-email-template';
 
   const CLIENT_AGENCY_SECTIONS = ['CLIENT', 'AGENCY'];
@@ -53,16 +49,36 @@ Please review the attached call sheet for full details including schedule, crew 
 Thank you,
 {{PRODUCTION_CO}}`;
 
-  /* ── Module-level sheet state (lives for duration of component mount) ── */
-  let _sheets = {};
+  /* ── Svelte 5 state ── */
+  let sheets        = $state({});
+  let view          = $state('main');
+  let activeDate    = $state(null);
+  let dateInput     = $state(_todayStr());
+  let emailTemplate = $state(DEFAULT_EMAIL_TEMPLATE);
+  let savedMsg      = $state('');
+  let emailSavedMsg = $state('');
+  let emailCopiedMsg = $state('');
+
+  /* ── Derived ── */
+  let activeSheet  = $derived(activeDate ? sheets[activeDate] : null);
+  let savedDates   = $derived(Object.keys(sheets).sort().reverse());
+  let groupedCrew  = $derived(activeDate ? _groupCrewBySection(sheets[activeDate]?.crew || []) : []);
+  let emailPreview = $derived(_resolveTokens(emailTemplate, activeDate));
+
+  /* ── Persist on change ── */
+  $effect(() => {
+    // Access sheets to register dependency; save whenever it changes
+    const snap = JSON.stringify(sheets);
+    localStorage.setItem(CS_KEY, snap);
+  });
 
   /* ── Persistence ── */
   function _loadSheets() {
-    try { _sheets = JSON.parse(localStorage.getItem(CS_KEY)) || {}; } catch { _sheets = {}; }
+    try { sheets = JSON.parse(localStorage.getItem(CS_KEY)) || {}; } catch { sheets = {}; }
   }
-  function _saveSheets() { localStorage.setItem(CS_KEY, JSON.stringify(_sheets)); }
+  function _saveSheets() { localStorage.setItem(CS_KEY, JSON.stringify(sheets)); }
 
-  /* ── Data helpers ── */
+  /* ── Helpers ── */
   function esc(str) {
     return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
@@ -236,30 +252,9 @@ Thank you,
       directContacts: [{ title:'', name:'', phone:'' }],
       notes: '',
       warningBanner: 'NO SET PHOTOS, VIDEOS OR SOCIAL MEDIA POSTS ALLOWED WHILE ON SET. NO VISITORS.',
+      report1stAM: '', report1stPM: '', reportCameraWrap: '',
+      reportLunch: '', report2ndMeal: '', reportCrewWrap: '',
     };
-  }
-
-  /* ── Inline input builders ── */
-  function _in(key, val, ph, cls) {
-    return `<input type="text" class="cse-in${cls?' '+cls:''}" data-cs="${key}" value="${esc(val||'')}" placeholder="${esc(ph||'')}" />`;
-  }
-  function _inSched(idx, field, val, ph) {
-    return `<input type="text" class="cse-in cse-in--sched" data-sched="S-${idx}-${field}" value="${esc(val||'')}" placeholder="${esc(ph||'')}" />`;
-  }
-  function _inCrew(idx, field, val, ph, cls) {
-    return `<input type="text" class="cse-in${cls?' '+cls:''}" data-crew="${idx}-${field}" value="${esc(val||'')}" placeholder="${esc(ph||'')}" />`;
-  }
-  function _inContact(idx, field, val, ph) {
-    return `<input type="text" class="cse-in" data-contact="${idx}-${field}" value="${esc(val||'')}" placeholder="${esc(ph||'')}" />`;
-  }
-  function _inAgency(idx, field, val, ph) {
-    return `<input type="text" class="cse-in" data-agency="${idx}-${field}" value="${esc(val||'')}" placeholder="${esc(ph||'')}" />`;
-  }
-  function _inTalent(idx, field, val, ph) {
-    return `<input type="text" class="cse-in" data-talent="${idx}-${field}" value="${esc(val||'')}" placeholder="${esc(ph||'')}" />`;
-  }
-  function _inVendor(idx, field, val, ph) {
-    return `<input type="text" class="cse-in" data-vendor="${idx}-${field}" value="${esc(val||'')}" placeholder="${esc(ph||'')}" />`;
   }
 
   /* ── Group crew by section ── */
@@ -272,49 +267,29 @@ Thank you,
     return groups;
   }
 
-  /* ── Right-side rows ── */
-  function _buildRightRows(s) {
+  /* ── Migrate old left/right schedule ── */
+  function _migrateSchedule(s) {
     const rows = [];
-    if (s.clientContacts?.length) {
-      rows.push({ isHeader: true, label: 'CLIENT' });
-      s.clientContacts.forEach((c, i) => rows.push({ isHeader: false, type:'contact', idx:i, col1:c.title, col2:c.name, col3:'', col4:c.email, col5:c.callTime, col6:c.callLoc||'' }));
+    const maxLen = Math.max(s.scheduleLeft?.length || 0, s.scheduleRight?.length || 0, 1);
+    for (let i = 0; i < maxLen; i++) {
+      const L = s.scheduleLeft?.[i] || {};
+      rows.push({ scene: L.scene||'', sets: L.location||'', setsDesc:'', cast: L.talent||'', dn:'', pages:'', location: L.time||'' });
     }
-    if (s.agencyContacts?.length) {
-      rows.push({ isHeader: true, label: 'AGENCY' });
-      s.agencyContacts.forEach((a, i) => rows.push({ isHeader: false, type:'agency', idx:i, col1:a.title, col2:a.name, col3:'', col4:a.email, col5:a.callTime, col6:a.callLoc||'' }));
-    }
-    if (s.talentContacts?.length) {
-      rows.push({ isHeader: true, label: 'TALENT' });
-      s.talentContacts.forEach((t, i) => rows.push({ isHeader: false, type:'talent', idx:i, col1:t.title, col2:t.name, col3:'', col4:'', col5:t.callTime, col6:t.callLoc||'' }));
-    }
-    if (s.vendors?.length) {
-      rows.push({ isHeader: true, label: 'VENDORS' });
-      s.vendors.forEach((v, i) => rows.push({ isHeader: false, type:'vendor', idx:i, col1:v.type, col2:v.company, col3:v.contact, col4:v.email, col5:v.callTime, col6:v.callLoc||'' }));
-    }
-    return rows;
+    return rows.length ? rows : [{ scene:'', sets:'', setsDesc:'', cast:'', dn:'', pages:'', location:'' }];
   }
 
-  function _rightDataCells(rr) {
-    const delBtn = `<button type="button" class="cse-row-del" data-del-type="${rr.type}" data-del-idx="${rr.idx}" title="Remove">✕</button>`;
-    if (rr.type === 'contact') {
-      return `<td>${_inContact(rr.idx,'title',rr.col1,'Title')}</td><td colspan="2">${_inContact(rr.idx,'name',rr.col2,'Name')}</td><td>${_inContact(rr.idx,'email',rr.col4,'Email')}</td><td class="cse-calltd">${_inContact(rr.idx,'callLoc',rr.col6,'Loc')} ${_inContact(rr.idx,'callTime',rr.col5,'Time')}${delBtn}</td>`;
+  function _ensureSchedule(s) {
+    if (!s.schedule) {
+      s.schedule = s.scheduleLeft?.length ? _migrateSchedule(s) : Array.from({length:8}, () => ({scene:'',sets:'',setsDesc:'',cast:'',dn:'',pages:'',location:''}));
     }
-    if (rr.type === 'agency') {
-      return `<td>${_inAgency(rr.idx,'title',rr.col1,'Title')}</td><td colspan="2">${_inAgency(rr.idx,'name',rr.col2,'Name')}</td><td>${_inAgency(rr.idx,'email',rr.col4,'Email')}</td><td class="cse-calltd">${_inAgency(rr.idx,'callLoc',rr.col6,'Loc')} ${_inAgency(rr.idx,'callTime',rr.col5,'Time')}${delBtn}</td>`;
-    }
-    if (rr.type === 'talent') {
-      return `<td>${_inTalent(rr.idx,'title',rr.col1,'#. Role')}</td><td colspan="2">${_inTalent(rr.idx,'name',rr.col2,'Name')}</td><td>${_inTalent(rr.idx,'email',rr.col4||'','Email')}</td><td class="cse-calltd">${_inTalent(rr.idx,'callLoc',rr.col6,'Loc')} ${_inTalent(rr.idx,'callTime',rr.col5,'Time')}${delBtn}</td>`;
-    }
-    if (rr.type === 'vendor') {
-      const vendors    = _getVendors();
-      const vendorOpts = vendors.map(v => `<option value="${esc(v.name)}">${esc(v.name)}${v.type ? ' ('+esc(v.type)+')' : ''}</option>`).join('');
-      const sel        = `<select class="cse-select cse-vendor-select" data-vendor-pick="${rr.idx}" style="font-size:8px;max-width:100%;width:100%;"><option value="">Select vendor…</option>${vendorOpts}</select>`;
-      return `<td>${sel}</td><td>${_inVendor(rr.idx,'company',rr.col2,'Company')}</td><td>${_inVendor(rr.idx,'contact',rr.col3,'Contact')}</td><td>${_inVendor(rr.idx,'email',rr.col4,'Email')}</td><td class="cse-calltd">${_inVendor(rr.idx,'callLoc',rr.col6,'Loc')} ${_inVendor(rr.idx,'callTime',rr.col5,'Time')}${delBtn}</td>`;
-    }
-    return `<td colspan="5"></td>`;
+    if (!s.directContacts) s.directContacts = [{ title:'', name:'', phone:'' }];
+    if (!s.clientContacts) s.clientContacts = [];
+    if (!s.agencyContacts) s.agencyContacts = [];
+    if (!s.talentContacts) s.talentContacts = [];
+    if (!s.vendors) s.vendors = [];
   }
 
-  /* ── Header helpers ── */
+  /* ── Header helpers (read-only display) ── */
   function _getAllCrewPositions() {
     const crew = _getCrewData(), positions = [];
     crew.forEach(section => {
@@ -335,519 +310,246 @@ Thank you,
     return { name: '', phone: '' };
   }
 
-  function _buildHeaderLeft(s) {
-    const pi = _getProdInfo();
-    const hasClient = !!(pi.clientName || pi.clientAddr || pi.clientCity || pi.clientPhone);
-    const hasAgency = !!(pi.agencyName || pi.agencyAddr || pi.agencyCity);
-    if (!s.directContacts) s.directContacts = [{ title:'', name:'', phone:'' }];
-    let html = '';
-    if (hasClient) {
-      const logo = pi.clientLogo ? `<img src="${esc(pi.clientLogo)}" alt="Client" class="cse-box-logo" />` : '';
-      html += `<div class="cse-client-agency-box"><div class="cse-box-inner"><div class="cse-box-text"><div class="cse-label">CLIENT</div><div class="cse-val">${esc(pi.clientName||'')}${pi.clientAddr?'<br>'+esc(pi.clientAddr):''}${pi.clientCity?'<br>'+esc(pi.clientCity):''}${pi.clientPhone?'<br>'+esc(pi.clientPhone):''}</div></div>${logo}</div></div>`;
+  /* ── Email token resolver ── */
+  function _resolveTokens(template, dateStr) {
+    const s = (dateStr ? sheets[dateStr] : null) || {};
+    const map = {
+      '{{DATE}}':             _formatDate(dateStr) || dateStr || '',
+      '{{SHOOT_DAY}}':        String(s.shootDay || '—'),
+      '{{TOTAL_SHOOT_DAYS}}': String(s.totalShootDays || '—'),
+      '{{DAY_TYPE}}':         s.dayType || '—',
+      '{{GENERAL_CALL}}':     s.generalCall || '—',
+      '{{LOCATION_NAME}}':    s.locationName || '—',
+      '{{LOCATION_ADDR}}':    [s.locationAddr1, s.locationAddr2].filter(Boolean).join(', ') || '—',
+      '{{PARKING_INFO}}':     s.parkingInfo || '—',
+      '{{PARKING_ADDR}}':     s.parkingAddr || '—',
+      '{{LUNCH_TIME}}':       s.lunchTime || '—',
+      '{{DIRECTOR}}':         s.director || '—',
+      '{{PRODUCER}}':         s.producer || '—',
+      '{{PRODUCTION_CO}}':    s.productionCo || '—',
+      '{{SUNRISE}}':          s.sunrise || '—',
+      '{{SUNSET}}':           s.sunset || '—',
+      '{{HIGH_TEMP}}':        s.highTemp || '—',
+      '{{LOW_TEMP}}':         s.lowTemp || '—',
+      '{{CONDITIONS}}':       s.conditions || '—',
+      '{{WARNING_BANNER}}':   s.warningBanner || '',
+      '{{NOTES}}':            s.notes || '',
+    };
+    let result = template || '';
+    for (const [tok, val] of Object.entries(map)) result = result.replaceAll(tok, val);
+    return result;
+  }
+
+  /* ── Navigation ── */
+  function openEditor(dateStr) {
+    if (!sheets[dateStr]) {
+      sheets[dateStr] = _buildDefaultSheet(dateStr);
+      _saveSheets();
     }
-    if (hasAgency) {
-      const logo = pi.agencyLogo ? `<img src="${esc(pi.agencyLogo)}" alt="Agency" class="cse-box-logo" />` : '';
-      html += `<div class="cse-client-agency-box"><div class="cse-box-inner"><div class="cse-box-text"><div class="cse-label">AGENCY</div><div class="cse-val">${esc(pi.agencyName||'')}${pi.agencyAddr?'<br>'+esc(pi.agencyAddr):''}${pi.agencyCity?'<br>'+esc(pi.agencyCity):''}</div></div>${logo}</div></div>`;
+    _ensureSchedule(sheets[dateStr]);
+    activeDate = dateStr;
+    view = 'editor';
+  }
+
+  function openEmailTemplate(dateStr) {
+    try { emailTemplate = localStorage.getItem(EMAIL_TPL_KEY) || DEFAULT_EMAIL_TEMPLATE; } catch { emailTemplate = DEFAULT_EMAIL_TEMPLATE; }
+    activeDate = dateStr || null;
+    view = 'email';
+  }
+
+  function goMain() {
+    _saveSheets();
+    view = 'main';
+  }
+
+  function generateSheet() {
+    if (!dateInput) return;
+    openEditor(dateInput);
+  }
+
+  function deleteSheet(dateStr) {
+    if (!confirm(`Delete call sheet for ${_formatDate(dateStr)}?`)) return;
+    const next = { ...sheets };
+    delete next[dateStr];
+    sheets = next;
+    _saveSheets();
+  }
+
+  /* ── Editor actions ── */
+  function saveSheet() {
+    _saveSheets();
+    savedMsg = 'Saved ✓';
+    setTimeout(() => { savedMsg = ''; }, 1500);
+  }
+
+  function refreshPersonnel() {
+    if (!activeDate) return;
+    const sheet = sheets[activeDate];
+    if (!confirm('Re-pull personnel from Crew & Cast lists? This will replace current crew, client, agency, and talent entries.')) return;
+    const fresh = _buildDefaultSheet(activeDate);
+    const preserve = (oldArr, newArr) => {
+      const map = {};
+      (oldArr||[]).forEach(e => { const k=(e.name||'').trim().toLowerCase(); if(k) map[k]={callTime:e.callTime||'',callLoc:e.callLoc||''}; });
+      (newArr||[]).forEach(e => { const k=(e.name||'').trim().toLowerCase(); if(map[k]){e.callTime=map[k].callTime;e.callLoc=map[k].callLoc;} });
+    };
+    preserve(sheet.crew,           fresh.crew);
+    preserve(sheet.clientContacts, fresh.clientContacts);
+    preserve(sheet.agencyContacts, fresh.agencyContacts);
+    preserve(sheet.talentContacts, fresh.talentContacts);
+    sheet.crew            = fresh.crew;
+    sheet.clientContacts  = fresh.clientContacts;
+    sheet.agencyContacts  = fresh.agencyContacts;
+    sheet.talentContacts  = fresh.talentContacts;
+    sheets = { ...sheets };
+    _saveSheets();
+  }
+
+  /* ── Schedule rows ── */
+  function addSchedRow() {
+    sheets[activeDate].schedule.push({scene:'',sets:'',setsDesc:'',cast:'',dn:'',pages:'',location:''});
+    sheets = { ...sheets };
+  }
+
+  function onSceneBlur(i) {
+    const row = sheets[activeDate]?.schedule[i];
+    if (!row?.scene?.trim()) return;
+    const bdScene = _lookupBreakdownScene(row.scene.trim());
+    if (!bdScene) return;
+    const fill = _breakdownToSchedRow(bdScene);
+    const schedule = sheets[activeDate].schedule;
+    schedule[i] = { ...schedule[i], ...fill };
+    sheets = { ...sheets };
+  }
+
+  /* ── Crew rows ── */
+  function addCrewRow() {
+    sheets[activeDate].crew.push({section:'',position:'',name:'',phone:'',email:'',callTime:'',callLoc:''});
+    sheets = { ...sheets };
+  }
+
+  function deleteCrewRow(i) {
+    sheets[activeDate].crew.splice(i, 1);
+    sheets = { ...sheets };
+  }
+
+  /* ── Contact rows ── */
+  function addContact(type) {
+    const s = sheets[activeDate];
+    if (type === 'client') s.clientContacts.push({title:'',name:'',email:'',callTime:'',callLoc:''});
+    else if (type === 'agency') s.agencyContacts.push({title:'',name:'',email:'',callTime:'',callLoc:''});
+    else if (type === 'talent') s.talentContacts.push({title:'',name:'',callTime:'',callLoc:''});
+    else if (type === 'vendor') s.vendors.push({type:'',company:'',contact:'',email:'',callTime:'',callLoc:''});
+    sheets = { ...sheets };
+  }
+
+  function deleteContact(type, i) {
+    const s = sheets[activeDate];
+    if (type === 'client') s.clientContacts.splice(i, 1);
+    else if (type === 'agency') s.agencyContacts.splice(i, 1);
+    else if (type === 'talent') s.talentContacts.splice(i, 1);
+    else if (type === 'vendor') s.vendors.splice(i, 1);
+    sheets = { ...sheets };
+  }
+
+  function onVendorPick(i, vendorName) {
+    const vendor = _getVendors().find(v => v.name === vendorName);
+    if (!vendor) return;
+    const s = sheets[activeDate];
+    if (s.vendors[i]) {
+      s.vendors[i].type    = vendor.type    || '';
+      s.vendors[i].company = vendor.name    || '';
+      s.vendors[i].contact = vendor.contact || '';
+      s.vendors[i].email   = vendor.email   || '';
     }
-    const positions   = _getAllCrewPositions();
-    const contactRows = s.directContacts.map((dc, i) => {
-      const opts = positions.map(p => `<option value="${esc(p)}"${dc.title===p?' selected':''}>${esc(p)}</option>`).join('');
-      return `<tr class="cse-dc-row">
-        <td><select class="cse-dc-select" data-dc-idx="${i}"><option value="">${dc.title?'':'Title'}</option>${opts}</select></td>
-        <td class="cse-dc-name" data-dc-name="${i}">${esc(dc.name)||'<span class="cse-dc-ghost">Name</span>'}</td>
-        <td class="cse-dc-phone" data-dc-phone="${i}">${esc(dc.phone)||'<span class="cse-dc-ghost">Phone</span>'}</td>
-        <td><button type="button" class="cse-dc-del" data-dc-del="${i}" title="Remove">✕</button></td>
-      </tr>`;
-    }).join('');
-    html += `<table class="cse-dc-table"><tbody>${contactRows}</tbody></table><button type="button" class="cse-dc-add" id="cs-add-dc">+</button>`;
-    return `<div class="cse-hdr-left-info">${html}</div>`;
+    sheets = { ...sheets };
   }
 
-  function _buildCenterProdBlock() {
-    const pi = _getProdInfo();
-    let lines = [];
-    if (pi.prodCoName)  lines.push(esc(pi.prodCoName));
-    if (pi.prodCoAddr)  lines.push(esc(pi.prodCoAddr));
-    if (pi.prodCoCity)  lines.push(esc(pi.prodCoCity));
-    if (pi.prodCoPhone) lines.push(esc(pi.prodCoPhone));
-    const logo = pi.prodCoLogo ? `<img src="${esc(pi.prodCoLogo)}" alt="Production Co." class="cse-prod-logo" />` : '';
-    return `<div class="cse-hdr-prod-block"><div class="cse-label">PRODUCTION</div><div class="cse-prod-co">${lines.join('<br>')}</div>${logo}</div>`;
+  /* ── Direct contacts ── */
+  function addDirectContact() {
+    sheets[activeDate].directContacts.push({ title:'', name:'', phone:'' });
+    sheets = { ...sheets };
   }
 
-  /* ── Migrate old left/right schedule ── */
-  function _migrateSchedule(s) {
-    const rows = [];
-    const maxLen = Math.max(s.scheduleLeft?.length || 0, s.scheduleRight?.length || 0, 1);
-    for (let i = 0; i < maxLen; i++) {
-      const L = s.scheduleLeft?.[i] || {};
-      rows.push({ scene: L.scene||'', sets: L.location||'', setsDesc:'', cast: L.talent||'', dn:'', pages:'', location: L.time||'' });
+  function deleteDirectContact(i) {
+    const dc = sheets[activeDate].directContacts;
+    dc.splice(i, 1);
+    if (dc.length === 0) dc.push({ title:'', name:'', phone:'' });
+    sheets = { ...sheets };
+  }
+
+  function onDirectContactPick(i, position) {
+    const match = _findCrewByPosition(position);
+    sheets[activeDate].directContacts[i] = { title: position, name: match.name, phone: match.phone };
+    sheets = { ...sheets };
+  }
+
+  /* ── Enter → next row keyboard nav ── */
+  function handleTableKeydown(e) {
+    if (e.key !== 'Enter') return;
+    const el = e.target;
+    if (el.tagName === 'TEXTAREA') return;
+    e.preventDefault();
+    const cell = el.closest('td');
+    if (!cell) return;
+    const row = cell.closest('tr');
+    if (!row) return;
+    const cellIdx = Array.from(row.cells).indexOf(cell);
+    const cellInputs = Array.from(cell.querySelectorAll('input[type="text"]'));
+    const inputIdx = cellInputs.indexOf(el);
+    let nextRow = row.nextElementSibling;
+    if (!nextRow || nextRow.classList.contains('cse-section-row')) {
+      nextRow = nextRow?.nextElementSibling;
     }
-    return rows.length ? rows : [{ scene:'', sets:'', setsDesc:'', cast:'', dn:'', pages:'', location:'' }];
-  }
-
-  /* ── Collect editor data ── */
-  function _collectEditorData(dateStr) {
-    const sheet = _sheets[dateStr];
-    if (!sheet) return;
-    container.querySelectorAll('[data-cs]').forEach(el => { sheet[el.dataset.cs] = el.value; });
-    container.querySelectorAll('[data-sched]').forEach(el => {
-      const [,idx,field] = el.dataset.sched.split('-');
-      if (!sheet.schedule) sheet.schedule = [];
-      const i = parseInt(idx);
-      if (!sheet.schedule[i]) sheet.schedule[i] = {};
-      sheet.schedule[i][field] = el.value;
-    });
-    container.querySelectorAll('[data-crew]').forEach(el => {
-      const [idx, field] = el.dataset.crew.split('-');
-      if (sheet.crew[parseInt(idx)]) sheet.crew[parseInt(idx)][field] = el.value;
-    });
-    container.querySelectorAll('[data-contact]').forEach(el => {
-      const [idx, field] = el.dataset.contact.split('-');
-      if (sheet.clientContacts?.[parseInt(idx)]) sheet.clientContacts[parseInt(idx)][field] = el.value;
-    });
-    container.querySelectorAll('[data-agency]').forEach(el => {
-      const [idx, field] = el.dataset.agency.split('-');
-      if (sheet.agencyContacts?.[parseInt(idx)]) sheet.agencyContacts[parseInt(idx)][field] = el.value;
-    });
-    container.querySelectorAll('[data-talent]').forEach(el => {
-      const [idx, field] = el.dataset.talent.split('-');
-      if (sheet.talentContacts?.[parseInt(idx)]) sheet.talentContacts[parseInt(idx)][field] = el.value;
-    });
-    container.querySelectorAll('[data-vendor]').forEach(el => {
-      const [idx, field] = el.dataset.vendor.split('-');
-      if (sheet.vendors?.[parseInt(idx)]) sheet.vendors[parseInt(idx)][field] = el.value;
-    });
-  }
-
-  /* ══════════════════════════════════
-     MAIN VIEW
-  ══════════════════════════════════ */
-  function _renderMain() {
-    const today      = _todayStr();
-    const savedDates = Object.keys(_sheets).sort().reverse();
-
-    container.innerHTML = `
-      <section class="cs-section">
-        <div class="cs-header" style="display:flex;align-items:flex-start;justify-content:space-between;">
-          <div>
-            <h2 class="cs-title">Call Sheet Generator</h2>
-            <p class="cs-subtitle">Select a date to generate or edit a call sheet.</p>
-          </div>
-          <a href="#crew" class="btn btn--sm" style="font-size:11px;padding:4px 10px;white-space:nowrap;margin-top:4px;background:var(--bg-elevated);color:var(--text-secondary);border:1px solid var(--border);text-decoration:none;">View Crew List</a>
-        </div>
-        <div class="cs-date-picker">
-          <div class="cs-date-row">
-            <label for="cs-date-input">Date</label>
-            <input type="date" id="cs-date-input" value="${today}" />
-            <button class="btn btn--primary" id="cs-generate-btn">Generate Call Sheet</button>
-            <button class="btn btn--sm cs-email-tpl-btn" id="cs-email-tpl-btn">Call Sheet Email Template</button>
-          </div>
-        </div>
-        ${savedDates.length ? `
-          <div class="cs-saved">
-            <h3 class="cs-saved-title">Saved Call Sheets</h3>
-            <div class="cs-saved-list">
-              ${savedDates.map(d => {
-                const s = _sheets[d];
-                const shootLabel = s.shootDay ? ` — Shoot Day ${s.shootDay}` : '';
-                return `<div class="cs-saved-item">
-                  <span class="cs-saved-date">${_formatDate(d)}${shootLabel}</span>
-                  <div class="cs-saved-actions">
-                    <button class="btn btn--ghost btn--sm" data-cs-edit="${d}">Edit</button>
-                    <button class="btn btn--ghost btn--sm" data-cs-print="${d}">Print / PDF</button>
-                    <button class="btn btn--ghost btn--sm btn--danger-text" data-cs-delete="${d}">Delete</button>
-                  </div>
-                </div>`;
-              }).join('')}
-            </div>
-          </div>` : ''}
-      </section>`;
-
-    container.querySelector('#cs-generate-btn').addEventListener('click', () => {
-      const dateStr = container.querySelector('#cs-date-input').value;
-      if (!dateStr) return;
-      if (!_sheets[dateStr]) { _sheets[dateStr] = _buildDefaultSheet(dateStr); _saveSheets(); }
-      _renderEditor(dateStr);
-    });
-    container.querySelector('#cs-email-tpl-btn').addEventListener('click', () => {
-      const dateStr = container.querySelector('#cs-date-input').value || today;
-      _renderEmailTemplate(dateStr);
-    });
-    container.querySelectorAll('[data-cs-edit]').forEach(b =>
-      b.addEventListener('click', () => _renderEditor(b.dataset.csEdit)));
-    container.querySelectorAll('[data-cs-print]').forEach(b =>
-      b.addEventListener('click', () => _openPrintView(b.dataset.csPrint)));
-    container.querySelectorAll('[data-cs-delete]').forEach(b =>
-      b.addEventListener('click', () => {
-        if (!confirm(`Delete call sheet for ${_formatDate(b.dataset.csDelete)}?`)) return;
-        delete _sheets[b.dataset.csDelete]; _saveSheets(); _renderMain();
-      }));
-  }
-
-  /* ══════════════════════════════════
-     EDITOR VIEW
-  ══════════════════════════════════ */
-  function _renderEditor(dateStr) {
-    const s = _sheets[dateStr];
-    if (!s) return;
-
-    if (!s.schedule) s.schedule = s.scheduleLeft?.length ? _migrateSchedule(s) : Array.from({length:8}, () => ({scene:'',sets:'',setsDesc:'',cast:'',dn:'',pages:'',location:''}));
-
-    let schedRowsHTML = '';
-    for (let i = 0; i < s.schedule.length; i++) {
-      const r = s.schedule[i] || {};
-      schedRowsHTML += `<tr>
-        <td class="cse-sched-scene">${_inSched(i,'scene',r.scene,'Scene')}</td>
-        <td class="cse-sched-sets">
-          <input type="text" class="cse-in cse-in--sched cse-in--sets-upper" data-sched="S-${i}-sets" value="${esc(r.sets||'')}" placeholder="Sets" />
-          <input type="text" class="cse-in cse-in--sched cse-in--sets-desc" data-sched="S-${i}-setsDesc" value="${esc(r.setsDesc||'')}" placeholder="Description" />
-        </td>
-        <td class="cse-sched-cast">${_inSched(i,'cast',r.cast,'Cast')}</td>
-        <td class="cse-sched-dn">${_inSched(i,'dn',r.dn,'D/N')}</td>
-        <td class="cse-sched-pages">${_inSched(i,'pages',r.pages,'Pages')}</td>
-        <td class="cse-sched-loc">${_inSched(i,'location',r.location,'Location')}</td>
-      </tr>`;
+    if (!nextRow) return;
+    const targetCell = nextRow.cells[cellIdx];
+    if (targetCell) {
+      const inputs = targetCell.querySelectorAll('input[type="text"]');
+      const target = inputs[inputIdx] || inputs[0];
+      if (target) { target.focus(); target.select(); }
     }
-
-    let globalCrewIdx = 0;
-    let leftCrewHTML  = '';
-    _groupCrewBySection(s.crew).forEach(group => {
-      leftCrewHTML += `<tr class="cse-section-row"><td colspan="5" class="cse-section-label">${esc(group.section)}</td></tr>`;
-      group.members.forEach(c => {
-        const ci = globalCrewIdx++;
-        leftCrewHTML += `<tr>
-          <td>${_inCrew(ci,'position',c.position,'Title','cse-in--crew')}</td>
-          <td>${_inCrew(ci,'name',c.name,'Name','cse-in--crew')}</td>
-          <td>${_inCrew(ci,'phone',c.phone,'Phone','cse-in--crew')}</td>
-          <td>${_inCrew(ci,'email',c.email,'Email','cse-in--crew')}</td>
-          <td class="cse-calltd">${_inCrew(ci,'callLoc',c.callLoc,'Loc','cse-in--call')} ${_inCrew(ci,'callTime',c.callTime,'Time','cse-in--call')}<button type="button" class="cse-row-del" data-del-type="crew" data-del-idx="${ci}" title="Remove">✕</button></td>
-        </tr>`;
-      });
-    });
-
-    let rightCrewHTML = '';
-    _buildRightRows(s).forEach((rr, ri) => {
-      if (rr.isHeader) rightCrewHTML += `<tr class="cse-section-row"><td colspan="5" class="cse-section-label cse-right-section">${esc(rr.label)}</td></tr>`;
-      else rightCrewHTML += `<tr>${_rightDataCells(rr, ri)}</tr>`;
-    });
-
-    const pi = _getProdInfo();
-
-    container.innerHTML = `
-      <div class="cse-toolbar">
-        <button class="btn btn--ghost btn--sm" id="cs-back-btn">← Back</button>
-        <span class="cse-toolbar-title">Call Sheet — ${_formatDate(dateStr)}</span>
-        <div class="cse-toolbar-actions">
-          <button class="btn btn--ghost btn--sm" id="cs-refresh-crew-btn">Refresh Personnel</button>
-          <button class="btn btn--ghost btn--sm" id="cs-print-btn">Print / PDF</button>
-          <button class="btn btn--primary btn--sm" id="cs-save-btn">Save</button>
-        </div>
-      </div>
-
-      <div class="cse-page-wrap">
-        <div class="cse-page">
-
-          <div class="cse-hdr">
-            <div class="cse-hdr-topbar">
-              <div class="cse-hdr-shootday">SHOOT DAY ${_in('shootDay',s.shootDay,'#','cse-in--shootday')} of ${_in('totalShootDays',s.totalShootDays||'','#','cse-in--shootday')}
-                <select data-cs="dayType" class="cse-select cse-select--topbar">
-                  <option value=""${!s.dayType?' selected':''}>Day Type</option>
-                  <option value="prep"${s.dayType==='prep'?' selected':''}>Prep</option>
-                  <option value="shoot"${s.dayType==='shoot'?' selected':''}>Shoot</option>
-                  <option value="wrap"${s.dayType==='wrap'?' selected':''}>Wrap</option>
-                  <option value="down"${s.dayType==='down'?' selected':''}>Down</option>
-                </select>
-              </div>
-              <div class="cse-hdr-title">${pi.titleLogo ? `<img src="${esc(pi.titleLogo)}" class="cse-title-logo" alt="Title" />` : 'CALL SHEET'}</div>
-              <div class="cse-hdr-date">${_formatDate(dateStr)}</div>
-            </div>
-
-            <div class="cse-hdr-left">${_buildHeaderLeft(s)}</div>
-
-            <div class="cse-hdr-center">
-              <div class="cse-hdr-center-top">
-                <div class="cse-project-title">${esc((_getProject()?.title)||'')}</div>
-                <div class="cse-hdr-call">
-                  <div class="cse-call-label">GENERAL CALL:</div>
-                  <div class="cse-call-time">${_in('generalCall',s.generalCall,'9:30 AM','cse-in--calltime')}</div>
-                </div>
-                <div class="cse-hdr-sub">*see individual call times*</div>
-                ${_buildCenterProdBlock()}
-              </div>
-              <div class="cse-hdr-meals">
-                Lunch RTS ${_in('lunchTime',s.lunchTime,'3:00 PM','cse-in--center')}<br>
-                2nd Meal RTS: ${_in('secondMeal',s.secondMeal,'8:00 PM','cse-in--center')}
-              </div>
-            </div>
-
-            <div class="cse-hdr-right">
-              <div class="cse-info-box">
-                <div class="cse-label">LOCATIONS</div>
-                <div class="cse-val">${_in('locationName',s.locationName,'Location name')}<br>${_in('locationAddr1',s.locationAddr1,'Street address')}<br>${_in('locationAddr2',s.locationAddr2,'City, State ZIP')}</div>
-              </div>
-              <div class="cse-info-box">
-                <div class="cse-label">PARKING</div>
-                <div class="cse-val">${_in('parkingInfo',s.parkingInfo,'Parking info')}<br>${_in('parkingAddr',s.parkingAddr,'Parking address')}<br>${_in('parkingAddr2',s.parkingAddr2||'','Parking line 3')}<br>${_in('parkingAddr3',s.parkingAddr3||'','Parking line 4')}</div>
-              </div>
-              <div class="cse-info-box">
-                <div class="cse-label">LOADING ZONE</div>
-                <div class="cse-val">${_in('loadingZone',s.loadingZone,'Loading zone')}<br>${_in('loadingAddr',s.loadingAddr,'Loading address')}<br>${_in('loadingAddr2',s.loadingAddr2||'','Loading line 3')}<br>${_in('loadingAddr3',s.loadingAddr3||'','Loading line 4')}</div>
-              </div>
-              <div class="cse-hdr-right-bottom">
-                <div class="cse-wx">
-                  High: ${_in('highTemp',s.highTemp,'67 cloudy','cse-in--sm')}<br>
-                  Low: ${_in('lowTemp',s.lowTemp,'48','cse-in--sm')}<br>
-                  UV Index: ${_in('uvIndex',s.uvIndex,'4 of 11','cse-in--sm')}<br>
-                  Rain: ${_in('rainChance',s.rainChance,'7% chance','cse-in--sm')}<br>
-                  Sunrise: ${_in('sunrise',s.sunrise,'6:40 am','cse-in--sm')}<br>
-                  Sunset: ${_in('sunset',s.sunset,'5:30 pm','cse-in--sm')}
-                </div>
-                <div class="cse-info-box cse-hdr-hospital">
-                  <div class="cse-label">NEAREST HOSPITAL</div>
-                  <div class="cse-val">${_in('hospitalName',s.hospitalName,'Hospital name')}<br>${_in('hospitalAddr',s.hospitalAddr,'Hospital address')}<br>${_in('hospitalAddr2',s.hospitalAddr2||'','City, State ZIP')}</div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="cse-warning">
-            ${_in('warningBanner',s.warningBanner,'Warning banner text','cse-in--warning')}
-          </div>
-
-          <table class="cse-sched">
-            <thead><tr>
-              <th class="cse-sched-scene">Scene</th>
-              <th class="cse-sched-sets">Sets</th>
-              <th class="cse-sched-cast">Cast</th>
-              <th class="cse-sched-dn">D/N</th>
-              <th class="cse-sched-pages">Pages</th>
-              <th class="cse-sched-loc">Location</th>
-            </tr></thead>
-            <tbody>${schedRowsHTML}</tbody>
-          </table>
-          <div class="cse-add-row-bar">
-            <button class="cse-add-btn" id="cs-add-sched">+ Row</button>
-          </div>
-
-          <div class="cse-crew-split">
-            <div class="cse-crew-left">
-              <table class="cse-crew cse-crew-tbl-left">
-                <thead><tr><th>Title</th><th>Name</th><th>Phone</th><th>Email</th><th>Report</th></tr></thead>
-                <tbody>${leftCrewHTML}</tbody>
-              </table>
-              <div class="cse-add-row-bar">
-                <button class="cse-add-btn" id="cs-add-crew">+ Crew</button>
-              </div>
-            </div>
-            <div class="cse-crew-right">
-              <table class="cse-crew cse-crew-tbl-right">
-                <thead><tr><th>Title</th><th>Name</th><th></th><th>Email</th><th>Report</th></tr></thead>
-                <tbody>${rightCrewHTML}</tbody>
-              </table>
-              <div class="cse-add-row-bar">
-                <button class="cse-add-btn" id="cs-add-contact">+ Client</button>
-                <button class="cse-add-btn" id="cs-add-agency">+ Agency</button>
-                <button class="cse-add-btn" id="cs-add-talent">+ Talent</button>
-                <button class="cse-add-btn" id="cs-add-vendor">+ Vendor</button>
-              </div>
-              <div class="cse-report">
-                <span class="cse-report-label">PRODUCTION REPORT:</span>
-                <div class="cse-report-cols">
-                  <div class="cse-report-col">
-                    <div class="cse-report-row"><span class="cse-report-field-label">1ST AM SHOT:</span> ${_in('report1stAM', s.report1stAM||'', '_________', 'cse-in--crew')}</div>
-                    <div class="cse-report-row"><span class="cse-report-field-label">1ST PM SHOT:</span> ${_in('report1stPM', s.report1stPM||'', '_________', 'cse-in--crew')}</div>
-                    <div class="cse-report-row"><span class="cse-report-field-label">CAMERA WRAP:</span> ${_in('reportCameraWrap', s.reportCameraWrap||'', '_________', 'cse-in--crew')}</div>
-                  </div>
-                  <div class="cse-report-col">
-                    <div class="cse-report-row"><span class="cse-report-field-label">LUNCH:</span> ${_in('reportLunch', s.reportLunch||'', '_________', 'cse-in--crew')}</div>
-                    <div class="cse-report-row"><span class="cse-report-field-label">2ND MEAL:</span> ${_in('report2ndMeal', s.report2ndMeal||'', '_________', 'cse-in--crew')}</div>
-                    <div class="cse-report-row"><span class="cse-report-field-label">CREW WRAP:</span> ${_in('reportCrewWrap', s.reportCrewWrap||'', '_________', 'cse-in--crew')}</div>
-                  </div>
-                </div>
-              </div>
-              <div class="cse-notes">
-                <span class="cse-notes-label">NOTES</span><br>
-                <textarea class="cse-notes-input" data-cs="notes" rows="2" placeholder="Additional notes...">${esc(s.notes)}</textarea>
-              </div>
-            </div>
-          </div>
-
-          <div class="cse-footer">**CALL SHEETS ARE CONFIDENTIAL AND NOT FOR REDISTRIBUTION OUTSIDE OF THE PRODUCTION**</div>
-
-        </div>
-      </div>`;
-
-    _wireEditor(dateStr);
   }
 
-  /* ── Wire editor ── */
-  function _wireEditor(dateStr) {
-    const sheet = _sheets[dateStr];
+  /* ── Email template actions ── */
+  let emailTextarea;
 
-    container.querySelector('#cs-back-btn').addEventListener('click', () => {
-      _collectEditorData(dateStr); _saveSheets(); _renderMain();
-    });
-    container.querySelector('#cs-save-btn').addEventListener('click', () => {
-      _collectEditorData(dateStr); _saveSheets();
-      const btn = container.querySelector('#cs-save-btn');
-      btn.textContent = 'Saved ✓'; setTimeout(() => { btn.textContent = 'Save'; }, 1500);
-    });
-    container.querySelector('#cs-print-btn').addEventListener('click', () => {
-      _collectEditorData(dateStr); _saveSheets(); _openPrintView(dateStr);
-    });
-    container.querySelector('#cs-refresh-crew-btn').addEventListener('click', () => {
-      if (!confirm('Re-pull personnel from Crew & Cast lists? This will replace current crew, client, agency, and talent entries.')) return;
-      _collectEditorData(dateStr);
-      const fresh = _buildDefaultSheet(dateStr);
-      const preserve = (oldArr, newArr) => {
-        const map = {};
-        (oldArr||[]).forEach(e => { const k=(e.name||'').trim().toLowerCase(); if(k) map[k]={callTime:e.callTime||'',callLoc:e.callLoc||''}; });
-        (newArr||[]).forEach(e => { const k=(e.name||'').trim().toLowerCase(); if(map[k]){e.callTime=map[k].callTime;e.callLoc=map[k].callLoc;} });
-      };
-      preserve(sheet.crew,           fresh.crew);
-      preserve(sheet.clientContacts, fresh.clientContacts);
-      preserve(sheet.agencyContacts, fresh.agencyContacts);
-      preserve(sheet.talentContacts, fresh.talentContacts);
-      sheet.crew = fresh.crew; sheet.clientContacts = fresh.clientContacts;
-      sheet.agencyContacts = fresh.agencyContacts; sheet.talentContacts = fresh.talentContacts;
-      _sheets[dateStr] = sheet; _saveSheets(); _renderEditor(dateStr);
-    });
-
-    // Scene autofill from breakdown
-    container.querySelectorAll('[data-sched]').forEach(el => {
-      const parts = el.dataset.sched.split('-');
-      if (parts[0] === 'S' && parts[2] === 'scene') {
-        el.addEventListener('blur', () => {
-          const sceneNum = el.value.trim();
-          if (!sceneNum) return;
-          const bdScene = _lookupBreakdownScene(sceneNum);
-          if (!bdScene) return;
-          const fill = _breakdownToSchedRow(bdScene);
-          const idx  = parts[1];
-          ['sets','setsDesc','cast','dn','pages','location'].forEach(field => {
-            const inp = container.querySelector(`[data-sched="S-${idx}-${field}"]`);
-            if (inp) inp.value = fill[field] || '';
-          });
-        });
+  function insertToken(token) {
+    if (!emailTextarea) return;
+    const start = emailTextarea.selectionStart;
+    const end   = emailTextarea.selectionEnd;
+    const val   = emailTemplate;
+    emailTemplate = val.slice(0, start) + token + val.slice(end);
+    // restore cursor after DOM update
+    setTimeout(() => {
+      if (emailTextarea) {
+        emailTextarea.selectionStart = emailTextarea.selectionEnd = start + token.length;
+        emailTextarea.focus();
       }
-    });
+    }, 0);
+  }
 
-    // Add rows
-    container.querySelector('#cs-add-sched').addEventListener('click', () => {
-      _collectEditorData(dateStr);
-      if (!sheet.schedule) sheet.schedule = [];
-      sheet.schedule.push({scene:'',sets:'',setsDesc:'',cast:'',dn:'',pages:'',location:''});
-      _saveSheets(); _renderEditor(dateStr);
-    });
-    container.querySelector('#cs-add-crew').addEventListener('click', () => {
-      _collectEditorData(dateStr); sheet.crew.push({section:'',position:'',name:'',phone:'',email:'',callTime:'',callLoc:''}); _saveSheets(); _renderEditor(dateStr);
-    });
-    container.querySelector('#cs-add-contact').addEventListener('click', () => {
-      _collectEditorData(dateStr); (sheet.clientContacts=sheet.clientContacts||[]).push({title:'',name:'',email:'',callTime:'',callLoc:''}); _saveSheets(); _renderEditor(dateStr);
-    });
-    container.querySelector('#cs-add-agency').addEventListener('click', () => {
-      _collectEditorData(dateStr); (sheet.agencyContacts=sheet.agencyContacts||[]).push({title:'',name:'',email:'',callTime:'',callLoc:''}); _saveSheets(); _renderEditor(dateStr);
-    });
-    container.querySelector('#cs-add-talent').addEventListener('click', () => {
-      _collectEditorData(dateStr); (sheet.talentContacts=sheet.talentContacts||[]).push({title:'',name:'',callTime:'',callLoc:''}); _saveSheets(); _renderEditor(dateStr);
-    });
-    container.querySelector('#cs-add-vendor').addEventListener('click', () => {
-      _collectEditorData(dateStr); (sheet.vendors=sheet.vendors||[]).push({type:'',company:'',contact:'',email:'',callTime:'',callLoc:''}); _saveSheets(); _renderEditor(dateStr);
-    });
+  function saveEmailTemplate() {
+    localStorage.setItem(EMAIL_TPL_KEY, emailTemplate);
+    emailSavedMsg = 'Saved ✓';
+    setTimeout(() => { emailSavedMsg = ''; }, 1500);
+  }
 
-    // Delete rows
-    container.querySelectorAll('.cse-row-del').forEach(btn => {
-      btn.addEventListener('click', () => {
-        _collectEditorData(dateStr);
-        const type = btn.dataset.delType, idx = parseInt(btn.dataset.delIdx);
-        if (type === 'crew')    sheet.crew.splice(idx, 1);
-        else if (type === 'contact') sheet.clientContacts.splice(idx, 1);
-        else if (type === 'agency')  sheet.agencyContacts.splice(idx, 1);
-        else if (type === 'talent')  sheet.talentContacts.splice(idx, 1);
-        else if (type === 'vendor')  sheet.vendors.splice(idx, 1);
-        _saveSheets(); _renderEditor(dateStr);
-      });
-    });
-
-    // Vendor dropdown autofill
-    container.querySelectorAll('.cse-vendor-select').forEach(sel => {
-      sel.addEventListener('change', () => {
-        const idx = parseInt(sel.dataset.vendorPick);
-        const vendor = _getVendors().find(v => v.name === sel.value);
-        if (!vendor) return;
-        _collectEditorData(dateStr);
-        if (!sheet.vendors) sheet.vendors = [];
-        if (sheet.vendors[idx]) {
-          sheet.vendors[idx].type    = vendor.type    || '';
-          sheet.vendors[idx].company = vendor.name    || '';
-          sheet.vendors[idx].contact = vendor.contact || '';
-          sheet.vendors[idx].email   = vendor.email   || '';
-        }
-        _saveSheets(); _renderEditor(dateStr);
-      });
-    });
-
-    // Direct contacts
-    const addDcBtn = container.querySelector('#cs-add-dc');
-    if (addDcBtn) {
-      addDcBtn.addEventListener('click', () => {
-        _collectEditorData(dateStr);
-        if (!sheet.directContacts) sheet.directContacts = [];
-        sheet.directContacts.push({ title:'', name:'', phone:'' });
-        _saveSheets(); _renderEditor(dateStr);
-      });
-    }
-    container.querySelectorAll('.cse-dc-select').forEach(sel => {
-      sel.addEventListener('change', () => {
-        const idx   = parseInt(sel.dataset.dcIdx);
-        const title = sel.value;
-        const match = _findCrewByPosition(title);
-        if (!sheet.directContacts) sheet.directContacts = [];
-        sheet.directContacts[idx] = { title, name: match.name, phone: match.phone };
-        _saveSheets(); _renderEditor(dateStr);
-      });
-    });
-    container.querySelectorAll('.cse-dc-del').forEach(btn => {
-      btn.addEventListener('click', () => {
-        _collectEditorData(dateStr);
-        const idx = parseInt(btn.dataset.dcDel);
-        sheet.directContacts.splice(idx, 1);
-        if (sheet.directContacts.length === 0) sheet.directContacts.push({ title:'', name:'', phone:'' });
-        _saveSheets(); _renderEditor(dateStr);
-      });
-    });
-
-    // Enter → move to same column in next row
-    container.querySelectorAll('.cse-page input[type="text"], .cse-page textarea').forEach(el => {
-      el.addEventListener('keydown', e => {
-        if (e.key !== 'Enter') return;
-        if (el.tagName === 'TEXTAREA') return;
-        e.preventDefault();
-        const cell = el.closest('td'); if (!cell) return;
-        const row  = cell.closest('tr'); if (!row) return;
-        const cellIdx    = Array.from(row.cells).indexOf(cell);
-        const cellInputs = Array.from(cell.querySelectorAll('input[type="text"]'));
-        const inputIdx   = cellInputs.indexOf(el);
-        let nextRow = row.nextElementSibling;
-        if (!nextRow || nextRow.classList.contains('cse-section-row')) {
-          nextRow = nextRow?.nextElementSibling;
-        }
-        if (!nextRow) return;
-        const targetCell = nextRow.cells[cellIdx];
-        if (targetCell) {
-          const inputs = targetCell.querySelectorAll('input[type="text"]');
-          const target = inputs[inputIdx] || inputs[0];
-          if (target) { target.focus(); target.select(); }
-        }
-      });
+  function copyResolvedEmail() {
+    navigator.clipboard.writeText(_resolveTokens(emailTemplate, activeDate)).then(() => {
+      emailCopiedMsg = 'Copied ✓';
+      setTimeout(() => { emailCopiedMsg = ''; }, 1500);
     });
   }
 
+  function resetEmailTemplate() {
+    if (!confirm('Reset the email template to the default? Your current template will be lost.')) return;
+    emailTemplate = DEFAULT_EMAIL_TEMPLATE;
+  }
+
   /* ══════════════════════════════════
-     PRINT VIEW
+     PRINT VIEW (unchanged)
   ══════════════════════════════════ */
   function _openPrintView(dateStr) {
-    const s = _sheets[dateStr];
+    const s = sheets[dateStr];
     if (!s) return;
     const e  = v => esc(v || '');
     const pi = _getProdInfo();
@@ -855,7 +557,7 @@ Thank you,
     const hasAgency = !!(pi.agencyName || pi.agencyAddr || pi.agencyCity);
 
     const crewBySection = _groupCrewBySection(s.crew);
-    const rightRows     = _buildRightRows(s);
+    const rightRows     = _buildRightRowsForPrint(s);
 
     let leftRows = '';
     crewBySection.forEach(group => {
@@ -1009,118 +711,511 @@ ${s.notes?`<div class="notes"><span class="notes-l">NOTES</span><br>${e(s.notes)
     win.document.close();
   }
 
-  /* ══════════════════════════════════
-     EMAIL TEMPLATE VIEW
-  ══════════════════════════════════ */
-  function _resolveTokens(template, dateStr) {
-    const s = _sheets[dateStr] || {};
-    const map = {
-      '{{DATE}}':             _formatDate(dateStr) || dateStr,
-      '{{SHOOT_DAY}}':        s.shootDay || '—',
-      '{{TOTAL_SHOOT_DAYS}}': s.totalShootDays || '—',
-      '{{DAY_TYPE}}':         s.dayType || '—',
-      '{{GENERAL_CALL}}':     s.generalCall || '—',
-      '{{LOCATION_NAME}}':    s.locationName || '—',
-      '{{LOCATION_ADDR}}':    [s.locationAddr1, s.locationAddr2].filter(Boolean).join(', ') || '—',
-      '{{PARKING_INFO}}':     s.parkingInfo || '—',
-      '{{PARKING_ADDR}}':     s.parkingAddr || '—',
-      '{{LUNCH_TIME}}':       s.lunchTime || '—',
-      '{{DIRECTOR}}':         s.director || '—',
-      '{{PRODUCER}}':         s.producer || '—',
-      '{{PRODUCTION_CO}}':    s.productionCo || '—',
-      '{{SUNRISE}}':          s.sunrise || '—',
-      '{{SUNSET}}':           s.sunset || '—',
-      '{{HIGH_TEMP}}':        s.highTemp || '—',
-      '{{LOW_TEMP}}':         s.lowTemp || '—',
-      '{{CONDITIONS}}':       s.conditions || '—',
-      '{{WARNING_BANNER}}':   s.warningBanner || '',
-      '{{NOTES}}':            s.notes || '',
-    };
-    let result = template;
-    for (const [tok, val] of Object.entries(map)) result = result.replaceAll(tok, val);
-    return result;
+  /* ── Right rows helper for print (read-only, no inputs) ── */
+  function _buildRightRowsForPrint(s) {
+    const rows = [];
+    if (s.clientContacts?.length) {
+      rows.push({ isHeader: true, label: 'CLIENT' });
+      s.clientContacts.forEach((c, i) => rows.push({ isHeader: false, type:'contact', idx:i, col1:c.title, col2:c.name, col3:'', col4:c.email, col5:c.callTime, col6:c.callLoc||'' }));
+    }
+    if (s.agencyContacts?.length) {
+      rows.push({ isHeader: true, label: 'AGENCY' });
+      s.agencyContacts.forEach((a, i) => rows.push({ isHeader: false, type:'agency', idx:i, col1:a.title, col2:a.name, col3:'', col4:a.email, col5:a.callTime, col6:a.callLoc||'' }));
+    }
+    if (s.talentContacts?.length) {
+      rows.push({ isHeader: true, label: 'TALENT' });
+      s.talentContacts.forEach((t, i) => rows.push({ isHeader: false, type:'talent', idx:i, col1:t.title, col2:t.name, col3:'', col4:'', col5:t.callTime, col6:t.callLoc||'' }));
+    }
+    if (s.vendors?.length) {
+      rows.push({ isHeader: true, label: 'VENDORS' });
+      s.vendors.forEach((v, i) => rows.push({ isHeader: false, type:'vendor', idx:i, col1:v.type, col2:v.company, col3:v.contact, col4:v.email, col5:v.callTime, col6:v.callLoc||'' }));
+    }
+    return rows;
   }
 
-  function _renderEmailTemplate(dateStr) {
-    const template = (() => { try { return localStorage.getItem(EMAIL_TPL_KEY) || DEFAULT_EMAIL_TEMPLATE; } catch { return DEFAULT_EMAIL_TEMPLATE; } })();
-
-    container.innerHTML = `
-      <section class="cs-section">
-        <div class="cs-header" style="display:flex;align-items:flex-start;justify-content:space-between;">
-          <div>
-            <h2 class="cs-title">Call Sheet Email Template</h2>
-            <p class="cs-subtitle">Design a reusable email body. Click a token to insert it at the cursor.</p>
-          </div>
-          <button class="btn btn--sm" id="cse-back-btn" style="font-size:11px;padding:4px 10px;background:var(--bg-elevated);color:var(--text-secondary);border:1px solid var(--border);margin-top:4px;">← Back</button>
-        </div>
-
-        <div class="cse-token-bar">
-          <span class="cse-token-label">Insert Token:</span>
-          ${EMAIL_TOKENS.map(t => `<button class="cse-token-pill" data-token="${esc(t.token)}">${esc(t.label)}</button>`).join('')}
-        </div>
-
-        <div class="cse-editor-wrap">
-          <div class="cse-editor-col">
-            <div class="cse-col-header">Template Editor</div>
-            <textarea id="cse-template-input" class="cse-template-input" spellcheck="false">${esc(template)}</textarea>
-          </div>
-          <div class="cse-preview-col">
-            <div class="cse-col-header">Preview <span class="cse-preview-date">(${_formatDate(dateStr) || dateStr})</span></div>
-            <div id="cse-preview" class="cse-preview"></div>
-          </div>
-        </div>
-
-        <div class="cse-actions">
-          <button class="btn btn--primary btn--sm" id="cse-save-btn">Save Template</button>
-          <button class="btn btn--sm" id="cse-copy-btn" style="background:var(--bg-elevated);color:var(--text-secondary);border:1px solid var(--border);">Copy Resolved Email</button>
-          <button class="btn btn--sm btn--danger-text" id="cse-reset-btn" style="margin-left:auto;">Reset to Default</button>
-        </div>
-      </section>`;
-
-    const textarea = container.querySelector('#cse-template-input');
-    const preview  = container.querySelector('#cse-preview');
-
-    function updatePreview() { preview.textContent = _resolveTokens(textarea.value, dateStr); }
-    updatePreview();
-    textarea.addEventListener('input', updatePreview);
-
-    container.querySelectorAll('.cse-token-pill').forEach(pill => {
-      pill.addEventListener('click', () => {
-        const token = pill.dataset.token;
-        const start = textarea.selectionStart, end = textarea.selectionEnd, val = textarea.value;
-        textarea.value = val.slice(0, start) + token + val.slice(end);
-        textarea.selectionStart = textarea.selectionEnd = start + token.length;
-        textarea.focus(); updatePreview();
-      });
-    });
-
-    container.querySelector('#cse-back-btn').addEventListener('click', () => _renderMain());
-    container.querySelector('#cse-save-btn').addEventListener('click', () => {
-      localStorage.setItem(EMAIL_TPL_KEY, textarea.value);
-      const btn = container.querySelector('#cse-save-btn');
-      btn.textContent = 'Saved ✓'; setTimeout(() => { btn.textContent = 'Save Template'; }, 1500);
-    });
-    container.querySelector('#cse-copy-btn').addEventListener('click', () => {
-      navigator.clipboard.writeText(_resolveTokens(textarea.value, dateStr)).then(() => {
-        const btn = container.querySelector('#cse-copy-btn');
-        btn.textContent = 'Copied ✓'; setTimeout(() => { btn.textContent = 'Copy Resolved Email'; }, 1500);
-      });
-    });
-    container.querySelector('#cse-reset-btn').addEventListener('click', () => {
-      if (!confirm('Reset the email template to the default? Your current template will be lost.')) return;
-      textarea.value = DEFAULT_EMAIL_TEMPLATE; updatePreview();
-    });
-  }
-
-  /* ── Mount ── */
-  onMount(() => {
-    _loadSheets();
-    _renderMain();
-  });
+  /* ── Init ── */
+  _loadSheets();
 </script>
 
-<div bind:this={container}></div>
+<!-- ══════════════════════ MAIN VIEW ══════════════════════ -->
+{#if view === 'main'}
+  <section class="cs-section">
+    <div class="cs-header" style="display:flex;align-items:flex-start;justify-content:space-between;">
+      <div>
+        <h2 class="cs-title">Call Sheet Generator</h2>
+        <p class="cs-subtitle">Select a date to generate or edit a call sheet.</p>
+      </div>
+      <a href="#crew" class="btn btn--sm" style="font-size:11px;padding:4px 10px;white-space:nowrap;margin-top:4px;background:var(--bg-elevated);color:var(--text-secondary);border:1px solid var(--border);text-decoration:none;">View Crew List</a>
+    </div>
+
+    <div class="cs-date-picker">
+      <div class="cs-date-row">
+        <label for="cs-date-input">Date</label>
+        <input type="date" id="cs-date-input" bind:value={dateInput} />
+        <button class="btn btn--primary" onclick={generateSheet}>Generate Call Sheet</button>
+        <button class="btn btn--sm cs-email-tpl-btn" onclick={() => openEmailTemplate(dateInput)}>Call Sheet Email Template</button>
+      </div>
+    </div>
+
+    {#if savedDates.length}
+      <div class="cs-saved">
+        <h3 class="cs-saved-title">Saved Call Sheets</h3>
+        <div class="cs-saved-list">
+          {#each savedDates as d}
+            {@const s = sheets[d]}
+            <div class="cs-saved-item">
+              <span class="cs-saved-date">{_formatDate(d)}{s?.shootDay ? ` — Shoot Day ${s.shootDay}` : ''}</span>
+              <div class="cs-saved-actions">
+                <button class="btn btn--ghost btn--sm" onclick={() => openEditor(d)}>Edit</button>
+                <button class="btn btn--ghost btn--sm" onclick={() => _openPrintView(d)}>Print / PDF</button>
+                <button class="btn btn--ghost btn--sm btn--danger-text" onclick={() => deleteSheet(d)}>Delete</button>
+              </div>
+            </div>
+          {/each}
+        </div>
+      </div>
+    {/if}
+  </section>
+
+<!-- ══════════════════════ EDITOR VIEW ══════════════════════ -->
+{:else if view === 'editor' && activeSheet}
+  {@const s = activeSheet}
+  {@const pi = _getProdInfo()}
+  {@const project = _getProject()}
+  {@const allPositions = _getAllCrewPositions()}
+  {@const allVendors = _getVendors()}
+
+  <div class="cse-toolbar">
+    <button class="btn btn--ghost btn--sm" onclick={() => { _saveSheets(); view = 'main'; }}>← Back</button>
+    <span class="cse-toolbar-title">Call Sheet — {_formatDate(activeDate)}</span>
+    <div class="cse-toolbar-actions">
+      <button class="btn btn--ghost btn--sm" onclick={refreshPersonnel}>Refresh Personnel</button>
+      <button class="btn btn--ghost btn--sm" onclick={() => { _saveSheets(); _openPrintView(activeDate); }}>Print / PDF</button>
+      <button class="btn btn--primary btn--sm" onclick={saveSheet}>{savedMsg || 'Save'}</button>
+    </div>
+  </div>
+
+  <div class="cse-page-wrap">
+    <div class="cse-page">
+
+      <!-- Header top bar -->
+      <div class="cse-hdr">
+        <div class="cse-hdr-topbar">
+          <div class="cse-hdr-shootday">
+            SHOOT DAY <input type="text" class="cse-in cse-in--shootday" bind:value={s.shootDay} placeholder="#" />
+            of <input type="text" class="cse-in cse-in--shootday" bind:value={s.totalShootDays} placeholder="#" />
+            <select bind:value={s.dayType} class="cse-select cse-select--topbar">
+              <option value="">Day Type</option>
+              <option value="prep">Prep</option>
+              <option value="shoot">Shoot</option>
+              <option value="wrap">Wrap</option>
+              <option value="down">Down</option>
+            </select>
+          </div>
+          <div class="cse-hdr-title">
+            {#if pi.titleLogo}
+              <img src={pi.titleLogo} class="cse-title-logo" alt="Title" />
+            {:else}
+              CALL SHEET
+            {/if}
+          </div>
+          <div class="cse-hdr-date">{_formatDate(activeDate)}</div>
+        </div>
+
+        <!-- Header left: client/agency boxes + direct contacts -->
+        <div class="cse-hdr-left">
+          <div class="cse-hdr-left-info">
+            {#if pi.clientName || pi.clientAddr || pi.clientCity || pi.clientPhone}
+              <div class="cse-client-agency-box">
+                <div class="cse-box-inner">
+                  <div class="cse-box-text">
+                    <div class="cse-label">CLIENT</div>
+                    <div class="cse-val">
+                      {pi.clientName || ''}{#if pi.clientAddr}<br>{pi.clientAddr}{/if}{#if pi.clientCity}<br>{pi.clientCity}{/if}{#if pi.clientPhone}<br>{pi.clientPhone}{/if}
+                    </div>
+                  </div>
+                  {#if pi.clientLogo}<img src={pi.clientLogo} alt="Client" class="cse-box-logo" />{/if}
+                </div>
+              </div>
+            {/if}
+            {#if pi.agencyName || pi.agencyAddr || pi.agencyCity}
+              <div class="cse-client-agency-box">
+                <div class="cse-box-inner">
+                  <div class="cse-box-text">
+                    <div class="cse-label">AGENCY</div>
+                    <div class="cse-val">
+                      {pi.agencyName || ''}{#if pi.agencyAddr}<br>{pi.agencyAddr}{/if}{#if pi.agencyCity}<br>{pi.agencyCity}{/if}
+                    </div>
+                  </div>
+                  {#if pi.agencyLogo}<img src={pi.agencyLogo} alt="Agency" class="cse-box-logo" />{/if}
+                </div>
+              </div>
+            {/if}
+
+            <!-- Direct contacts table -->
+            <table class="cse-dc-table">
+              <tbody>
+                {#each s.directContacts as dc, i}
+                  <tr class="cse-dc-row">
+                    <td>
+                      <select class="cse-dc-select" value={dc.title}
+                        onchange={(e) => onDirectContactPick(i, e.target.value)}>
+                        <option value="">{dc.title ? '' : 'Title'}</option>
+                        {#each allPositions as p}
+                          <option value={p} selected={dc.title === p}>{p}</option>
+                        {/each}
+                      </select>
+                    </td>
+                    <td class="cse-dc-name">{dc.name || ''}<span class="cse-dc-ghost">{dc.name ? '' : 'Name'}</span></td>
+                    <td class="cse-dc-phone">{dc.phone || ''}<span class="cse-dc-ghost">{dc.phone ? '' : 'Phone'}</span></td>
+                    <td><button type="button" class="cse-dc-del" onclick={() => deleteDirectContact(i)} title="Remove">✕</button></td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+            <button type="button" class="cse-dc-add" onclick={addDirectContact}>+</button>
+          </div>
+        </div>
+
+        <!-- Header center: project title, general call, production -->
+        <div class="cse-hdr-center">
+          <div class="cse-hdr-center-top">
+            <div class="cse-project-title">{project?.title || ''}</div>
+            <div class="cse-hdr-call">
+              <div class="cse-call-label">GENERAL CALL:</div>
+              <div class="cse-call-time">
+                <input type="text" class="cse-in cse-in--calltime" bind:value={s.generalCall} placeholder="9:30 AM" />
+              </div>
+            </div>
+            <div class="cse-hdr-sub">*see individual call times*</div>
+            <div class="cse-hdr-prod-block">
+              <div class="cse-label">PRODUCTION</div>
+              <div class="cse-prod-co">
+                {#if pi.prodCoName}{pi.prodCoName}<br>{/if}
+                {#if pi.prodCoAddr}{pi.prodCoAddr}<br>{/if}
+                {#if pi.prodCoCity}{pi.prodCoCity}<br>{/if}
+                {#if pi.prodCoPhone}{pi.prodCoPhone}{/if}
+              </div>
+              {#if pi.prodCoLogo}<img src={pi.prodCoLogo} alt="Production Co." class="cse-prod-logo" />{/if}
+            </div>
+          </div>
+          <div class="cse-hdr-meals">
+            Lunch RTS <input type="text" class="cse-in cse-in--center" bind:value={s.lunchTime} placeholder="3:00 PM" /><br>
+            2nd Meal RTS: <input type="text" class="cse-in cse-in--center" bind:value={s.secondMeal} placeholder="8:00 PM" />
+          </div>
+        </div>
+
+        <!-- Header right: locations, parking, loading, weather, hospital -->
+        <div class="cse-hdr-right">
+          <div class="cse-info-box">
+            <div class="cse-label">LOCATIONS</div>
+            <div class="cse-val">
+              <input type="text" class="cse-in" bind:value={s.locationName} placeholder="Location name" /><br>
+              <input type="text" class="cse-in" bind:value={s.locationAddr1} placeholder="Street address" /><br>
+              <input type="text" class="cse-in" bind:value={s.locationAddr2} placeholder="City, State ZIP" />
+            </div>
+          </div>
+          <div class="cse-info-box">
+            <div class="cse-label">PARKING</div>
+            <div class="cse-val">
+              <input type="text" class="cse-in" bind:value={s.parkingInfo} placeholder="Parking info" /><br>
+              <input type="text" class="cse-in" bind:value={s.parkingAddr} placeholder="Parking address" /><br>
+              <input type="text" class="cse-in" bind:value={s.parkingAddr2} placeholder="Parking line 3" /><br>
+              <input type="text" class="cse-in" bind:value={s.parkingAddr3} placeholder="Parking line 4" />
+            </div>
+          </div>
+          <div class="cse-info-box">
+            <div class="cse-label">LOADING ZONE</div>
+            <div class="cse-val">
+              <input type="text" class="cse-in" bind:value={s.loadingZone} placeholder="Loading zone" /><br>
+              <input type="text" class="cse-in" bind:value={s.loadingAddr} placeholder="Loading address" /><br>
+              <input type="text" class="cse-in" bind:value={s.loadingAddr2} placeholder="Loading line 3" /><br>
+              <input type="text" class="cse-in" bind:value={s.loadingAddr3} placeholder="Loading line 4" />
+            </div>
+          </div>
+          <div class="cse-hdr-right-bottom">
+            <div class="cse-wx">
+              High: <input type="text" class="cse-in cse-in--sm" bind:value={s.highTemp} placeholder="67 cloudy" /><br>
+              Low: <input type="text" class="cse-in cse-in--sm" bind:value={s.lowTemp} placeholder="48" /><br>
+              UV Index: <input type="text" class="cse-in cse-in--sm" bind:value={s.uvIndex} placeholder="4 of 11" /><br>
+              Rain: <input type="text" class="cse-in cse-in--sm" bind:value={s.rainChance} placeholder="7% chance" /><br>
+              Sunrise: <input type="text" class="cse-in cse-in--sm" bind:value={s.sunrise} placeholder="6:40 am" /><br>
+              Sunset: <input type="text" class="cse-in cse-in--sm" bind:value={s.sunset} placeholder="5:30 pm" />
+            </div>
+            <div class="cse-info-box cse-hdr-hospital">
+              <div class="cse-label">NEAREST HOSPITAL</div>
+              <div class="cse-val">
+                <input type="text" class="cse-in" bind:value={s.hospitalName} placeholder="Hospital name" /><br>
+                <input type="text" class="cse-in" bind:value={s.hospitalAddr} placeholder="Hospital address" /><br>
+                <input type="text" class="cse-in" bind:value={s.hospitalAddr2} placeholder="City, State ZIP" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div><!-- end .cse-hdr -->
+
+      <!-- Warning banner -->
+      <div class="cse-warning">
+        <input type="text" class="cse-in cse-in--warning" bind:value={s.warningBanner} placeholder="Warning banner text" />
+      </div>
+
+      <!-- Schedule table -->
+      <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+      <table class="cse-sched" onkeydown={handleTableKeydown}>
+        <thead>
+          <tr>
+            <th class="cse-sched-scene">Scene</th>
+            <th class="cse-sched-sets">Sets</th>
+            <th class="cse-sched-cast">Cast</th>
+            <th class="cse-sched-dn">D/N</th>
+            <th class="cse-sched-pages">Pages</th>
+            <th class="cse-sched-loc">Location</th>
+          </tr>
+        </thead>
+        <tbody>
+          {#each s.schedule as row, i}
+            <tr>
+              <td class="cse-sched-scene">
+                <input type="text" class="cse-in cse-in--sched" bind:value={row.scene} placeholder="Scene"
+                  onblur={() => onSceneBlur(i)} />
+              </td>
+              <td class="cse-sched-sets">
+                <input type="text" class="cse-in cse-in--sched cse-in--sets-upper" bind:value={row.sets} placeholder="Sets" />
+                <input type="text" class="cse-in cse-in--sched cse-in--sets-desc" bind:value={row.setsDesc} placeholder="Description" />
+              </td>
+              <td class="cse-sched-cast">
+                <input type="text" class="cse-in cse-in--sched" bind:value={row.cast} placeholder="Cast" />
+              </td>
+              <td class="cse-sched-dn">
+                <input type="text" class="cse-in cse-in--sched" bind:value={row.dn} placeholder="D/N" />
+              </td>
+              <td class="cse-sched-pages">
+                <input type="text" class="cse-in cse-in--sched" bind:value={row.pages} placeholder="Pages" />
+              </td>
+              <td class="cse-sched-loc">
+                <input type="text" class="cse-in cse-in--sched" bind:value={row.location} placeholder="Location" />
+              </td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+      <div class="cse-add-row-bar">
+        <button class="cse-add-btn" onclick={addSchedRow}>+ Row</button>
+      </div>
+
+      <!-- Crew split: left crew + right contacts -->
+      <div class="cse-crew-split">
+
+        <!-- Left: crew -->
+        <div class="cse-crew-left">
+          <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+          <table class="cse-crew cse-crew-tbl-left" onkeydown={handleTableKeydown}>
+            <thead>
+              <tr><th>Title</th><th>Name</th><th>Phone</th><th>Email</th><th>Report</th></tr>
+            </thead>
+            <tbody>
+              {#each groupedCrew as group}
+                <tr class="cse-section-row">
+                  <td colspan="5" class="cse-section-label">{group.section}</td>
+                </tr>
+                {#each group.members as c, localIdx}
+                  {@const globalIdx = s.crew.indexOf(c)}
+                  <tr>
+                    <td><input type="text" class="cse-in cse-in--crew" bind:value={c.position} placeholder="Title" /></td>
+                    <td><input type="text" class="cse-in cse-in--crew" bind:value={c.name} placeholder="Name" /></td>
+                    <td><input type="text" class="cse-in cse-in--crew" bind:value={c.phone} placeholder="Phone" /></td>
+                    <td><input type="text" class="cse-in cse-in--crew" bind:value={c.email} placeholder="Email" /></td>
+                    <td class="cse-calltd">
+                      <input type="text" class="cse-in cse-in--call" bind:value={c.callLoc} placeholder="Loc" />
+                      <input type="text" class="cse-in cse-in--call" bind:value={c.callTime} placeholder="Time" />
+                      <button type="button" class="cse-row-del" onclick={() => deleteCrewRow(globalIdx)} title="Remove">✕</button>
+                    </td>
+                  </tr>
+                {/each}
+              {/each}
+            </tbody>
+          </table>
+          <div class="cse-add-row-bar">
+            <button class="cse-add-btn" onclick={addCrewRow}>+ Crew</button>
+          </div>
+        </div>
+
+        <!-- Right: client, agency, talent, vendors -->
+        <div class="cse-crew-right">
+          <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+          <table class="cse-crew cse-crew-tbl-right" onkeydown={handleTableKeydown}>
+            <thead>
+              <tr><th>Title</th><th>Name</th><th></th><th>Email</th><th>Report</th></tr>
+            </thead>
+            <tbody>
+              {#if s.clientContacts?.length}
+                <tr class="cse-section-row">
+                  <td colspan="5" class="cse-section-label cse-right-section">CLIENT</td>
+                </tr>
+                {#each s.clientContacts as c, i}
+                  <tr>
+                    <td><input type="text" class="cse-in" bind:value={c.title} placeholder="Title" /></td>
+                    <td colspan="2"><input type="text" class="cse-in" bind:value={c.name} placeholder="Name" /></td>
+                    <td><input type="text" class="cse-in" bind:value={c.email} placeholder="Email" /></td>
+                    <td class="cse-calltd">
+                      <input type="text" class="cse-in cse-in--call" bind:value={c.callLoc} placeholder="Loc" />
+                      <input type="text" class="cse-in cse-in--call" bind:value={c.callTime} placeholder="Time" />
+                      <button type="button" class="cse-row-del" onclick={() => deleteContact('client', i)} title="Remove">✕</button>
+                    </td>
+                  </tr>
+                {/each}
+              {/if}
+
+              {#if s.agencyContacts?.length}
+                <tr class="cse-section-row">
+                  <td colspan="5" class="cse-section-label cse-right-section">AGENCY</td>
+                </tr>
+                {#each s.agencyContacts as a, i}
+                  <tr>
+                    <td><input type="text" class="cse-in" bind:value={a.title} placeholder="Title" /></td>
+                    <td colspan="2"><input type="text" class="cse-in" bind:value={a.name} placeholder="Name" /></td>
+                    <td><input type="text" class="cse-in" bind:value={a.email} placeholder="Email" /></td>
+                    <td class="cse-calltd">
+                      <input type="text" class="cse-in cse-in--call" bind:value={a.callLoc} placeholder="Loc" />
+                      <input type="text" class="cse-in cse-in--call" bind:value={a.callTime} placeholder="Time" />
+                      <button type="button" class="cse-row-del" onclick={() => deleteContact('agency', i)} title="Remove">✕</button>
+                    </td>
+                  </tr>
+                {/each}
+              {/if}
+
+              {#if s.talentContacts?.length}
+                <tr class="cse-section-row">
+                  <td colspan="5" class="cse-section-label cse-right-section">TALENT</td>
+                </tr>
+                {#each s.talentContacts as t, i}
+                  <tr>
+                    <td><input type="text" class="cse-in" bind:value={t.title} placeholder="#. Role" /></td>
+                    <td colspan="2"><input type="text" class="cse-in" bind:value={t.name} placeholder="Name" /></td>
+                    <td><input type="text" class="cse-in" bind:value={t.email} placeholder="Email" /></td>
+                    <td class="cse-calltd">
+                      <input type="text" class="cse-in cse-in--call" bind:value={t.callLoc} placeholder="Loc" />
+                      <input type="text" class="cse-in cse-in--call" bind:value={t.callTime} placeholder="Time" />
+                      <button type="button" class="cse-row-del" onclick={() => deleteContact('talent', i)} title="Remove">✕</button>
+                    </td>
+                  </tr>
+                {/each}
+              {/if}
+
+              {#if s.vendors?.length}
+                <tr class="cse-section-row">
+                  <td colspan="5" class="cse-section-label cse-right-section">VENDORS</td>
+                </tr>
+                {#each s.vendors as v, i}
+                  <tr>
+                    <td>
+                      <select class="cse-select cse-vendor-select" style="font-size:8px;max-width:100%;width:100%;"
+                        onchange={(e) => onVendorPick(i, e.target.value)}>
+                        <option value="">Select vendor…</option>
+                        {#each allVendors as vend}
+                          <option value={vend.name}>{vend.name}{vend.type ? ` (${vend.type})` : ''}</option>
+                        {/each}
+                      </select>
+                    </td>
+                    <td><input type="text" class="cse-in" bind:value={v.company} placeholder="Company" /></td>
+                    <td><input type="text" class="cse-in" bind:value={v.contact} placeholder="Contact" /></td>
+                    <td><input type="text" class="cse-in" bind:value={v.email} placeholder="Email" /></td>
+                    <td class="cse-calltd">
+                      <input type="text" class="cse-in cse-in--call" bind:value={v.callLoc} placeholder="Loc" />
+                      <input type="text" class="cse-in cse-in--call" bind:value={v.callTime} placeholder="Time" />
+                      <button type="button" class="cse-row-del" onclick={() => deleteContact('vendor', i)} title="Remove">✕</button>
+                    </td>
+                  </tr>
+                {/each}
+              {/if}
+            </tbody>
+          </table>
+
+          <div class="cse-add-row-bar">
+            <button class="cse-add-btn" onclick={() => addContact('client')}>+ Client</button>
+            <button class="cse-add-btn" onclick={() => addContact('agency')}>+ Agency</button>
+            <button class="cse-add-btn" onclick={() => addContact('talent')}>+ Talent</button>
+            <button class="cse-add-btn" onclick={() => addContact('vendor')}>+ Vendor</button>
+          </div>
+
+          <!-- Production report -->
+          <div class="cse-report">
+            <span class="cse-report-label">PRODUCTION REPORT:</span>
+            <div class="cse-report-cols">
+              <div class="cse-report-col">
+                <div class="cse-report-row"><span class="cse-report-field-label">1ST AM SHOT:</span> <input type="text" class="cse-in cse-in--crew" bind:value={s.report1stAM} placeholder="_________" /></div>
+                <div class="cse-report-row"><span class="cse-report-field-label">1ST PM SHOT:</span> <input type="text" class="cse-in cse-in--crew" bind:value={s.report1stPM} placeholder="_________" /></div>
+                <div class="cse-report-row"><span class="cse-report-field-label">CAMERA WRAP:</span> <input type="text" class="cse-in cse-in--crew" bind:value={s.reportCameraWrap} placeholder="_________" /></div>
+              </div>
+              <div class="cse-report-col">
+                <div class="cse-report-row"><span class="cse-report-field-label">LUNCH:</span> <input type="text" class="cse-in cse-in--crew" bind:value={s.reportLunch} placeholder="_________" /></div>
+                <div class="cse-report-row"><span class="cse-report-field-label">2ND MEAL:</span> <input type="text" class="cse-in cse-in--crew" bind:value={s.report2ndMeal} placeholder="_________" /></div>
+                <div class="cse-report-row"><span class="cse-report-field-label">CREW WRAP:</span> <input type="text" class="cse-in cse-in--crew" bind:value={s.reportCrewWrap} placeholder="_________" /></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Notes -->
+          <div class="cse-notes">
+            <span class="cse-notes-label">NOTES</span><br>
+            <textarea class="cse-notes-input" rows="2" bind:value={s.notes} placeholder="Additional notes..."></textarea>
+          </div>
+        </div>
+      </div><!-- end .cse-crew-split -->
+
+      <div class="cse-footer">**CALL SHEETS ARE CONFIDENTIAL AND NOT FOR REDISTRIBUTION OUTSIDE OF THE PRODUCTION**</div>
+
+    </div><!-- end .cse-page -->
+  </div><!-- end .cse-page-wrap -->
+
+<!-- ══════════════════════ EMAIL TEMPLATE VIEW ══════════════════════ -->
+{:else if view === 'email'}
+  <section class="cs-section">
+    <div class="cs-header" style="display:flex;align-items:flex-start;justify-content:space-between;">
+      <div>
+        <h2 class="cs-title">Call Sheet Email Template</h2>
+        <p class="cs-subtitle">Design a reusable email body. Click a token to insert it at the cursor.</p>
+      </div>
+      <button class="btn btn--sm" onclick={() => { view = 'main'; }}
+        style="font-size:11px;padding:4px 10px;background:var(--bg-elevated);color:var(--text-secondary);border:1px solid var(--border);margin-top:4px;">← Back</button>
+    </div>
+
+    <div class="cse-token-bar">
+      <span class="cse-token-label">Insert Token:</span>
+      {#each EMAIL_TOKENS as t}
+        <button class="cse-token-pill" onclick={() => insertToken(t.token)}>{t.label}</button>
+      {/each}
+    </div>
+
+    <div class="cse-editor-wrap">
+      <div class="cse-editor-col">
+        <div class="cse-col-header">Template Editor</div>
+        <textarea
+          bind:this={emailTextarea}
+          bind:value={emailTemplate}
+          class="cse-template-input"
+          spellcheck="false"
+        ></textarea>
+      </div>
+      <div class="cse-preview-col">
+        <div class="cse-col-header">
+          Preview <span class="cse-preview-date">({_formatDate(activeDate) || activeDate || 'no date'})</span>
+        </div>
+        <div class="cse-preview">{emailPreview}</div>
+      </div>
+    </div>
+
+    <div class="cse-actions">
+      <button class="btn btn--primary btn--sm" onclick={saveEmailTemplate}>{emailSavedMsg || 'Save Template'}</button>
+      <button class="btn btn--sm" onclick={copyResolvedEmail}
+        style="background:var(--bg-elevated);color:var(--text-secondary);border:1px solid var(--border);">
+        {emailCopiedMsg || 'Copy Resolved Email'}
+      </button>
+      <button class="btn btn--sm btn--danger-text" onclick={resetEmailTemplate} style="margin-left:auto;">Reset to Default</button>
+    </div>
+  </section>
+{/if}
 
 <style>
-  div { height: 100%; }
+  :global(body) { }
 </style>
