@@ -5,11 +5,12 @@
   "main": "electron/main.js",
   "scripts": {
     "dev": "vite",
+    "electron:dev": "vite & electron . --dev",
     "build:svelte": "vite build",
     "start": "electron .",
-    "build": "electron-builder --mac",
-    "build:dmg": "electron-builder --mac dmg",
-    "build:zip": "electron-builder --mac zip"
+    "build": "npm run build:svelte && electron-builder --mac",
+    "build:dmg": "npm run build:svelte && electron-builder --mac dmg",
+    "build:zip": "npm run build:svelte && electron-builder --mac zip"
   },
   "author": "Kyle Henke",
   "license": "UNLICENSED",
@@ -29,10 +30,10 @@
     },
     "files": [
       "electron/**/*",
-      "src/**/*",
+      "dist-svelte/**/*",
       "assets/**/*",
-      "vendor/**/*",
-      "index.html"
+      "public/**/*",
+      "vendor/**/*"
     ],
     "mac": {
       "category": "public.app-category.productivity",
@@ -61,6 +62,7 @@
     }
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.103.3",
     "pdf-lib": "^1.17.1"
   }
 }

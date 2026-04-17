@@ -34,6 +34,7 @@
   import CreativeCamera   from './routes/CreativeCamera.svelte';
   import CreativeLocations from './routes/CreativeLocations.svelte';
   import CreativeStub     from './routes/CreativeStub.svelte';
+  import Chat             from './components/Chat.svelte';
 
   /* ── Profile dropdown ── */
   let showDropdown = false;
@@ -364,6 +365,9 @@
     The Masterbook &copy; {new Date().getFullYear()}
   </footer>
 </div>
+
+<!-- Global chat bubble — fixed-position, renders on top of everything -->
+<Chat projectId={_project?.id ?? 'global'} />
 
 <style>
   .app-shell {

@@ -31,11 +31,13 @@ function createWindow() {
     },
   });
 
-  mainWindow.loadFile('index.html');
-
-  // Open DevTools in dev mode
+  // Dev mode: load from Vite dev server (run `npm run dev` first)
+  // Prod mode: load compiled Svelte build
   if (process.argv.includes('--dev')) {
+    mainWindow.loadURL('http://localhost:5173/index.svelte.html');
     mainWindow.webContents.openDevTools();
+  } else {
+    mainWindow.loadFile('dist-svelte/index.svelte.html');
   }
 
   mainWindow.on('closed', () => { mainWindow = null; });
