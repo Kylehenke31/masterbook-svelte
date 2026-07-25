@@ -38,10 +38,10 @@
   const unsubAuth = authUser.subscribe(u => { user = u; });
 
   const DEFAULT_CHANNELS = [
-    { name: '🎬 All Crew' },
-    { name: '🎙️ AD Department' },
-    { name: '🎥 Department Heads' },
-    { name: '💰 Producers' },
+    { name: 'All Crew' },
+    { name: 'AD Department' },
+    { name: 'Department Heads' },
+    { name: 'Producers' },
   ];
 
   /* ── Bootstrap channels for this project ── */
@@ -267,9 +267,10 @@
       </div>
 
     {:else}
-      <!-- ── Channel tabs ── -->
+      <!-- ── Channel list ── -->
       <div class="chat-channels">
-        {#each channels as ch (ch.id)}
+        {#each channels as ch, i (ch.id)}
+          {#if i > 0}<div class="chat-channel-divider"></div>{/if}
           <button class="chat-channel-tab" class:chat-channel-tab--active={activeChannel?.id === ch.id}
             onclick={() => switchChannel(ch)}>
             {ch.name}
@@ -490,31 +491,39 @@
   /* ── Channel tabs ── */
   .chat-channels {
     display: flex;
-    gap: 0;
-    overflow-x: auto;
+    flex-direction: column;
     flex-shrink: 0;
     border-bottom: 1px solid var(--border, #333);
-    scrollbar-width: none;
   }
-  .chat-channels::-webkit-scrollbar { display: none; }
+  .chat-channel-divider {
+    height: 1px;
+    background: var(--border, #333);
+    margin: 0 12px;
+    opacity: 0.5;
+  }
   .chat-channel-tab {
-    flex-shrink: 0;
-    padding: 8px 12px;
+    display: block;
+    width: 100%;
+    padding: 8px 14px;
     background: none;
     border: none;
-    border-bottom: 2px solid transparent;
-    margin-bottom: -1px;
-    color: var(--text-secondary, #888);
-    font-size: 0.75rem;
+    border-left: 2px solid transparent;
+    text-align: left;
+    color: var(--text-muted, #888);
+    font-size: 0.78rem;
     white-space: nowrap;
     cursor: pointer;
-    transition: color 0.12s, border-color 0.12s;
+    transition: color 0.12s, background 0.12s, border-color 0.12s;
   }
-  .chat-channel-tab:hover { color: var(--text-primary, #eee); }
+  .chat-channel-tab:hover {
+    color: var(--text-primary, #eee);
+    background: var(--bg-elevated, #222);
+  }
   .chat-channel-tab--active {
     color: var(--gold, #c9a84c);
-    border-bottom-color: var(--gold, #c9a84c);
+    border-left-color: var(--gold, #c9a84c);
     font-weight: 600;
+    background: rgba(201,168,76,0.06);
   }
 
   /* ── Messages ── */
