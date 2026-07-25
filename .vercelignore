@@ -1,0 +1,7 @@
+node_modules
+dist-svelte
+dist
+release
+.git
+*.dmg
+*.zip

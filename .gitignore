@@ -5,3 +5,5 @@ dist-svelte/
 *.log
 .env
 .env.local
+.vercel
+.claude/worktrees/

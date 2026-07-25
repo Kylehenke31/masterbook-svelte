@@ -1,0 +1,7 @@
+{
+  "buildCommand": "npm run build:svelte",
+  "outputDirectory": "dist-svelte",
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.svelte.html" }
+  ]
+}
