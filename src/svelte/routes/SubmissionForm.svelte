@@ -48,7 +48,7 @@
                 <!-- Receipt / Invoice (REQUIRED) -->
                 <div class="field field--full">
                   <label for="f-receipt">
-                    Receipt / Invoice <span class="req">*</span>
+                    Receipt / Invoice <span class="optional-label">(optional)</span>
                   </label>
                   <div class="receipt-input-row">
                     <input type="file" id="f-receipt" name="receipt"
@@ -733,7 +733,6 @@ Rules:
       if (!el.value.trim()) { if (err) err.textContent = 'This field is required.'; el.classList.add('invalid'); return false; }
       if (err) err.textContent = ''; el.classList.remove('invalid'); return true;
     }
-    ok = requireFile(form.querySelector('#f-receipt'), c.querySelector('#err-receipt'), 'A receipt file is required.') && ok;
     ok = requireField('f-vendor', 'err-vendor') && ok;
     ok = requireField('f-date',   'err-date')   && ok;
     ok = requireField('f-amount', 'err-amount') && ok;

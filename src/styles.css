@@ -888,6 +888,14 @@ a:hover {
   margin-left: 2px;
 }
 
+/* Optional field hint */
+.optional-label {
+  font-size: 0.75em;
+  font-weight: 400;
+  color: var(--text-muted, #888);
+  margin-left: 4px;
+}
+
 /* Form inputs */
 .field input[type="text"],
 .field input[type="date"],
