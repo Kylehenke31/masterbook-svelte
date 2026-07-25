@@ -369,6 +369,12 @@ export function addPurchase(record) {
   }
   DB.purchases.unshift(purchase);
   persist();
+  // Cloud sync — fire and forget
+  getCloudHelpers().then(h => {
+    if (!h) return;
+    const pid = h.getActiveProjectId();
+    if (pid) h.cloudSavePurchase(pid, purchase).catch(() => {});
+  });
   return purchase;
 }
 
@@ -395,12 +401,23 @@ export function updatePurchase(id, changes) {
   }
   DB.purchases[idx] = merged;
   persist();
+  // Cloud sync — fire and forget
+  getCloudHelpers().then(h => {
+    if (!h) return;
+    const pid = h.getActiveProjectId();
+    if (pid) h.cloudSavePurchase(pid, merged).catch(() => {});
+  });
   return DB.purchases[idx];
 }
 
 export function deletePurchase(id) {
   DB.purchases = DB.purchases.filter(p => p.id !== id);
   persist();
+  // Cloud sync — fire and forget
+  getCloudHelpers().then(h => {
+    if (!h) return;
+    h.cloudDeletePurchase(id).catch(() => {});
+  });
 }
 
 export function voidPurchase(id) {
@@ -434,6 +451,56 @@ const COUNTERS_KEY   = 'movie-ledger-counters-v2';
 export function persist() {
   localStorage.setItem(STORAGE_KEY,  JSON.stringify(DB.purchases));
   localStorage.setItem(COUNTERS_KEY, JSON.stringify(DB.folderCounters));
+}
+
+/* ── Cloud helpers (imported lazily to avoid circular deps at boot) ── */
+async function getCloudHelpers() {
+  try {
+    const [{ cloudSavePurchase, cloudSaveAllPurchases, cloudDeletePurchase },
+           { getActiveProjectId }] = await Promise.all([
+      import('./svelte/lib/db.js'),
+      import('./svelte/stores/project.js'),
+    ]);
+    return { cloudSavePurchase, cloudSaveAllPurchases, cloudDeletePurchase, getActiveProjectId };
+  } catch { return null; }
+}
+
+/**
+ * Called once after user signs in.
+ * Pulls purchases from Supabase for the active project and replaces
+ * the in-memory DB so the purchase log shows cloud data.
+ * Dispatches 'masterbook-purchases-loaded' when done so the UI can refresh.
+ */
+export async function hydrateFromCloud(projectId) {
+  if (!projectId) return;
+  try {
+    const { cloudLoadPurchases } = await import('./svelte/lib/db.js');
+    const purchases = await cloudLoadPurchases(projectId);
+    if (!purchases.length) {
+      // No cloud data yet — push local data up to Supabase
+      const h = await getCloudHelpers();
+      if (h && DB.purchases.length) {
+        await h.cloudSaveAllPurchases(projectId, DB.purchases).catch(() => {});
+      }
+      return;
+    }
+    DB.purchases = purchases;
+    // Recompute folder counters from cloud data
+    let low = 0, high = 0;
+    for (const p of DB.purchases) {
+      if (p.isReturn) continue;
+      const n = parseInt(p.folder, 10);
+      if (!isNaN(n)) {
+        if (n >= 1000) high = Math.max(high, n - 999);
+        else           low  = Math.max(low,  n + 1);
+      }
+    }
+    DB.folderCounters = { low, high };
+    persist();
+    window.dispatchEvent(new CustomEvent('masterbook-purchases-loaded'));
+  } catch (e) {
+    console.warn('[data] hydrateFromCloud failed:', e.message);
+  }
 }
 
 export function hydrate() {

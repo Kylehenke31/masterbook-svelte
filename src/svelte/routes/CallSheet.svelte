@@ -70,6 +70,7 @@ Thank you,
     // Access sheets to register dependency; save whenever it changes
     const snap = JSON.stringify(sheets);
     localStorage.setItem(CS_KEY, snap);
+    window.dispatchEvent(new CustomEvent('masterbook-section-changed', { detail: { section: 'call_sheets' } }));
   });
 
   /* ── Persistence ── */
@@ -529,6 +530,7 @@ Thank you,
 
   function saveEmailTemplate() {
     localStorage.setItem(EMAIL_TPL_KEY, emailTemplate);
+    window.dispatchEvent(new CustomEvent('masterbook-section-changed', { detail: { section: 'call_sheets' } }));
     emailSavedMsg = 'Saved ✓';
     setTimeout(() => { emailSavedMsg = ''; }, 1500);
   }

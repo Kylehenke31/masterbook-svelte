@@ -44,9 +44,21 @@
       _wrapDate  = _parseDate(proj?.wrapDate);
     } catch { _startDate = null; _wrapDate = null; }
   }
-  function _saveEvents()   { localStorage.setItem(_calMode === 'accounting' ? ACCT_CAL_KEY : CALENDAR_KEY, JSON.stringify(_events)); }
-  function _saveDayTypes() { localStorage.setItem(DAYTYPES_KEY, JSON.stringify(_dayTypes)); }
-  function _saveTZ()       { localStorage.setItem(CAL_TZ_KEY, _timezone); }
+  function _notifyCalendarChanged() {
+    window.dispatchEvent(new CustomEvent('masterbook-section-changed', { detail: { section: 'calendars' } }));
+  }
+  function _saveEvents()   {
+    localStorage.setItem(_calMode === 'accounting' ? ACCT_CAL_KEY : CALENDAR_KEY, JSON.stringify(_events));
+    _notifyCalendarChanged();
+  }
+  function _saveDayTypes() {
+    localStorage.setItem(DAYTYPES_KEY, JSON.stringify(_dayTypes));
+    _notifyCalendarChanged();
+  }
+  function _saveTZ()       {
+    localStorage.setItem(CAL_TZ_KEY, _timezone);
+    _notifyCalendarChanged();
+  }
 
   /* ── Helpers ── */
   function _parseDate(str) {

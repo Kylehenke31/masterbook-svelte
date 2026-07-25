@@ -39,7 +39,10 @@
   let totalFiles = $derived(Object.values(files).reduce((s, a) => s + a.length, 0));
 
   // ── Persistence ────────────────────────────────────────────
-  function save() { localStorage.setItem(FILES_KEY, JSON.stringify(files)); }
+  function save() {
+    localStorage.setItem(FILES_KEY, JSON.stringify(files));
+    window.dispatchEvent(new CustomEvent('masterbook-section-changed', { detail: { section: 'files' } }));
+  }
 
   // ── Helpers ────────────────────────────────────────────────
   function formatSize(bytes) {

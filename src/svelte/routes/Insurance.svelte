@@ -40,6 +40,7 @@
       certDataUrl = reader.result;
       previewSrc  = reader.result;
       localStorage.setItem(INS_CERT_KEY, certDataUrl);
+      window.dispatchEvent(new CustomEvent('masterbook-section-changed', { detail: { section: 'insurance' } }));
       selectedIdx = null;
       downloadHref = null;
     };

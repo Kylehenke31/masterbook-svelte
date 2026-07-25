@@ -38,6 +38,7 @@ export function loadCreative() {
 }
 export function saveCreative(data) {
   localStorage.setItem(CREATIVE_KEY, JSON.stringify(data));
+  window.dispatchEvent(new CustomEvent('masterbook-section-changed', { detail: { section: 'creative' } }));
 }
 export function loadDept(deptId) {
   return loadCreative()[deptId] || _blankDept(deptId);

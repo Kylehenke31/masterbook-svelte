@@ -27,6 +27,7 @@
   function _save() {
     localStorage.setItem(BD_KEY, JSON.stringify(_scenes));
     localStorage.setItem(ELEMENTS_KEY, JSON.stringify(_elements));
+    window.dispatchEvent(new CustomEvent('masterbook-section-changed', { detail: { section: 'schedules' } }));
   }
 
   /* ── Helpers ── */

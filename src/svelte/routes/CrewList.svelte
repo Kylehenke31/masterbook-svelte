@@ -83,14 +83,20 @@
   }
 
   /* ── Save ── */
+  function _notifyPersonnelChanged() {
+    window.dispatchEvent(new CustomEvent('masterbook-section-changed', { detail: { section: 'personnel' } }));
+  }
+
   function save() {
     localStorage.setItem(CREW_KEY,     JSON.stringify(data));
     localStorage.setItem(SCHED_KEY,    JSON.stringify({ numWeeks }));
     localStorage.setItem(DAYTYPES_KEY, JSON.stringify(dayTypes));
+    _notifyPersonnelChanged();
   }
 
   function saveCheckCols() {
     localStorage.setItem(CHECKCOLS_KEY, JSON.stringify(checkCols));
+    _notifyPersonnelChanged();
   }
 
   /* ── Derived ── */

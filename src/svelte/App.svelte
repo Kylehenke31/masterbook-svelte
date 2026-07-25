@@ -9,7 +9,8 @@
     snapshotProject, restoreProject, setActiveProjectId,
     PROJECT_DATA_KEYS,
   } from './stores/project.js';
-  import { hydrate } from '../../src/data.js';
+  import { hydrate, hydrateFromCloud } from '../../src/data.js';
+  import { syncAllSectionsFromCloud, pushAllSectionsToCloud, saveSectionToCloud } from './lib/sections.js';
 
   import Home           from './routes/Home.svelte';
   import ElementsReport from './routes/ElementsReport.svelte';
@@ -35,14 +36,80 @@
   import CreativeLocations from './routes/CreativeLocations.svelte';
   import CreativeStub     from './routes/CreativeStub.svelte';
   import Chat             from './components/Chat.svelte';
+  import Login            from './routes/Login.svelte';
+  import { authUser, authLoading, signOut } from './stores/auth.js';
+  import { loadProjectsFromCloud } from './stores/project.js';
+
+  let authState      = $state(null);   // mirrors authUser store
+  let authIsLoading  = $state(true);   // mirrors authLoading store
+
+  authUser.subscribe(u    => { authState     = u; });
+  authLoading.subscribe(l => { authIsLoading = l; });
+
+  /* ── Cloud sync state ── */
+  let cloudSyncing = $state(false);
+  let lastSyncedUserId = null;
+
+  // When the user signs in, pull their projects + purchases + all sections from
+  // Supabase, then force a route remount so every component reads the fresh data.
+  authUser.subscribe(async (user) => {
+    if (!user || user.id === lastSyncedUserId) return;
+    lastSyncedUserId = user.id;
+    cloudSyncing = true;
+    try {
+      await loadProjectsFromCloud();
+      const activeId = getActiveProjectId();
+      if (activeId) {
+        // Pull purchases and all section blobs in parallel
+        await Promise.all([
+          hydrateFromCloud(activeId),
+          syncAllSectionsFromCloud(activeId),
+        ]);
+      }
+      // Force all route components to remount with fresh data.
+      // Use the live URL hash — not `route` (which may be stale if the user
+      // navigated during the async sync).
+      currentRoute.set(null);
+      setTimeout(() => resolveRoute(), 50);
+    } catch (e) {
+      console.warn('[App] cloud sync failed:', e);
+    } finally {
+      cloudSyncing = false;
+    }
+  });
+
+  /* ── Debounced section auto-save ──────────────────────────────── */
+  // Any component can dispatch window event 'masterbook-section-changed'
+  // with detail: { section: 'budget' | 'personnel' | ... }
+  // to trigger a cloud save of that section.
+  // Falls back to pushing ALL sections if no section name is given.
+  let _sectionSaveTimers = {};
+  function handleSectionChanged(e) {
+    const sectionName = e?.detail?.section;
+    const projectId   = getActiveProjectId();
+    if (!projectId) return;
+
+    if (sectionName) {
+      clearTimeout(_sectionSaveTimers[sectionName]);
+      _sectionSaveTimers[sectionName] = setTimeout(() => {
+        saveSectionToCloud(sectionName, projectId).catch(() => {});
+      }, 1500);
+    } else {
+      // No specific section — debounce a full push
+      clearTimeout(_sectionSaveTimers.__all);
+      _sectionSaveTimers.__all = setTimeout(() => {
+        pushAllSectionsToCloud(projectId).catch(() => {});
+      }, 1500);
+    }
+  }
 
   /* ── Profile dropdown ── */
-  let showDropdown = false;
-  let dropdownRegistry = [];
-  let dropdownActiveId = null;
+  let showDropdown      = $state(false);
+  let dropdownRegistry  = $state([]);
+  let dropdownActiveId  = $state(null);
 
   /* ── Routing ── */
-  let route;
+  let route = $state(null);
   currentRoute.subscribe(r => {
     route = r;
     showDropdown = false; // close dropdown on every navigation
@@ -50,7 +117,7 @@
   });
 
   /* ── Project state (reactive via store) ── */
-  let _project = null;
+  let _project = $state(null);
   projectStore.subscribe(p => { _project = p; });
 
   function openDropdown() {
@@ -61,12 +128,39 @@
 
   function closeDropdown() { showDropdown = false; }
 
-  function handleSwitchProject(targetId) {
+  async function handleSwitchProject(targetId) {
     closeDropdown();
-    if (targetId !== getActiveProjectId()) {
-      switchProject(targetId);
-      hydrate();
+    const currentId = getActiveProjectId();
+    if (targetId === currentId) {
+      window.location.hash = '#log';
+      return;
     }
+
+    // Push current project's sections to cloud before switching
+    if (currentId) {
+      pushAllSectionsToCloud(currentId).catch(() => {});
+    }
+
+    // Switch localStorage (synchronous)
+    switchProject(targetId);
+    hydrate();
+
+    // Pull the new project's sections from cloud, then remount
+    cloudSyncing = true;
+    try {
+      await Promise.all([
+        hydrateFromCloud(targetId),
+        syncAllSectionsFromCloud(targetId),
+      ]);
+    } catch (e) {
+      console.warn('[App] project switch sync failed:', e);
+    } finally {
+      cloudSyncing = false;
+    }
+
+    // Force remount so all components re-read fresh localStorage data
+    currentRoute.set(null);
+    setTimeout(() => resolveRoute(), 50);
     window.location.hash = '#log';
   }
 
@@ -74,6 +168,13 @@
     closeDropdown();
     sessionStorage.setItem('pm-intent', 'create');
     window.location.hash = '#home';
+  }
+
+  async function handleSignOut() {
+    closeDropdown();
+    lastSyncedUserId = null;  // allow re-sync if user signs back in
+    await signOut();
+    // authUser store will update → authState becomes null → Login screen shows
   }
 
   /* ── Derived header values ── */
@@ -160,8 +261,12 @@
     refreshProjectStore();
 
     window.addEventListener('hashchange', resolveRoute);
+    window.addEventListener('masterbook-section-changed', handleSectionChanged);
     resolveRoute();
-    return () => window.removeEventListener('hashchange', resolveRoute);
+    return () => {
+      window.removeEventListener('hashchange', resolveRoute);
+      window.removeEventListener('masterbook-section-changed', handleSectionChanged);
+    };
   });
 </script>
 
@@ -169,6 +274,20 @@
 <svelte:window onclick={(e) => {
   if (showDropdown && !e.target.closest('.profile-wrap')) closeDropdown();
 }} />
+
+<!-- ── Auth gate ── -->
+{#if authIsLoading}
+  <!-- Checking session — brief splash so there's no flicker -->
+  <div class="auth-splash">
+    <img src="/logo-night.png" class="auth-splash-logo auth-splash-logo--dark" alt="The Masterbook" />
+    <img src="/logo-day.png"   class="auth-splash-logo auth-splash-logo--light" alt="The Masterbook" />
+  </div>
+
+{:else if !authState}
+  <!-- Not logged in — show full-page login -->
+  <Login />
+
+{:else}
 
 <!-- Macro sidebar (far-left icon rail) -->
 <aside class="macro-sidebar">
@@ -241,6 +360,15 @@
       <a href="#vendors"  class:active={route === 'vendors'}>Vendors</a>
     </nav>
 
+    {#if cloudSyncing}
+      <span class="cloud-sync-indicator" title="Syncing with cloud…">
+        <svg class="spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+          <path d="M21 12a9 9 0 11-6.219-8.56"/>
+        </svg>
+        Syncing…
+      </span>
+    {/if}
+
     <!-- Project title → settings or initial setup -->
     <button
       class="header-project-title"
@@ -260,7 +388,8 @@
 
       {#if showDropdown}
         <div class="profile-dropdown" role="menu">
-          <div class="pd-user">{_project?.defaultSubmitter || 'User'}</div>
+          <div class="pd-user">{_project?.defaultSubmitter || authState?.email || 'User'}</div>
+          <div class="pd-email">{authState?.email || ''}</div>
           <div class="pd-divider"></div>
           <div class="pd-label">Projects</div>
           <div class="pd-projects">
@@ -287,6 +416,10 @@
               Project Settings
             </button>
           {/if}
+          <div class="pd-divider"></div>
+          <button class="pd-action-btn pd-action-btn--signout" role="menuitem" onclick={handleSignOut}>
+            Sign Out
+          </button>
         </div>
       {/if}
     </div>
@@ -366,8 +499,12 @@
   </footer>
 </div>
 
-<!-- Global chat bubble — fixed-position, renders on top of everything -->
-<Chat projectId={_project?.id ?? 'global'} />
+<!-- Global chat bubble — only render when a real project is active -->
+{#if _hasProject()}
+  <Chat projectId={getActiveProjectId()} />
+{/if}
+
+{/if} <!-- end auth gate -->
 
 <style>
   .app-shell {
@@ -411,7 +548,7 @@
 
   /* Project title button */
   .header-project-title {
-    margin-left: auto;
+    margin-left: auto; /* overridden to 0 when cloud-sync-indicator is present */
     font-size: 0.875rem;
     color: var(--text-muted, #888);
     background: none;
@@ -476,7 +613,7 @@
   }
 
   .pd-user {
-    padding: 10px 14px 6px;
+    padding: 10px 14px 2px;
     font-size: 0.875rem;
     font-weight: 600;
     color: var(--text-primary, #eee);
@@ -484,6 +621,16 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
+
+  .pd-email {
+    padding: 0 14px 8px;
+    font-size: 0.72rem;
+    color: var(--text-muted, #888);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .pd-email:empty { display: none; }
 
   .pd-divider {
     height: 1px;
@@ -576,6 +723,9 @@
     color: var(--text-primary, #eee);
   }
 
+  .pd-action-btn--signout { color: #e66; }
+  .pd-action-btn--signout:hover { background: rgba(220,60,60,0.08); color: #e88; }
+
   /* Main content */
   .app-main {
     flex: 1;
@@ -608,5 +758,49 @@
   .coming-soon h2 {
     font-size: 1.5rem;
     color: var(--text-primary, #eee);
+  }
+
+  /* Auth splash (session check on startup) */
+  .auth-splash {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-base, #111);
+    z-index: 9999;
+  }
+  .auth-splash-logo {
+    width: 80px;
+    height: auto;
+    opacity: 0.6;
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+  .auth-splash-logo--light { display: none; }
+  :global([data-theme="light"]) .auth-splash-logo--dark  { display: none; }
+  :global([data-theme="light"]) .auth-splash-logo--light { display: block; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 0.4; transform: scale(0.97); }
+    50%       { opacity: 0.8; transform: scale(1.03); }
+  }
+
+  /* Cloud sync indicator */
+  .cloud-sync-indicator {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.75rem;
+    color: var(--gold, #c9a84c);
+    margin-left: auto;
+    margin-right: 8px;
+    white-space: nowrap;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+  .spin {
+    animation: spin 0.9s linear infinite;
   }
 </style>

@@ -94,7 +94,10 @@
     };
   }
 
-  function _save() { localStorage.setItem(CAST_KEY, JSON.stringify(store)); }
+  function _save() {
+    localStorage.setItem(CAST_KEY, JSON.stringify(store));
+    window.dispatchEvent(new CustomEvent('masterbook-section-changed', { detail: { section: 'personnel' } }));
+  }
 
   /* ── Derived ── */
   let activeProfile = $derived(activeId ? store.profiles[activeId] : null);

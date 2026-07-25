@@ -14,7 +14,10 @@
     }
   })();
 
-  function saveSettings() { localStorage.setItem(SO_KEY, JSON.stringify(settings)); }
+  function saveSettings() {
+    localStorage.setItem(SO_KEY, JSON.stringify(settings));
+    window.dispatchEvent(new CustomEvent('masterbook-section-changed', { detail: { section: 'schedules' } }));
+  }
 
   /* ── Data ── */
   function getScenes() {

@@ -23,7 +23,10 @@
   // ── Load ───────────────────────────────────────────────────
   try { vendors = JSON.parse(localStorage.getItem(VENDORS_KEY)) || []; } catch { vendors = []; }
 
-  function save() { localStorage.setItem(VENDORS_KEY, JSON.stringify(vendors)); }
+  function save() {
+    localStorage.setItem(VENDORS_KEY, JSON.stringify(vendors));
+    window.dispatchEvent(new CustomEvent('masterbook-section-changed', { detail: { section: 'vendors' } }));
+  }
 
   // ── Derived ────────────────────────────────────────────────
   let sortedIndices = $derived.by(() => {

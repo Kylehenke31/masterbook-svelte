@@ -2,10 +2,11 @@
  * Multi-project registry — shared helpers used by App shell,
  * ProjectMenu (Home), and ProjectSettings.
  *
- * All data lives in localStorage; no Svelte state here so it
- * can be imported as a plain ES module by any component.
+ * Primary store: localStorage (synchronous, used by all components).
+ * Cloud layer: Supabase (async, fire-and-forget on writes, authoritative on login).
  */
 import { writable } from 'svelte/store';
+import { cloudSaveProject, cloudLoadProjects } from '../lib/db.js';
 
 /* ── Storage keys ── */
 export const REGISTRY_KEY  = 'movie-ledger-project-registry';
@@ -26,6 +27,7 @@ export const PROJECT_DATA_KEYS = [
   'movie-ledger-counters-v2', 'movie-ledger-budget-lock',
   'movie-ledger-hot-costs', 'movie-ledger-fringe-actuals',
   'movie-ledger-auto-prep', 'anthropic-api-key',
+  'movie-ledger-creative', 'movie-ledger-crew-checkcols',
 ];
 
 /* ── Reactive store so App shell and other components stay in sync ── */
@@ -48,6 +50,10 @@ export function saveProject(data) {
   const activeId = getActiveProjectId();
   if (activeId) syncRegistryEntry(activeId);
   projectStore.set(data);
+  // Cloud sync — inject the registry id since it's not stored inside the data object
+  if (activeId) {
+    cloudSaveProject({ ...data, id: activeId }).catch(() => {});
+  }
 }
 
 /* ── Registry ── */
@@ -135,6 +141,55 @@ export function migrateToMultiProject() {
   registerProject(id, p);
   setActiveProjectId(id);
   snapshotProject(id);
+}
+
+/* ── Cloud sync ── */
+
+/**
+ * Called once after the user signs in.
+ * Pulls all projects from Supabase, rebuilds the local registry,
+ * and snapshots each project's data into localStorage so the
+ * existing synchronous APIs keep working.
+ *
+ * Returns true if any cloud data was found, false otherwise.
+ */
+export async function loadProjectsFromCloud() {
+  try {
+    const cloudProjects = await cloudLoadProjects();
+    if (!cloudProjects.length) return false;
+
+    // Rebuild registry from cloud
+    const reg = cloudProjects.map(({ id, data }) => ({
+      id,
+      title:            data.title             || '',
+      productionNumber: data.productionNumber  || '',
+      budgetTemplate:   data.budgetTemplate    || 'commercial',
+      _createdAt:       data._createdAt        || new Date().toISOString(),
+      _archived:        data._archived         || false,
+    }));
+    saveRegistry(reg);
+
+    // Snapshot each project into localStorage so switchProject() works.
+    // Strip the injected `id` field — it lives in the registry, not the data blob.
+    for (const { id, data } of cloudProjects) {
+      const { id: _id, ...projectData } = data;
+      localStorage.setItem(`ml-${id}-movie-ledger-project`, JSON.stringify(projectData));
+    }
+
+    // Restore whichever project was active (or default to first)
+    const currentId = getActiveProjectId();
+    const validId   = reg.find(r => r.id === currentId) ? currentId : reg[0]?.id;
+    if (validId) {
+      setActiveProjectId(validId);
+      restoreProject(validId);
+    }
+
+    refreshProjectStore();
+    return true;
+  } catch (e) {
+    console.warn('[project] loadProjectsFromCloud failed:', e.message);
+    return false;
+  }
 }
 
 /* ── Display helpers ── */

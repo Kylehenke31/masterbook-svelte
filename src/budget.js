@@ -20,6 +20,7 @@ function _loadHotLog() {
 }
 function _saveHotLog(log) {
   localStorage.setItem(HOT_COST_LOG_KEY, JSON.stringify(log));
+  window.dispatchEvent(new CustomEvent('masterbook-section-changed', { detail: { section: 'budget' } }));
 }
 function _addHotEntry(entry) {
   const log = _loadHotLog();
@@ -44,6 +45,7 @@ function _saveLock() {
   } else {
     localStorage.removeItem(LOCK_KEY);
   }
+  window.dispatchEvent(new CustomEvent('masterbook-section-changed', { detail: { section: 'budget' } }));
 }
 function _isBidLocked() {
   return !!_lockState?.locked;
@@ -451,6 +453,7 @@ function _load() {
 
 function _save() {
   localStorage.setItem(BUDGET_KEY, JSON.stringify(_budget));
+  window.dispatchEvent(new CustomEvent('masterbook-section-changed', { detail: { section: 'budget' } }));
 }
 
 function _initQR() {

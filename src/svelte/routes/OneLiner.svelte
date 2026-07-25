@@ -40,6 +40,7 @@
   function _saveDrafts() {
     localStorage.setItem(OL_KEY, JSON.stringify(_drafts));
     localStorage.setItem(OL_ACTIVE, _activeDraftId);
+    window.dispatchEvent(new CustomEvent('masterbook-section-changed', { detail: { section: 'schedules' } }));
   }
   function _items()           { return _drafts[_activeDraftId]?.items || []; }
   function _setItems(items)   { _drafts[_activeDraftId].items = items; }
