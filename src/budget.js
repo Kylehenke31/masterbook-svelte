@@ -1208,8 +1208,10 @@ function _buildRow(def, row, ri, lineInfo) {
   const rowLocked   = _isRowLocked(row.id);
   const bidLocked   = _isBidLocked();
   const isPostLockRow = bidLocked && !rowLocked; // row added after lock
-  const ce = rowLocked ? '' : 'contenteditable="plaintext-only"'; // conditional contenteditable for bid fields
-  const ceDesc = rowLocked ? '' : 'contenteditable="plaintext-only"'; // description also locked for existing rows
+  // Locked cells aren't editable, but keep them keyboard-focusable (tabindex="-1")
+  // so arrow/tab/enter navigation can still land on them.
+  const ce = rowLocked ? 'tabindex="-1"' : 'contenteditable="plaintext-only"';
+  const ceDesc = rowLocked ? 'tabindex="-1"' : 'contenteditable="plaintext-only"';
 
   const noCell = hasSubLines
     ? `<td class="bud-td bud-td--num bud-td--readonly">${row.subLines.length} sub</td>`
@@ -1702,10 +1704,7 @@ function _attachListeners(lineMap) {
   /* Cell edit */
   _container.querySelectorAll('.bud-cell').forEach(cell => {
     cell.addEventListener('blur', _onCellBlur);
-    cell.addEventListener('keydown', e => {
-      if (e.key === 'Enter') { e.preventDefault(); cell.blur(); }
-      if (e.key === 'Escape') cell.blur();
-    });
+    cell.addEventListener('keydown', _handleBudCellKeydown);
     cell.addEventListener('focus', () => {
       const r = document.createRange(); r.selectNodeContents(cell);
       const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
@@ -1923,6 +1922,123 @@ function _fringePopupKeyHandler(e) {
   if (e.key === 'Escape') { _closeFringePopup(); _render(); }
 }
 
+/* ── Cell keyboard navigation (arrows / tab / enter) ──────────────
+   All .bud-cell elements within a line-item row/table are wired up
+   to this handler. Navigation is scoped to the current section's
+   table — it never crosses into another section. */
+function _focusBudCell(cell) {
+  if (cell) cell.focus();
+}
+
+// Visual left-to-right order of editable cells in a row == DOM order
+// of .bud-cell within that <tr> (non-editable computed cells like bid/
+// actual/variance don't carry the class, so they're skipped naturally).
+function _rowBudCells(row) {
+  return Array.from(row.querySelectorAll('.bud-cell'));
+}
+
+function _caretAtStart(el) {
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount) return true;
+  const range = sel.getRangeAt(0);
+  if (!range.collapsed || !el.contains(range.startContainer)) return true;
+  const test = range.cloneRange();
+  test.selectNodeContents(el);
+  test.setEnd(range.startContainer, range.startOffset);
+  return test.toString().length === 0;
+}
+
+function _caretAtEnd(el) {
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount) return true;
+  const range = sel.getRangeAt(0);
+  if (!range.collapsed || !el.contains(range.endContainer)) return true;
+  const test = range.cloneRange();
+  test.selectNodeContents(el);
+  test.setStart(range.endContainer, range.endOffset);
+  return test.toString().length === 0;
+}
+
+function _handleBudCellKeydown(e) {
+  const cell  = e.currentTarget;
+  const row   = cell.closest('tr.bud-row');
+  const table = cell.closest('table.bud-table');
+
+  if (e.key === 'Escape') { cell.blur(); return; }
+
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    let target = null;
+    if (row && table) {
+      const field = cell.dataset.field;
+      const rows  = Array.from(table.querySelectorAll('tbody > tr.bud-row'));
+      const idx   = rows.indexOf(row);
+      // Down one row, same column…
+      for (let i = idx + 1; i < rows.length && !target; i++) {
+        target = rows[i].querySelector(`.bud-cell[data-field="${field}"]`);
+      }
+      // …or wrap to the top of that column within this section.
+      if (!target) {
+        for (let i = 0; i < idx && !target; i++) {
+          target = rows[i].querySelector(`.bud-cell[data-field="${field}"]`);
+        }
+      }
+    }
+    if (target && target !== cell) _focusBudCell(target);
+    else { cell.blur(); _focusBudCell(cell); } // nothing to move to — just commit the edit
+    return;
+  }
+
+  if (e.key === 'Tab' && !e.shiftKey) {
+    e.preventDefault();
+    let target = null;
+    if (row) {
+      const cellsInRow = _rowBudCells(row);
+      const idx = cellsInRow.indexOf(cell);
+      target = idx >= 0 && idx < cellsInRow.length - 1 ? cellsInRow[idx + 1] : null;
+      // Wrap to the leftmost cell of the next row in this section.
+      if (!target && table) {
+        const rows = Array.from(table.querySelectorAll('tbody > tr.bud-row'));
+        const nextRow = rows[rows.indexOf(row) + 1];
+        if (nextRow) target = _rowBudCells(nextRow)[0] || null;
+      }
+    }
+    if (target && target !== cell) _focusBudCell(target);
+    else { cell.blur(); _focusBudCell(cell); } // last cell of the section — just commit the edit
+    return;
+  }
+
+  if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+    if (!row || !table) return;
+    e.preventDefault();
+    const field = cell.dataset.field;
+    const rows  = Array.from(table.querySelectorAll('tbody > tr.bud-row'));
+    const idx   = rows.indexOf(row);
+    let target = null;
+    if (e.key === 'ArrowUp') {
+      for (let i = idx - 1; i >= 0 && !target; i--) {
+        target = rows[i].querySelector(`.bud-cell[data-field="${field}"]`);
+      }
+    } else {
+      for (let i = idx + 1; i < rows.length && !target; i++) {
+        target = rows[i].querySelector(`.bud-cell[data-field="${field}"]`);
+      }
+    }
+    if (target) _focusBudCell(target);
+    return;
+  }
+
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+    // Let the caret move within the text unless it's already at that edge.
+    const atBoundary = e.key === 'ArrowLeft' ? _caretAtStart(cell) : _caretAtEnd(cell);
+    if (!atBoundary || !row) return;
+    const cellsInRow = _rowBudCells(row);
+    const idx = cellsInRow.indexOf(cell);
+    const target = cellsInRow[e.key === 'ArrowRight' ? idx + 1 : idx - 1];
+    if (target) { e.preventDefault(); _focusBudCell(target); }
+  }
+}
+
 function _onCellBlur(e) {
   const cell  = e.target;
   const { sec, ri, field } = cell.dataset;
@@ -2129,10 +2245,7 @@ function _rerenderSection(sec) {
   });
   built.querySelectorAll('.bud-cell').forEach(cell => {
     cell.addEventListener('blur', _onCellBlur);
-    cell.addEventListener('keydown', e => {
-      if (e.key === 'Enter') { e.preventDefault(); cell.blur(); }
-      if (e.key === 'Escape') cell.blur();
-    });
+    cell.addEventListener('keydown', _handleBudCellKeydown);
     cell.addEventListener('focus', () => {
       const r = document.createRange(); r.selectNodeContents(cell);
       const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
