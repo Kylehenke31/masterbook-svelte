@@ -180,7 +180,7 @@
     padding: 7px 32px 7px 34px;
     background: var(--bg-elevated, #1e1e1e);
     border: 1px solid var(--border, #333);
-    border-radius: 6px;
+    border-radius: 0;
     color: var(--text-primary, #eee);
     font-size: 0.875rem;
   }

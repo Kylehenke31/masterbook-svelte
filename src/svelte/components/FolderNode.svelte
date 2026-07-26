@@ -93,7 +93,7 @@
     align-items: center;
     gap: 6px;
     padding: 5px 6px;
-    border-radius: 5px;
+    border-radius: 0;
     cursor: pointer;
     transition: background 0.1s;
   }
@@ -119,7 +119,7 @@
     background: var(--bg-elevated, #2a2a2a);
     color: var(--text-muted, #888);
     padding: 1px 6px;
-    border-radius: 10px;
+    border-radius: 0;
     flex-shrink: 0;
   }
 
@@ -171,7 +171,7 @@
     color: var(--text-muted, #888);
     cursor: pointer;
     padding: 3px 8px;
-    border-radius: 4px;
+    border-radius: 0;
     border: 1px dashed var(--border, #333);
     transition: color 0.12s, border-color 0.12s;
   }

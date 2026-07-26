@@ -341,7 +341,7 @@
     height: 520px;
     background: var(--bg-surface, #1a1a1a);
     border: 1px solid var(--border, #333);
-    border-radius: 12px;
+    border-radius: 0;
     box-shadow: 0 8px 32px rgba(0,0,0,0.45);
     display: flex;
     flex-direction: column;
@@ -410,7 +410,7 @@
     padding: 6px;
     background: var(--bg-elevated, #222);
     border: 1px solid var(--border, #333);
-    border-radius: 6px;
+    border-radius: 0;
     color: var(--text-secondary, #888);
     font-size: 0.8rem;
     cursor: pointer;
@@ -426,7 +426,7 @@
     padding: 8px 10px;
     background: var(--bg-elevated, #222);
     border: 1px solid var(--border, #333);
-    border-radius: 6px;
+    border-radius: 0;
     color: var(--text-primary, #eee);
     font-size: 0.825rem;
     box-sizing: border-box;
@@ -443,7 +443,7 @@
     background: var(--gold, #c9a84c);
     color: #111;
     border: none;
-    border-radius: 6px;
+    border-radius: 0;
     font-size: 0.825rem;
     font-weight: 700;
     cursor: pointer;
@@ -559,7 +559,7 @@
   .chat-msg-bubble {
     padding: 8px 11px;
     background: var(--bg-elevated, #2a2a2a);
-    border-radius: 12px;
+    border-radius: 0;
     border-bottom-left-radius: 3px;
     color: var(--text-primary, #eee);
     font-size: 0.825rem;
@@ -569,7 +569,7 @@
   }
   .chat-msg--me .chat-msg-bubble {
     background: rgba(201,168,76,0.18);
-    border-radius: 12px;
+    border-radius: 0;
     border-bottom-right-radius: 3px;
   }
 
@@ -587,7 +587,7 @@
     padding: 8px 10px;
     background: var(--bg-elevated, #2a2a2a);
     border: 1px solid var(--border, #333);
-    border-radius: 8px;
+    border-radius: 0;
     color: var(--text-primary, #eee);
     font-size: 0.825rem;
     resize: none;
@@ -599,7 +599,7 @@
   .chat-send-btn {
     width: 34px;
     height: 34px;
-    border-radius: 8px;
+    border-radius: 0;
     background: var(--gold, #c9a84c);
     color: #111;
     border: none;

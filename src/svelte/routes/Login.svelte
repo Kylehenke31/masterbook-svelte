@@ -137,7 +137,7 @@
     max-width: 400px;
     background: var(--bg-surface, #1a1a1a);
     border: 1px solid var(--border, #333);
-    border-radius: 16px;
+    border-radius: 0;
     padding: 40px 36px 36px;
     box-shadow: 0 16px 48px rgba(0,0,0,0.5);
     display: flex;
@@ -182,7 +182,7 @@
     width: 100%;
     gap: 0;
     border: 1px solid var(--border, #333);
-    border-radius: 8px;
+    border-radius: 0;
     overflow: hidden;
     margin-bottom: 24px;
   }
@@ -232,7 +232,7 @@
     padding: 10px 12px;
     background: var(--bg-elevated, #222);
     border: 1px solid var(--border, #333);
-    border-radius: 8px;
+    border-radius: 0;
     color: var(--text-primary, #eee);
     font-size: 0.9rem;
     transition: border-color 0.15s;
@@ -256,7 +256,7 @@
     padding: 8px 12px;
     background: rgba(220, 60, 60, 0.08);
     border: 1px solid rgba(220, 60, 60, 0.2);
-    border-radius: 6px;
+    border-radius: 0;
     line-height: 1.4;
   }
 
@@ -266,7 +266,7 @@
     background: var(--gold, #c9a84c);
     color: #111;
     border: none;
-    border-radius: 8px;
+    border-radius: 0;
     font-size: 0.9rem;
     font-weight: 700;
     cursor: pointer;

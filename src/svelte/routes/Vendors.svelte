@@ -365,7 +365,7 @@
   .vnd-input {
     background: var(--bg-elevated, #1e1e1e);
     border: 1px solid var(--border, #333);
-    border-radius: 5px;
+    border-radius: 0;
     color: var(--text-primary, #eee);
     font-size: 0.875rem;
     padding: 7px 10px;

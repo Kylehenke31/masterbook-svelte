@@ -100,7 +100,7 @@
     padding: 16px 18px;
     background: var(--bg-surface, #1e1e1e);
     border: 1px solid var(--border, #333);
-    border-radius: 10px;
+    border-radius: 0;
     text-decoration: none;
     color: inherit;
     transition: border-color 0.15s, background 0.15s;
@@ -115,7 +115,7 @@
   .cr-dept-icon {
     width: 44px;
     height: 44px;
-    border-radius: 10px;
+    border-radius: 0;
     background: var(--bg-elevated, #2a2a2a);
     border: 1px solid var(--border, #333);
     display: flex;

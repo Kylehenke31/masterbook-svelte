@@ -248,7 +248,7 @@
     color: var(--text-muted, #888);
     background: var(--bg-elevated, #2a2a2a);
     padding: 1px 6px;
-    border-radius: 10px;
+    border-radius: 0;
   }
 
   .ins-vendor-list {
@@ -262,7 +262,7 @@
     justify-content: space-between;
     align-items: center;
     padding: 7px 8px;
-    border-radius: 5px;
+    border-radius: 0;
     cursor: pointer;
     transition: background 0.12s;
   }
@@ -293,7 +293,7 @@
 
   .ins-cert-preview {
     border: 1px solid var(--border, #333);
-    border-radius: 6px;
+    border-radius: 0;
     overflow: hidden;
     background: var(--bg-elevated, #1a1a1a);
     height: 520px;

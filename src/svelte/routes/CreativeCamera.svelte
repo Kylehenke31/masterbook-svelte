@@ -643,7 +643,7 @@
     gap: 0;
     height: calc(100vh - 200px);
     border: 1px solid var(--border, #333);
-    border-radius: 8px;
+    border-radius: 0;
     overflow: hidden;
   }
 
@@ -665,7 +665,7 @@
     background: var(--gold, #c9a84c);
     color: #000;
     border: none;
-    border-radius: 6px;
+    border-radius: 0;
     cursor: pointer;
     font-weight: 600;
     transition: opacity 0.15s;
@@ -690,7 +690,7 @@
     width: 100%;
     height: 72px;
     object-fit: cover;
-    border-radius: 4px;
+    border-radius: 0;
     display: block;
     margin-bottom: 4px;
   }
@@ -698,7 +698,7 @@
   .deck-thumb-blank {
     width: 100%;
     height: 72px;
-    border-radius: 4px;
+    border-radius: 0;
     background: var(--bg-elevated, #252525);
     margin-bottom: 4px;
   }
@@ -718,7 +718,7 @@
     right: 6px;
     width: 18px;
     height: 18px;
-    border-radius: 50%;
+    border-radius: 0;
     background: rgba(0,0,0,0.6);
     border: none;
     color: #ccc;
@@ -802,7 +802,7 @@
   .deck-input, .deck-textarea {
     background: var(--bg-surface, #1e1e1e);
     border: 1px solid var(--border, #333);
-    border-radius: 6px;
+    border-radius: 0;
     color: var(--text-primary, #eee);
     padding: 8px 10px;
     font-size: 0.875rem;
@@ -820,7 +820,7 @@
 
   .elnode {
     border: 1px solid var(--border, #333);
-    border-radius: 8px;
+    border-radius: 0;
     padding: 12px 14px;
     background: var(--bg-surface, #1e1e1e);
     transition: border-color 0.15s;
@@ -837,13 +837,13 @@
   }
 
   .elnode-name { font-weight: 600; color: var(--text-primary, #eee); font-size: 0.9rem; flex: 1; }
-  .elnode-dept { font-size: 0.75rem; color: var(--text-secondary, #888); background: var(--bg-elevated, #2a2a2a); padding: 2px 7px; border-radius: 10px; }
+  .elnode-dept { font-size: 0.75rem; color: var(--text-secondary, #888); background: var(--bg-elevated, #2a2a2a); padding: 2px 7px; border-radius: 0; }
   .elnode-scenes { font-size: 0.75rem; color: var(--text-secondary, #888); }
   .elnode-status {
     font-size: 0.75rem;
     background: var(--bg-elevated, #252525);
     border: 1px solid var(--border, #333);
-    border-radius: 6px;
+    border-radius: 0;
     color: var(--text-primary, #eee);
     padding: 3px 6px;
     cursor: pointer;
@@ -853,7 +853,7 @@
     width: 100%;
     background: var(--bg-main, #161616);
     border: 1px solid var(--border, #2a2a2a);
-    border-radius: 5px;
+    border-radius: 0;
     color: var(--text-primary, #ddd);
     font-size: 0.8rem;
     padding: 7px 10px;
@@ -870,7 +870,7 @@
 
   .sl-scene {
     border: 1px solid var(--border, #2a2a2a);
-    border-radius: 8px;
+    border-radius: 0;
     margin-bottom: 8px;
     overflow: hidden;
     background: var(--bg-surface, #1e1e1e);
@@ -923,7 +923,7 @@
   .sl-select, .sl-input {
     background: var(--bg-main, #161616);
     border: 1px solid var(--border, #2a2a2a);
-    border-radius: 4px;
+    border-radius: 0;
     color: var(--text-primary, #eee);
     padding: 3px 6px;
     font-size: 0.78rem;
@@ -947,7 +947,7 @@
     padding: 5px 12px;
     background: none;
     border: 1px dashed var(--border, #444);
-    border-radius: 6px;
+    border-radius: 0;
     color: var(--text-secondary, #888);
     cursor: pointer;
     transition: border-color 0.15s, color 0.15s;
@@ -962,7 +962,7 @@
     padding: 8px 16px;
     background: var(--gold, #c9a84c);
     color: #000;
-    border-radius: 6px;
+    border-radius: 0;
     font-size: 0.875rem;
     font-weight: 600;
     cursor: pointer;
@@ -978,7 +978,7 @@
 
   .camrep-card {
     border: 1px solid var(--border, #333);
-    border-radius: 8px;
+    border-radius: 0;
     overflow: hidden;
     background: var(--bg-surface, #1e1e1e);
   }
@@ -996,8 +996,8 @@
   .camrep-info { padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
   .camrep-label { font-size: 0.85rem; font-weight: 600; background: transparent; border: none; border-bottom: 1px solid var(--border, #333); color: var(--text-primary, #eee); padding: 2px 0; width: 100%; }
   .camrep-label:focus { outline: none; border-bottom-color: var(--gold, #c9a84c); }
-  .camrep-date { font-size: 0.8rem; background: var(--bg-main, #161616); border: 1px solid var(--border, #333); border-radius: 4px; color: var(--text-primary, #eee); padding: 3px 6px; }
-  .camrep-notes { font-size: 0.78rem; background: var(--bg-main, #161616); border: 1px solid var(--border, #2a2a2a); border-radius: 4px; color: var(--text-primary, #ddd); padding: 5px 8px; resize: none; font-family: inherit; width: 100%; box-sizing: border-box; }
+  .camrep-date { font-size: 0.8rem; background: var(--bg-main, #161616); border: 1px solid var(--border, #333); border-radius: 0; color: var(--text-primary, #eee); padding: 3px 6px; }
+  .camrep-notes { font-size: 0.78rem; background: var(--bg-main, #161616); border: 1px solid var(--border, #2a2a2a); border-radius: 0; color: var(--text-primary, #ddd); padding: 5px 8px; resize: none; font-family: inherit; width: 100%; box-sizing: border-box; }
 
   .camrep-actions { padding: 8px 12px; display: flex; gap: 8px; border-top: 1px solid var(--border, #2a2a2a); }
 
@@ -1007,7 +1007,7 @@
     font-size: 0.775rem;
     background: var(--bg-elevated, #2a2a2a);
     border: 1px solid var(--border, #333);
-    border-radius: 5px;
+    border-radius: 0;
     color: var(--text-primary, #eee);
     cursor: pointer;
     text-decoration: none;
@@ -1033,7 +1033,7 @@
     font-weight: 500;
     background: var(--bg-surface, #1a1a1a);
     border: 1px solid var(--border, #333);
-    border-radius: 6px;
+    border-radius: 0;
     color: var(--text-secondary, #888);
     cursor: pointer;
     transition: background 0.12s, color 0.12s, border-color 0.12s;
@@ -1049,7 +1049,7 @@
   .doc-section {
     margin-top: 24px;
     border: 1px solid var(--border, #333);
-    border-radius: 8px;
+    border-radius: 0;
     overflow: hidden;
   }
   .doc-section-hdr {
@@ -1072,7 +1072,7 @@
     font-size: 0.775rem;
     background: var(--bg-elevated, #2a2a2a);
     border: 1px solid var(--border, #333);
-    border-radius: 5px;
+    border-radius: 0;
     color: var(--text-primary, #eee);
     cursor: pointer;
     transition: background 0.1s;
@@ -1092,7 +1092,7 @@
     width: 48px;
     height: 48px;
     object-fit: cover;
-    border-radius: 4px;
+    border-radius: 0;
     border: 1px solid var(--border, #333);
   }
   .doc-pdf-icon {
@@ -1104,7 +1104,7 @@
     justify-content: center;
     background: var(--bg-elevated, #2a2a2a);
     border: 1px solid var(--border, #333);
-    border-radius: 4px;
+    border-radius: 0;
     color: var(--text-secondary, #888);
     font-size: 0.65rem;
     gap: 2px;
@@ -1120,7 +1120,7 @@
     padding: 4px 8px;
     background: var(--bg-elevated, #2a2a2a);
     border: 1px solid var(--border, #333);
-    border-radius: 4px;
+    border-radius: 0;
     color: var(--text-primary, #eee);
     font-size: 0.825rem;
     width: 100%;

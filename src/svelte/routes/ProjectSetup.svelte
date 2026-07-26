@@ -314,7 +314,7 @@
   .setup-card {
     background: var(--bg-surface, #161616);
     border: 1px solid var(--border, #2a2a2a);
-    border-radius: 8px;
+    border-radius: 0;
     padding: 20px;
     margin-bottom: 16px;
   }
@@ -359,7 +359,7 @@
   .field textarea {
     background: var(--bg-elevated, #1e1e1e);
     border: 1px solid var(--border, #333);
-    border-radius: 5px;
+    border-radius: 0;
     color: var(--text-primary, #eee);
     font-size: 0.875rem;
     padding: 7px 10px;
@@ -388,7 +388,7 @@
     align-items: center;
     background: var(--bg-elevated, #1e1e1e);
     border: 1px solid var(--border, #2a2a2a);
-    border-radius: 6px;
+    border-radius: 0;
     padding: 10px 12px;
   }
 

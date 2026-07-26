@@ -505,7 +505,7 @@
     background: var(--bg-elevated, #2a2a2a);
     color: var(--text-muted, #888);
     border: 1px solid var(--border, #333);
-    border-radius: 3px;
+    border-radius: 0;
     padding: 1px 4px;
     vertical-align: middle;
     margin-left: 4px;
@@ -539,7 +539,7 @@
     width: 80px;
     height: 60px;
     border: 1px dashed var(--border, #444);
-    border-radius: 6px;
+    border-radius: 0;
     display: flex;
     align-items: center;
     justify-content: center;

@@ -384,7 +384,7 @@
     padding: 6px 10px;
     background: var(--bg-surface, #1e1e1e);
     border: 1px solid var(--border, #333);
-    border-radius: 6px;
+    border-radius: 0;
     color: var(--text-primary, #eee);
     font-size: 0.8rem;
   }
@@ -396,7 +396,7 @@
     background: var(--gold, #c9a84c);
     color: #111;
     border: none;
-    border-radius: 6px;
+    border-radius: 0;
     font-size: 0.8rem;
     font-weight: 600;
     cursor: pointer;
@@ -409,7 +409,7 @@
     padding: 8px 10px;
     background: var(--bg-surface, #1e1e1e);
     border: 1px solid var(--border, #333);
-    border-radius: 7px;
+    border-radius: 0;
     cursor: pointer;
     color: var(--text-primary, #eee);
     font-size: 0.825rem;
@@ -483,7 +483,7 @@
     width: 140px;
     height: 90px;
     object-fit: cover;
-    border-radius: 6px;
+    border-radius: 0;
     border: 1px solid var(--border, #333);
     display: block;
   }
@@ -494,7 +494,7 @@
     padding: 4px 6px;
     background: var(--bg-surface, #1e1e1e);
     border: 1px solid var(--border, #333);
-    border-radius: 4px;
+    border-radius: 0;
     color: var(--text-primary, #eee);
     font-size: 0.75rem;
     box-sizing: border-box;
@@ -506,7 +506,7 @@
     right: 4px;
     width: 20px;
     height: 20px;
-    border-radius: 50%;
+    border-radius: 0;
     background: rgba(0,0,0,0.65);
     border: none;
     color: #fff;
@@ -522,7 +522,7 @@
     width: 140px;
     height: 90px;
     border: 2px dashed var(--border, #333);
-    border-radius: 6px;
+    border-radius: 0;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -546,7 +546,7 @@
     padding: 8px 10px;
     background: var(--bg-surface, #1e1e1e);
     border: 1px solid var(--border, #333);
-    border-radius: 6px;
+    border-radius: 0;
     color: var(--text-primary, #eee);
     font-size: 0.85rem;
     resize: vertical;
@@ -564,7 +564,7 @@
     font-size: 0.875rem;
     font-style: italic;
     border: 1px dashed var(--border, #333);
-    border-radius: 8px;
+    border-radius: 0;
   }
 
   /* Elements Deck */
@@ -591,7 +591,7 @@
   .crs-el-card {
     background: var(--bg-surface, #1e1e1e);
     border: 1px solid var(--border, #333);
-    border-radius: 8px;
+    border-radius: 0;
     padding: 12px 14px;
     display: flex;
     flex-direction: column;
@@ -623,7 +623,7 @@
     padding: 2px 6px;
     background: var(--bg-elevated, #2a2a2a);
     border: 1px solid var(--border, #333);
-    border-radius: 4px;
+    border-radius: 0;
     font-size: 0.7rem;
     color: var(--text-secondary, #888);
   }
@@ -632,7 +632,7 @@
     padding: 4px 8px;
     background: var(--bg-elevated, #2a2a2a);
     border: 1px solid var(--border, #333);
-    border-radius: 5px;
+    border-radius: 0;
     color: var(--text-primary, #eee);
     font-size: 0.75rem;
     cursor: pointer;
@@ -659,7 +659,7 @@
     padding: 6px 10px;
     background: var(--bg-elevated, #2a2a2a);
     border: 1px solid var(--border, #333);
-    border-radius: 5px;
+    border-radius: 0;
     color: var(--text-primary, #eee);
     font-size: 0.8rem;
     resize: vertical;
@@ -683,7 +683,7 @@
     font-weight: 500;
     background: var(--bg-surface, #1e1e1e);
     border: 1px solid var(--border, #333);
-    border-radius: 6px;
+    border-radius: 0;
     color: var(--text-secondary, #888);
     cursor: pointer;
     transition: background 0.12s, color 0.12s, border-color 0.12s;
@@ -699,7 +699,7 @@
   .crs-doc-section {
     margin-top: 24px;
     border: 1px solid var(--border, #333);
-    border-radius: 8px;
+    border-radius: 0;
     overflow: hidden;
   }
   .crs-doc-hdr {
@@ -722,7 +722,7 @@
     font-size: 0.775rem;
     background: var(--bg-elevated, #2a2a2a);
     border: 1px solid var(--border, #333);
-    border-radius: 5px;
+    border-radius: 0;
     color: var(--text-primary, #eee);
     cursor: pointer;
     transition: background 0.1s;
@@ -741,7 +741,7 @@
     width: 48px;
     height: 48px;
     object-fit: cover;
-    border-radius: 4px;
+    border-radius: 0;
     border: 1px solid var(--border, #333);
   }
   .crs-doc-pdf-icon {
@@ -753,7 +753,7 @@
     justify-content: center;
     background: var(--bg-elevated, #2a2a2a);
     border: 1px solid var(--border, #333);
-    border-radius: 4px;
+    border-radius: 0;
     color: var(--text-secondary, #888);
     font-size: 0.65rem;
     gap: 2px;
@@ -769,7 +769,7 @@
     padding: 4px 8px;
     background: var(--bg-elevated, #2a2a2a);
     border: 1px solid var(--border, #333);
-    border-radius: 4px;
+    border-radius: 0;
     color: var(--text-primary, #eee);
     font-size: 0.825rem;
     width: 100%;
@@ -789,7 +789,7 @@
     font-size: 0.775rem;
     background: var(--bg-elevated, #2a2a2a);
     border: 1px solid var(--border, #333);
-    border-radius: 5px;
+    border-radius: 0;
     color: var(--text-primary, #eee);
     cursor: pointer;
     text-decoration: none;

@@ -396,7 +396,7 @@
     gap: 8px;
     padding: 14px 14px 12px;
     border: 1px solid var(--border, #333);
-    border-radius: 8px;
+    border-radius: 0;
     background: var(--bg-elevated, #1e1e1e);
     opacity: 0.55;
     position: relative;
@@ -412,7 +412,7 @@
   .sched-card-title { font-size: 0.85rem; font-weight: 600; }
   .sched-card-desc  { font-size: 0.75rem; color: var(--text-muted, #888); }
   .sched-card-badge {
-    font-size: 0.65rem; padding: 2px 6px; border-radius: 4px;
+    font-size: 0.65rem; padding: 2px 6px; border-radius: 0;
     background: var(--bg-surface, #1a1a1a); color: var(--text-muted, #888);
     align-self: flex-start;
   }
@@ -426,7 +426,7 @@
   .prep-info-card {
     background: var(--bg-elevated, #1e1e1e);
     border: 1px solid var(--border, #333);
-    border-radius: 6px;
+    border-radius: 0;
     padding: 12px 14px;
   }
   .prep-info-card h3 { font-size: 0.82rem; font-weight: 700; margin-bottom: 8px; color: var(--text-muted, #888); text-transform: uppercase; letter-spacing: 0.04em; }
@@ -442,11 +442,11 @@
   .prep-event-loc-inline { font-size: 0.7rem; color: var(--text-muted, #888); font-style: italic; }
 
   .prep-pdf-iframe {
-    width: 100%; height: 650px; border: 1px solid var(--border, #333); border-radius: 6px;
+    width: 100%; height: 650px; border: 1px solid var(--border, #333); border-radius: 0;
   }
   .prep-preview-placeholder {
     width: 100%; height: 400px; display: flex; align-items: center; justify-content: center;
-    border: 1px dashed var(--border, #333); border-radius: 6px;
+    border: 1px dashed var(--border, #333); border-radius: 0;
     color: var(--text-muted, #888); font-size: 0.875rem;
   }
 </style>

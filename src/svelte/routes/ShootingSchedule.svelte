@@ -221,7 +221,7 @@ body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#000;background
 .ss-page-meta{display:flex;flex-wrap:wrap;gap:6px 16px;margin-bottom:8px;font-size:10px}
 .ss-meta-item{display:flex;gap:4px}
 .ss-meta-label{font-weight:700}
-.ss-synopsis{font-size:10px;font-style:italic;margin-bottom:8px;padding:4px 8px;background:#f5f5f5;border-radius:3px}
+.ss-synopsis{font-size:10px;font-style:italic;margin-bottom:8px;padding:4px 8px;background:#f5f5f5;border-radius:0}
 .ss-cast-section{margin-bottom:8px}
 .ss-section-title{font-weight:700;font-size:10px;margin-bottom:3px;text-transform:uppercase;letter-spacing:0.05em;border-bottom:1px solid #000;padding-bottom:2px}
 .ss-cast-row{display:flex;gap:8px;font-size:10px;padding:1px 0}
@@ -313,7 +313,7 @@ ${pagesHTML}
   .ss-draft-select {
     background: var(--bg-elevated, #1e1e1e);
     border: 1px solid var(--border, #333);
-    border-radius: 5px;
+    border-radius: 0;
     color: var(--text-primary, #eee);
     font-size: 0.875rem;
     padding: 5px 8px;

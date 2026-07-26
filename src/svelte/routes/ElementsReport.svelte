@@ -271,7 +271,7 @@ ${bodyHTML}
   .er-name {
     background: transparent;
     border: 1px solid transparent;
-    border-radius: 4px;
+    border-radius: 0;
     color: var(--text-primary, #eee);
     font-size: 0.875rem;
     padding: 3px 6px;
