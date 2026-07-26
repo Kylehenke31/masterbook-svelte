@@ -546,10 +546,6 @@
       </div>
     {/if}
   </main>
-
-  <footer class="app-footer">
-    The Masterbook &copy; {new Date().getFullYear()}
-  </footer>
 </div>
 
 <!-- Global chat bubble — only render when a real project is active -->
@@ -847,14 +843,6 @@
   .app-main--full {
     padding: 0;
     max-width: 100%;
-  }
-
-  .app-footer {
-    padding: 12px 24px;
-    font-size: 0.75rem;
-    color: var(--text-muted, #555);
-    border-top: 1px solid var(--border, #333);
-    text-align: center;
   }
 
   .coming-soon {
