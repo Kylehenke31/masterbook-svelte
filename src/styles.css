@@ -3270,39 +3270,55 @@ textarea {
   left: 0;
   top: 0;
   bottom: 0;
-  width: 64px;
+  width: 200px;
   background: var(--bg-surface);
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
   gap: 0;
   z-index: 300;
   padding: 8px 0;
+  transition: width 0.16s ease;
+}
+.macro-sidebar--collapsed {
+  width: 44px;
 }
 .macro-sidebar-top {
   padding-bottom: 8px;
   border-bottom: 1px solid var(--border);
   width: 100%;
   display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px 10px;
+  margin-bottom: 8px;
+}
+.macro-sidebar--collapsed .macro-sidebar-top {
   justify-content: center;
   padding: 6px 0 10px;
-  margin-bottom: 8px;
 }
 .macro-sidebar-items {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 4px;
+  align-items: stretch;
+  gap: 1px;
   flex: 1;
+  padding: 0 8px;
+}
+.macro-sidebar-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 8px 4px;
+  opacity: 0.6;
 }
 .macro-btn {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 3px;
-  padding: 8px 4px;
-  width: 56px;
+  gap: 10px;
+  padding: 7px 10px;
+  width: 100%;
   border: none;
   background: transparent;
   color: var(--text-secondary);
@@ -3321,6 +3337,10 @@ textarea {
 .macro-btn svg {
   flex-shrink: 0;
 }
+/* Second section: plain-text "folder" list, no icons */
+.macro-btn--text {
+  padding: 7px 10px 7px 20px;
+}
 .sidebar-logo {
   width: 36px;
   height: auto;
@@ -3331,18 +3351,22 @@ textarea {
 [data-theme="light"] .sidebar-logo--dark  { display: none; }
 [data-theme="light"] .sidebar-logo--light { display: block; }
 .macro-label {
-  font-size: 7.5px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  line-height: 1;
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  text-transform: none;
+  line-height: 1.2;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.macro-btn.macro-active .macro-label {
+  font-weight: 700;
 }
 
-/* Push #app content right of sidebar */
-#app {
-  margin-left: 64px;
-}
+/* Note: pushing content right of the sidebar is handled by .app-shell's
+   margin-left in App.svelte's scoped styles, since that width must react
+   to the sidebar's collapsed state. */
 
 /* ============================================================
    Project Menu (Home / Landing)

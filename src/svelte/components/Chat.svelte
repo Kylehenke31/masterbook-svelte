@@ -4,14 +4,15 @@
   import { authUser, getDisplayName, signIn, signUp, signOut } from '../stores/auth.js';
   import { getActiveProjectId } from '../stores/project.js';
 
-  const { projectId: _propProjectId } = $props();
+  let {
+    projectId: _propProjectId,
+    open   = $bindable(false),
+    unread = $bindable(0),
+  } = $props();
 
   function activeProjectId() {
     return _propProjectId || getActiveProjectId() || 'global';
   }
-
-  /* ── Panel open/close ── */
-  let open = $state(false);
 
   /* ── Auth UI state ── */
   let user = $state(null);
@@ -29,7 +30,6 @@
   let newMsg       = $state('');
   let sending      = $state(false);
   let loadingMsgs  = $state(false);
-  let unread       = $state(0);   // bubble badge count
 
   let messagesEl;       // ref to scroll container
   let subscription;     // realtime subscription
@@ -143,12 +143,20 @@
   /* ── Open panel ── */
   function toggleOpen() {
     open = !open;
-    if (open) {
+  }
+
+  // The panel can also be opened/closed externally (the trigger button
+  // lives in the sidebar, in App.svelte), so react to `open` transitioning
+  // to true rather than hooking only the local toggle function.
+  let _wasOpen = false;
+  $effect(() => {
+    if (open && !_wasOpen) {
       unread = 0;
       if (user && channels.length === 0) loadChannels();
       else scrollToBottom();
     }
-  }
+    _wasOpen = open;
+  });
 
   /* ── Auth handlers ── */
   async function handleSignIn() {
@@ -211,15 +219,8 @@
   });
 </script>
 
-<!-- ── Floating bubble ── -->
-<button class="chat-bubble" onclick={toggleOpen} title="Project Chat">
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="22" height="22">
-    <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
-  </svg>
-  {#if unread > 0}
-    <span class="chat-badge">{unread > 99 ? '99+' : unread}</span>
-  {/if}
-</button>
+<!-- Trigger button lives in the sidebar (App.svelte); this component only
+     owns the slide-up panel itself, toggled via the bindable `open` prop. -->
 
 <!-- ── Slide-in panel ── -->
 {#if open}
@@ -330,50 +331,12 @@
 {/if}
 
 <style>
-  /* ── Floating bubble ── */
-  .chat-bubble {
-    position: fixed;
-    bottom: 24px;
-    right: 24px;
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
-    background: var(--gold, #c9a84c);
-    color: #111;
-    border: none;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 4px 14px rgba(0,0,0,0.35);
-    z-index: 900;
-    transition: transform 0.15s, box-shadow 0.15s;
-  }
-  .chat-bubble:hover { transform: scale(1.06); box-shadow: 0 6px 18px rgba(0,0,0,0.45); }
-
-  .chat-badge {
-    position: absolute;
-    top: -4px;
-    right: -4px;
-    min-width: 18px;
-    height: 18px;
-    padding: 0 4px;
-    background: #e44;
-    color: #fff;
-    border-radius: 9px;
-    font-size: 0.65rem;
-    font-weight: 700;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    line-height: 1;
-  }
-
-  /* ── Panel ── */
+  /* ── Panel — anchored near the chat trigger button at the bottom of
+     the sidebar (see App.svelte's .chat-trigger-btn) ── */
   .chat-panel {
     position: fixed;
-    bottom: 84px;
-    right: 24px;
+    left: 16px;
+    bottom: 76px;
     width: 320px;
     height: 520px;
     background: var(--bg-surface, #1a1a1a);

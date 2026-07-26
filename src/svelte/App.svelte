@@ -108,6 +108,18 @@
   let dropdownRegistry  = $state([]);
   let dropdownActiveId  = $state(null);
 
+  /* ── Chat trigger (button lives in sidebar; panel owned by Chat.svelte) ── */
+  let chatOpen   = $state(false);
+  let chatUnread = $state(0);
+
+  /* ── Sidebar collapse ── */
+  const SIDEBAR_COLLAPSED_KEY = 'movie-ledger-sidebar-collapsed';
+  let sidebarCollapsed = $state(localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1');
+  function toggleSidebar() {
+    sidebarCollapsed = !sidebarCollapsed;
+    localStorage.setItem(SIDEBAR_COLLAPSED_KEY, sidebarCollapsed ? '1' : '0');
+  }
+
   /* ── Routing ── */
   let route = $state(null);
   currentRoute.subscribe(r => {
@@ -290,11 +302,24 @@
 {:else}
 
 <!-- Macro sidebar (far-left icon rail) -->
-<aside class="macro-sidebar">
+<aside class="macro-sidebar" class:macro-sidebar--collapsed={sidebarCollapsed}>
   <div class="macro-sidebar-top">
-    <img src="/logo-night.png" class="sidebar-logo sidebar-logo--dark" alt="Masterbook" />
-    <img src="/logo-day.png"   class="sidebar-logo sidebar-logo--light" alt="Masterbook" />
+    {#if !sidebarCollapsed}
+      <img src="/logo-night.png" class="sidebar-logo sidebar-logo--dark" alt="Masterbook" />
+      <img src="/logo-day.png"   class="sidebar-logo sidebar-logo--light" alt="Masterbook" />
+    {/if}
+    <button class="sidebar-collapse-btn" onclick={toggleSidebar}
+      title={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+        {#if sidebarCollapsed}
+          <polyline points="9 18 15 12 9 6"/>
+        {:else}
+          <polyline points="15 18 9 12 15 6"/>
+        {/if}
+      </svg>
+    </button>
   </div>
+  {#if !sidebarCollapsed}
   <div class="macro-sidebar-items">
 
     <button class="macro-btn" class:macro-active={routeGroup(route) === 'budget'}
@@ -348,18 +373,33 @@
       <span class="macro-label">Files</span>
     </button>
 
+    <div class="macro-sidebar-divider"></div>
+
+    <!-- Second section: plain-text "folder" list, no icons -->
+    <button class="macro-btn macro-btn--text" class:macro-active={route === 'log'}
+      onclick={() => { window.location.hash = '#log'; }}>
+      <span class="macro-label">Purchase Log</span>
+    </button>
+
+    <button class="macro-btn macro-btn--text" class:macro-active={route === 'calendar'}
+      onclick={() => { window.location.hash = '#calendar'; }}>
+      <span class="macro-label">Calendar</span>
+    </button>
+
+    <button class="macro-btn macro-btn--text" class:macro-active={route === 'crew'}
+      onclick={() => { window.location.hash = '#crew'; }}>
+      <span class="macro-label">Personnel</span>
+    </button>
+
+    <button class="macro-btn macro-btn--text" class:macro-active={route === 'vendors'}
+      onclick={() => { window.location.hash = '#vendors'; }}>
+      <span class="macro-label">Vendors</span>
+    </button>
+
   </div>
-</aside>
 
-<div class="app-shell">
-  <header class="app-header">
-    <nav class="app-nav">
-      <a href="#log"      class:active={route === 'log'}>Purchase Log</a>
-      <a href="#calendar" class:active={route === 'calendar'}>Calendar</a>
-      <a href="#crew"     class:active={route === 'crew'}>Personnel</a>
-      <a href="#vendors"  class:active={route === 'vendors'}>Vendors</a>
-    </nav>
-
+  <!-- Bottom of sidebar: profile + chat trigger, then project settings -->
+  <div class="macro-sidebar-bottom">
     {#if cloudSyncing}
       <span class="cloud-sync-indicator" title="Syncing with cloud…">
         <svg class="spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
@@ -369,6 +409,62 @@
       </span>
     {/if}
 
+    <div class="sidebar-bottom-row">
+      <!-- Profile button + dropdown -->
+      <div class="profile-wrap">
+        {#if showDropdown}
+          <div class="profile-dropdown" role="menu">
+            <div class="pd-user">{_project?.defaultSubmitter || authState?.email || 'User'}</div>
+            <div class="pd-email">{authState?.email || ''}</div>
+            <div class="pd-divider"></div>
+            <div class="pd-label">Projects</div>
+            <div class="pd-projects">
+              {#each dropdownRegistry as r (r.id)}
+                <button
+                  class="pd-project-btn"
+                  class:pd-project-btn--active={r.id === dropdownActiveId}
+                  role="menuitem"
+                  onclick={() => handleSwitchProject(r.id)}
+                >
+                  <span class="pd-project-name">{r.productionNumber ? `${r.productionNumber}_${r.title}` : r.title}</span>
+                  <span class="pd-project-meta">{r.budgetTemplate === 'feature' ? 'Feature/TV' : 'Commercial'}</span>
+                  {#if r.id === dropdownActiveId}<span class="pd-active-dot"></span>{/if}
+                </button>
+              {:else}
+                <div class="pd-empty">No projects</div>
+              {/each}
+            </div>
+            <div class="pd-divider"></div>
+            <button class="pd-action-btn" role="menuitem" onclick={handleNewProject}>+ New Project</button>
+            <div class="pd-divider"></div>
+            <button class="pd-action-btn pd-action-btn--signout" role="menuitem" onclick={handleSignOut}>
+              Sign Out
+            </button>
+          </div>
+        {/if}
+
+        <button
+          class="btn btn--icon btn--profile"
+          aria-label="User profile"
+          title="User profile"
+          onclick={showDropdown ? closeDropdown : openDropdown}
+        >{_initials()}</button>
+      </div>
+
+      <!-- Chat trigger (panel rendered by <Chat> below, outside the aside) -->
+      {#if _hasProject()}
+        <button class="chat-trigger-btn" aria-label="Project chat" title="Project Chat"
+          onclick={() => { chatOpen = !chatOpen; }}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="16" height="16">
+            <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+          </svg>
+          {#if chatUnread > 0}
+            <span class="chat-badge-mini">{chatUnread > 99 ? '99+' : chatUnread}</span>
+          {/if}
+        </button>
+      {/if}
+    </div>
+
     <!-- Project title → settings or initial setup -->
     <button
       class="header-project-title"
@@ -376,54 +472,11 @@
       title={_headerTitle()}
       onclick={() => { window.location.hash = _headerTarget(); }}
     >{_headerTitle()}</button>
+  </div>
+  {/if}
+</aside>
 
-    <!-- Profile button + dropdown -->
-    <div class="profile-wrap">
-      <button
-        class="btn btn--icon btn--profile"
-        aria-label="User profile"
-        title="User profile"
-        onclick={showDropdown ? closeDropdown : openDropdown}
-      >{_initials()}</button>
-
-      {#if showDropdown}
-        <div class="profile-dropdown" role="menu">
-          <div class="pd-user">{_project?.defaultSubmitter || authState?.email || 'User'}</div>
-          <div class="pd-email">{authState?.email || ''}</div>
-          <div class="pd-divider"></div>
-          <div class="pd-label">Projects</div>
-          <div class="pd-projects">
-            {#each dropdownRegistry as r (r.id)}
-              <button
-                class="pd-project-btn"
-                class:pd-project-btn--active={r.id === dropdownActiveId}
-                role="menuitem"
-                onclick={() => handleSwitchProject(r.id)}
-              >
-                <span class="pd-project-name">{r.productionNumber ? `${r.productionNumber}_${r.title}` : r.title}</span>
-                <span class="pd-project-meta">{r.budgetTemplate === 'feature' ? 'Feature/TV' : 'Commercial'}</span>
-                {#if r.id === dropdownActiveId}<span class="pd-active-dot"></span>{/if}
-              </button>
-            {:else}
-              <div class="pd-empty">No projects</div>
-            {/each}
-          </div>
-          <div class="pd-divider"></div>
-          <button class="pd-action-btn" role="menuitem" onclick={handleNewProject}>+ New Project</button>
-          {#if _hasProject()}
-            <button class="pd-action-btn" role="menuitem"
-              onclick={() => { closeDropdown(); window.location.hash = '#settings'; }}>
-              Project Settings
-            </button>
-          {/if}
-          <div class="pd-divider"></div>
-          <button class="pd-action-btn pd-action-btn--signout" role="menuitem" onclick={handleSignOut}>
-            Sign Out
-          </button>
-        </div>
-      {/if}
-    </div>
-  </header>
+<div class="app-shell" class:app-shell--sidebar-collapsed={sidebarCollapsed}>
 
   <main class="app-main" class:app-main--full={route === 'crew' || route === 'budget-lines'}>
     {#if route === 'log'}
@@ -501,7 +554,7 @@
 
 <!-- Global chat bubble — only render when a real project is active -->
 {#if _hasProject()}
-  <Chat projectId={getActiveProjectId()} />
+  <Chat projectId={getActiveProjectId()} bind:open={chatOpen} bind:unread={chatUnread} />
 {/if}
 
 {/if} <!-- end auth gate -->
@@ -511,55 +564,108 @@
     display: flex;
     flex-direction: column;
     min-height: 100vh;
+    margin-left: 200px;
+    transition: margin-left 0.16s ease;
   }
 
-  .app-header {
+  .app-shell--sidebar-collapsed {
+    margin-left: 44px;
+  }
+
+  /* Collapse/expand toggle, top of sidebar */
+  .sidebar-collapse-btn {
     display: flex;
     align-items: center;
-    gap: 16px;
-    padding: 0 24px;
-    height: 52px;
-    background: var(--bg-surface, #1a1a1a);
-    border-bottom: 1px solid var(--border, #333);
-    position: sticky;
-    top: 0;
-    z-index: 100;
-  }
-
-  .app-nav {
-    display: flex;
-    gap: 4px;
-  }
-
-  .app-nav a {
-    padding: 6px 12px;
-    border-radius: 6px;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    border-radius: 0;
     color: var(--text-muted, #888);
-    text-decoration: none;
-    font-size: 0.875rem;
-    transition: color 0.15s, background 0.15s;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
   }
 
-  .app-nav a:hover,
-  .app-nav a.active {
-    color: var(--text-primary, #eee);
+  .sidebar-collapse-btn:hover {
     background: var(--bg-elevated, #2a2a2a);
+    color: var(--text-primary, #eee);
   }
 
-  /* Project title button */
+  /* Bottom of macro sidebar: profile bubble + chat trigger + project settings */
+  .macro-sidebar-bottom {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding-top: 8px;
+    border-top: 1px solid var(--border, #333);
+  }
+
+  .sidebar-bottom-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  /* Chat trigger button — square, sits next to the profile button */
+  .chat-trigger-btn {
+    position: relative;
+    width: 32px;
+    height: 32px;
+    border-radius: 0;
+    background: var(--bg-elevated, #2a2a2a);
+    border: 1px solid var(--border, #333);
+    color: var(--text-primary, #eee);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: background 0.15s, border-color 0.15s;
+  }
+
+  .chat-trigger-btn:hover {
+    background: var(--bg-hover, #3a3a3a);
+    border-color: var(--gold, #c9a84c);
+  }
+
+  .chat-badge-mini {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 3px;
+    background: #e44;
+    color: #fff;
+    border-radius: 8px;
+    font-size: 0.6rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+  }
+
+  /* Project title / settings button */
   .header-project-title {
-    margin-left: auto; /* overridden to 0 when cloud-sync-indicator is present */
-    font-size: 0.875rem;
+    width: calc(100% - 16px);
+    margin: 0 8px;
+    font-size: 0.72rem;
     color: var(--text-muted, #888);
     background: none;
     border: none;
     cursor: pointer;
-    padding: 4px 8px;
+    padding: 6px 4px;
     border-radius: 6px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 240px;
+    text-align: center;
     transition: color 0.15s, background 0.15s;
   }
 
@@ -580,7 +686,7 @@
   .btn--profile {
     width: 32px;
     height: 32px;
-    border-radius: 50%;
+    border-radius: 0;
     background: var(--bg-elevated, #2a2a2a);
     border: 1px solid var(--border, #333);
     color: var(--text-primary, #eee);
@@ -598,12 +704,18 @@
     border-color: var(--gold, #c9a84c);
   }
 
-  /* Profile dropdown */
+  /* Profile dropdown — opens upward from the bottom of the sidebar.
+     top/right explicitly reset to auto to override the legacy global
+     .profile-dropdown rule in styles.css (top: 36px; right: 0), which
+     otherwise combines with bottom/left here and collapses the height. */
   .profile-dropdown {
     position: absolute;
-    top: calc(100% + 8px);
-    right: 0;
-    min-width: 220px;
+    top: auto;
+    bottom: calc(100% + 8px);
+    left: 0;
+    right: auto;
+    min-width: 240px;
+    padding: 0;
     background: var(--bg-surface, #1a1a1a);
     border: 1px solid var(--border, #333);
     border-radius: 8px;
@@ -790,10 +902,8 @@
     display: flex;
     align-items: center;
     gap: 5px;
-    font-size: 0.75rem;
+    font-size: 0.65rem;
     color: var(--gold, #c9a84c);
-    margin-left: auto;
-    margin-right: 8px;
     white-space: nowrap;
   }
 
