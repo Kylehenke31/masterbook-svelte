@@ -1,11 +1,12 @@
 /**
- * budgetVersions.js — named snapshots ("drafts") of a project's budget.
+ * budgetVersions.js — named drafts of a project's budget.
  *
- * The "live" budget budget.js reads/writes (movie-ledger-budget +
- * movie-ledger-budget-lock) is untouched by this module — it's always
- * whatever is currently being edited. This module just manages a
- * registry of saved snapshots of that data, and can copy a snapshot
- * into (or out of) the live slot.
+ * Model: exactly one draft is "active" at a time. The live budget
+ * budget.js reads/writes (movie-ledger-budget + movie-ledger-budget-lock)
+ * is that active draft's in-progress working copy. Committing writes the
+ * live copy back into the active draft's own record (in place — it never
+ * forks a new draft). The active draft is also what auto-loads the first
+ * time a project's Budget page is opened (see ensureActiveLoaded).
  */
 
 const VERSIONS_KEY = 'movie-ledger-budget-versions';
@@ -19,10 +20,9 @@ function _loadState() {
     const state = JSON.parse(localStorage.getItem(VERSIONS_KEY)) || {};
     return {
       activeId: state.activeId ?? null,
-      currentWorkingId: state.currentWorkingId ?? null,
       versions: state.versions ?? [],
     };
-  } catch { return { activeId: null, currentWorkingId: null, versions: [] }; }
+  } catch { return { activeId: null, versions: [] }; }
 }
 
 function _saveState(state) {
@@ -50,6 +50,10 @@ export function listVersions() {
   return _loadState().versions.slice().sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
 }
 
+export function getVersion(id) {
+  return _loadState().versions.find(x => x.id === id) || null;
+}
+
 export function getActiveVersionId() {
   return _loadState().activeId;
 }
@@ -68,34 +72,81 @@ export function hasLiveBudgetData() {
   } catch { return false; }
 }
 
+/**
+ * True if the live budget differs from the active draft's last-committed
+ * data (or, if there's no active draft at all, true whenever the live
+ * budget has any data — since there's nowhere for it to be "committed").
+ */
+export function hasUncommittedChanges() {
+  const state = _loadState();
+  const v = state.versions.find(x => x.id === state.activeId);
+  if (!v) return hasLiveBudgetData();
+  return JSON.stringify(_snapshotLive()) !== JSON.stringify(v.data);
+}
+
 export function suggestedDraftName() {
   return `Draft — ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
 }
 
-export function getCurrentWorkingId() {
-  return _loadState().currentWorkingId;
-}
-
 /* ── Writes ────────────────────────────────────────────────────── */
 
-/** Snapshot the current live budget as a new named draft. */
-export function saveCurrentAsVersion(name) {
+/**
+ * Start a brand-new, blank, named draft and make it active immediately.
+ * Caller is responsible for handling any uncommitted changes on the
+ * outgoing active draft first (see hasUncommittedChanges).
+ */
+export function createNamedDraft(name) {
   const state = _loadState();
   const now = new Date().toISOString();
   const entry = {
     id: _uid(),
     name: (name || '').trim() || suggestedDraftName(),
-    data: _snapshotLive(),
+    data: { budget: {}, lock: null },
+    notes: '',
     createdAt: now,
     updatedAt: now,
   };
   state.versions.push(entry);
   state.activeId = entry.id;
   _saveState(state);
+  _applyToLive(entry.data);
   return entry;
 }
 
-/** Clear the live budget back to blank. Caller decides whether to save first. */
+/**
+ * Fork the CURRENT live budget into a brand-new separate draft (does not
+ * touch the active draft's own saved data, and does not change which
+ * draft is active). Useful for "save my in-progress edits as a new
+ * variant without committing them to the draft I started from."
+ */
+export function forkLiveAsNewDraft(name) {
+  const state = _loadState();
+  const now = new Date().toISOString();
+  const entry = {
+    id: _uid(),
+    name: (name || '').trim() || suggestedDraftName(),
+    data: _snapshotLive(),
+    notes: '',
+    createdAt: now,
+    updatedAt: now,
+  };
+  state.versions.push(entry);
+  _saveState(state);
+  return entry;
+}
+
+/** Write the current live budget back into the active draft, in place. */
+export function commitToActiveDraft() {
+  const state = _loadState();
+  const v = state.versions.find(x => x.id === state.activeId);
+  if (!v) return null;
+  v.data = _snapshotLive();
+  v.updatedAt = new Date().toISOString();
+  _saveState(state);
+  return v;
+}
+
+/** Clear the live budget back to blank, with no active draft. */
 export function createFreshBudget() {
   localStorage.removeItem(BUDGET_KEY);
   localStorage.removeItem(LOCK_KEY);
@@ -104,8 +155,12 @@ export function createFreshBudget() {
   _saveState(state);
 }
 
-/** Replace the live budget with a saved draft's data. */
-export function loadVersion(id) {
+/**
+ * Switch the active draft. Loads that draft's data into the live slot.
+ * Does NOT create, fork, or duplicate anything — caller should offer to
+ * commitToActiveDraft() the outgoing draft first if hasUncommittedChanges().
+ */
+export function markAsActive(id) {
   const state = _loadState();
   const v = state.versions.find(x => x.id === id);
   if (!v) return false;
@@ -124,6 +179,7 @@ export function duplicateVersion(id) {
     id: _uid(),
     name: `${v.name} copy`,
     data: JSON.parse(JSON.stringify(v.data)),
+    notes: v.notes || '',
     createdAt: now,
     updatedAt: now,
   };
@@ -143,44 +199,34 @@ export function renameVersion(id, newName) {
   return true;
 }
 
-export function deleteVersion(id) {
-  const state = _loadState();
-  state.versions = state.versions.filter(x => x.id !== id);
-  if (state.activeId === id) state.activeId = null;
-  if (state.currentWorkingId === id) state.currentWorkingId = null;
-  _saveState(state);
-}
-
-/**
- * Mark a draft as the "Current Working Budget" — the one that loads
- * automatically the first time a project's Budget page is opened.
- * Also switches the live budget to it immediately, same as loadVersion.
- */
-export function setCurrentWorkingBudget(id) {
+export function setDraftNotes(id, notes) {
   const state = _loadState();
   const v = state.versions.find(x => x.id === id);
   if (!v) return false;
-  _applyToLive(v.data);
-  state.activeId = id;
-  state.currentWorkingId = id;
+  v.notes = notes || '';
   _saveState(state);
   return true;
 }
 
+export function deleteVersion(id) {
+  const state = _loadState();
+  state.versions = state.versions.filter(x => x.id !== id);
+  if (state.activeId === id) state.activeId = null;
+  _saveState(state);
+}
+
 /**
  * Called once when the Budget page mounts. If nothing has been edited
- * yet in this session (no live data) and a Current Working Budget is
- * set, loads it in. Never overwrites in-progress live edits.
+ * yet in this session (no live data) and there's an active draft,
+ * loads it in. Never overwrites in-progress live edits.
  * Returns true if it loaded something.
  */
-export function ensureCurrentWorkingLoaded() {
+export function ensureActiveLoaded() {
   if (hasLiveBudgetData()) return false;
   const state = _loadState();
-  if (!state.currentWorkingId) return false;
-  const v = state.versions.find(x => x.id === state.currentWorkingId);
+  if (!state.activeId) return false;
+  const v = state.versions.find(x => x.id === state.activeId);
   if (!v) return false;
   _applyToLive(v.data);
-  state.activeId = v.id;
-  _saveState(state);
   return true;
 }

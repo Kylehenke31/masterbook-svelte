@@ -104,7 +104,7 @@ function _hasFringeActual(secId) {
 }
 
 /* ── Commercial Section Definitions ── */
-const COMMERCIAL_SECTIONS = [
+export const COMMERCIAL_SECTIONS = [
   { num: 1,  id: 'A', type: 'labor',   name: 'Pre-Production Labor', items: [
     'Line Producer','Assistant Director','Director of Photography','1st Assistant Camera',
     '2nd Assistant Camera','Loader','Lighting Tech (Stills)','Cam Assistant (Stills)',
@@ -210,7 +210,7 @@ const COMMERCIAL_SECTIONS = [
 ];
 
 /* ── Feature Film Section Definitions ── */
-const FEATURE_SECTIONS = [
+export const FEATURE_SECTIONS = [
   { num: 1,  id: 'A', type: 'expense', name: 'Above the Line - Story & Rights', items: [
     'Story Rights / Option Purchase','Screenplay Purchase','Screenplay Rewrite Fee',
     'Writer Step Deal','Treatment Purchase','Research & Development',
@@ -648,6 +648,32 @@ function _totalPWFBid() {
 function _totalPWFActual() {
   // P&W+Fringe actuals ONLY from approved "Group X" purchases — never percentage-based
   return _sections.reduce((sum, def) => sum + _getFringeActual(def.id), 0);
+}
+
+/**
+ * Pure top-sheet summary for an arbitrary (sectionDefs, budgetData) pair —
+ * does not touch or require the module's live _budget/_sections state.
+ * Used by the Budget Drafts preview panel to show a draft's totals
+ * without loading it into the live editing slot. Mirrors _sectionSubTotal /
+ * _sectionEstimateTotal / _apBid / _qBid / _rBid / _grandBid above, reusing
+ * the same _calcRowBid formula so the numbers can't drift out of sync.
+ */
+export function computeBudgetSummary(sectionDefs, budgetData) {
+  const data = budgetData || {};
+  const sectionTotals = sectionDefs.map(def => {
+    const sec = data[def.id];
+    const rows = sec?.rows || [];
+    const subTotal = rows.reduce((s, r) => s + _calcRowBid(def, r), 0);
+    const pwRate     = parseFloat(sec?.pwRate)     || 0;
+    const fringeRate = parseFloat(sec?.fringeRate) || 0;
+    const estimateTotal = subTotal + subTotal * ((pwRate + fringeRate) / 100);
+    return { id: def.id, name: sec?.customName || def.name, bidTotal: estimateTotal };
+  });
+  const apBid = sectionTotals.reduce((s, t) => s + t.bidTotal, 0);
+  const qBid  = parseFloat(data.__q?.amount) || 0;
+  const rBid  = _ceil2(apBid * (parseFloat(data.__r?.rate) || 0) / 100);
+  const grandBid = apBid + qBid + rBid;
+  return { sectionTotals, apBid, qBid, rBid, grandBid };
 }
 
 /* ── Estimate (scratch) calculations ── */

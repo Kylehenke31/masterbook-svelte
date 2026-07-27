@@ -4,8 +4,8 @@
  * A commit is just a checkpoint marker: who, when, which draft, and an
  * optional message describing what changed. It does not diff field
  * values — that's intentionally out of scope. Pair with
- * budgetVersions.js's saveCurrentAsVersion() if you also want a
- * restorable snapshot at that point in time.
+ * budgetVersions.js's commitToActiveDraft() which is what actually
+ * writes the live edits back into the draft; this module only logs it.
  */
 
 import { get } from 'svelte/store';
@@ -27,17 +27,24 @@ export function listCommits() {
   return _load().slice().sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 }
 
+/** Most recent commit logged against a specific draft, or null. */
+export function latestCommitForVersion(versionId) {
+  return listCommits().find(c => c.versionId === versionId) || null;
+}
+
 /**
  * Record a commit. `message` is optional (git-style — a blank message
- * just logs "(no message)"). `versionName` labels which draft this
- * checkpoint belongs to, for readability in the log only.
+ * just logs "(no message)"). `versionId` is the draft it was committed
+ * against; `versionName` is a cached label for display so the log still
+ * reads sensibly even if that draft is later renamed or deleted.
  */
-export function commitBudgetChanges(message, versionName) {
+export function commitBudgetChanges(message, versionId, versionName) {
   const user = get(authUser);
   const entry = {
     id: crypto.randomUUID(),
     message: (message || '').trim() || '(no message)',
     userLabel: user ? getDisplayName(user) : 'Unknown user',
+    versionId: versionId || null,
     versionName: versionName || 'Untitled Budget',
     timestamp: new Date().toISOString(),
   };
