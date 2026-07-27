@@ -1,6 +1,7 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
   import { renderBudget, renderBudgetOverview, renderHotCosts } from '../../budget.js';
+  import BudgetVersionBar from '../components/BudgetVersionBar.svelte';
 
   /**
    * view: 'overview' | 'lines' | 'hot-costs'
@@ -10,9 +11,8 @@
 
   let container;
 
-  onMount(() => {
+  function renderCurrentView() {
     if (!container) return;
-
     if (view === 'overview') {
       renderBudgetOverview(container);
     } else if (view === 'lines') {
@@ -20,12 +20,16 @@
     } else if (view === 'hot-costs') {
       renderHotCosts(container);
     }
-  });
+  }
+
+  onMount(renderCurrentView);
 
   onDestroy(() => {
     if (container) container.innerHTML = '';
   });
 </script>
+
+<BudgetVersionBar onVersionChanged={renderCurrentView} />
 
 <div
   bind:this={container}

@@ -28,6 +28,7 @@ export const PROJECT_DATA_KEYS = [
   'movie-ledger-hot-costs', 'movie-ledger-fringe-actuals',
   'movie-ledger-auto-prep', 'anthropic-api-key',
   'movie-ledger-creative', 'movie-ledger-crew-checkcols',
+  'movie-ledger-budget-versions',
 ];
 
 /* ── Reactive store so App shell and other components stay in sync ── */

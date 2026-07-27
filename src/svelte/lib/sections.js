@@ -28,6 +28,7 @@ export const SECTIONS = {
       'movie-ledger-hot-costs',
       'movie-ledger-fringe-actuals',
       'movie-ledger-counters-v2',
+      'movie-ledger-budget-versions',
     ],
   },
   personnel: {
