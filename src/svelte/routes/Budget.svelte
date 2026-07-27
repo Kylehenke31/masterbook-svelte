@@ -1,6 +1,7 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
   import { renderBudget, renderBudgetOverview, renderHotCosts } from '../../budget.js';
+  import { ensureCurrentWorkingLoaded } from '../lib/budgetVersions.js';
   import BudgetVersionBar from '../components/BudgetVersionBar.svelte';
 
   /**
@@ -13,6 +14,10 @@
 
   function renderCurrentView() {
     if (!container) return;
+    // First time this project's Budget page is ever opened (no live data
+    // yet), load whichever draft is pinned as the Current Working Budget.
+    // No-ops once anything has been edited, so it never clobbers live work.
+    ensureCurrentWorkingLoaded();
     if (view === 'overview') {
       renderBudgetOverview(container);
     } else if (view === 'lines') {

@@ -31,6 +31,7 @@
   import SubmissionForm from './routes/SubmissionForm.svelte';
   import CallSheet      from './routes/CallSheet.svelte';
   import Budget         from './routes/Budget.svelte';
+  import BudgetDrafts   from './routes/BudgetDrafts.svelte';
   import Creative         from './routes/Creative.svelte';
   import CreativeCamera   from './routes/CreativeCamera.svelte';
   import CreativeLocations from './routes/CreativeLocations.svelte';
@@ -214,7 +215,7 @@
   const REQUIRES_PROJECT = new Set([
     'log', 'submit', 'crew', 'calendar', 'schedules', 'breakdowns',
     'one-liner', 'script-order', 'shooting-schedule', 'elements-report',
-    'day-out-of-days', 'budget', 'budget-lines', 'hot-costs', 'call-sheet',
+    'day-out-of-days', 'budget', 'budget-lines', 'hot-costs', 'budget-drafts', 'call-sheet',
     'insurance', 'vendors', 'files', 'settings',
     'creative', 'creative-camera', 'creative-locations',
     'creative-prod-design', 'creative-costume', 'creative-property',
@@ -226,7 +227,7 @@
     if (!r) return '';
     if (['schedules','breakdowns','one-liner','script-order','shooting-schedule',
          'elements-report','day-out-of-days'].includes(r)) return 'schedules';
-    if (['budget','budget-lines','hot-costs'].includes(r)) return 'budget';
+    if (['budget','budget-lines','hot-costs','budget-drafts'].includes(r)) return 'budget';
     if (r.startsWith('creative')) return 'creative';
     if (r === 'call-sheet') return 'callsheet';
     if (r === 'vendors') return 'vendors';
@@ -517,6 +518,8 @@
       <Budget view="lines" />
     {:else if route === 'hot-costs'}
       <Budget view="hot-costs" />
+    {:else if route === 'budget-drafts'}
+      <BudgetDrafts />
     {:else if route === 'creative'}
       <Creative />
     {:else if route === 'creative-camera'}

@@ -15,8 +15,14 @@ const LOCK_KEY      = 'movie-ledger-budget-lock';
 function _uid() { return crypto.randomUUID(); }
 
 function _loadState() {
-  try { return JSON.parse(localStorage.getItem(VERSIONS_KEY)) || { activeId: null, versions: [] }; }
-  catch { return { activeId: null, versions: [] }; }
+  try {
+    const state = JSON.parse(localStorage.getItem(VERSIONS_KEY)) || {};
+    return {
+      activeId: state.activeId ?? null,
+      currentWorkingId: state.currentWorkingId ?? null,
+      versions: state.versions ?? [],
+    };
+  } catch { return { activeId: null, currentWorkingId: null, versions: [] }; }
 }
 
 function _saveState(state) {
@@ -64,6 +70,10 @@ export function hasLiveBudgetData() {
 
 export function suggestedDraftName() {
   return `Draft — ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+}
+
+export function getCurrentWorkingId() {
+  return _loadState().currentWorkingId;
 }
 
 /* ── Writes ────────────────────────────────────────────────────── */
@@ -137,5 +147,40 @@ export function deleteVersion(id) {
   const state = _loadState();
   state.versions = state.versions.filter(x => x.id !== id);
   if (state.activeId === id) state.activeId = null;
+  if (state.currentWorkingId === id) state.currentWorkingId = null;
   _saveState(state);
+}
+
+/**
+ * Mark a draft as the "Current Working Budget" — the one that loads
+ * automatically the first time a project's Budget page is opened.
+ * Also switches the live budget to it immediately, same as loadVersion.
+ */
+export function setCurrentWorkingBudget(id) {
+  const state = _loadState();
+  const v = state.versions.find(x => x.id === id);
+  if (!v) return false;
+  _applyToLive(v.data);
+  state.activeId = id;
+  state.currentWorkingId = id;
+  _saveState(state);
+  return true;
+}
+
+/**
+ * Called once when the Budget page mounts. If nothing has been edited
+ * yet in this session (no live data) and a Current Working Budget is
+ * set, loads it in. Never overwrites in-progress live edits.
+ * Returns true if it loaded something.
+ */
+export function ensureCurrentWorkingLoaded() {
+  if (hasLiveBudgetData()) return false;
+  const state = _loadState();
+  if (!state.currentWorkingId) return false;
+  const v = state.versions.find(x => x.id === state.currentWorkingId);
+  if (!v) return false;
+  _applyToLive(v.data);
+  state.activeId = v.id;
+  _saveState(state);
+  return true;
 }

@@ -29,6 +29,7 @@ export const SECTIONS = {
       'movie-ledger-fringe-actuals',
       'movie-ledger-counters-v2',
       'movie-ledger-budget-versions',
+      'movie-ledger-budget-commits',
     ],
   },
   personnel: {
