@@ -568,6 +568,14 @@
     };
     document.addEventListener('keydown', _keydownHandler);
     refreshView();
+
+    // Deep-link from a Budget "Actual" contribution popup — open that
+    // purchase's detail view once the log has rendered.
+    const pendingId = sessionStorage.getItem('masterbook-pending-log-detail');
+    if (pendingId) {
+      sessionStorage.removeItem('masterbook-pending-log-detail');
+      openDetailPopup(pendingId);
+    }
   });
 
   onDestroy(() => {

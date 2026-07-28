@@ -753,6 +753,10 @@ export function getBudgetLineMap() {
 
 /* ── Actual Contributions Popup ── */
 
+// Shared with PurchaseLog.svelte — set here right before navigating to #log
+// so it can open the matching purchase's detail popup on mount.
+const PENDING_LOG_DETAIL_KEY = 'masterbook-pending-log-detail';
+
 function _showActualPopup(title, contributions, grandTotal, showLineNums = false) {
   _closeActualPopup(); // remove any existing one
 
@@ -760,7 +764,7 @@ function _showActualPopup(title, contributions, grandTotal, showLineNums = false
   const fmtAmt = n => '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   const rows = contributions.map(c => `
-    <tr class="ap-row">
+    <tr class="ap-row${c.id ? ' ap-row--clickable' : ''}" data-id="${c.id ? esc2(c.id) : ''}" title="${c.id ? 'Click to view this entry in the Purchase Log' : ''}">
       ${showLineNums ? `<td class="ap-td ap-td--line">${esc2(c.lineNum || '—')}</td>` : ''}
       <td class="ap-td ap-td--folder">${esc2(c.folder)}</td>
       <td class="ap-td ap-td--vendor">${esc2(c.vendor)}</td>
@@ -801,7 +805,15 @@ function _showActualPopup(title, contributions, grandTotal, showLineNums = false
 
   document.body.appendChild(overlay);
   overlay.querySelector('#actual-popup-close').addEventListener('click', _closeActualPopup);
-  overlay.addEventListener('click', e => { if (e.target === overlay) _closeActualPopup(); });
+  overlay.addEventListener('click', e => {
+    if (e.target === overlay) { _closeActualPopup(); return; }
+    const row = e.target.closest('.ap-row--clickable');
+    if (row?.dataset.id) {
+      sessionStorage.setItem(PENDING_LOG_DETAIL_KEY, row.dataset.id);
+      _closeActualPopup();
+      window.location.hash = '#log';
+    }
+  });
   document.addEventListener('keydown', _popupKeyHandler);
 }
 
@@ -833,7 +845,9 @@ function _buildActualsMap() {
   } catch { /* ignore */ }
 
   purchases
-    .filter(p => p.status === 'Approved' && Array.isArray(p.lineItems) && p.lineItems.length > 0)
+    // Actualize only once a charge is both Approved and Paid — an approval
+    // alone isn't a completed transaction yet.
+    .filter(p => p.status === 'Approved' && p.paid === true && Array.isArray(p.lineItems) && p.lineItems.length > 0)
     .forEach(p => {
       p.lineItems.forEach(li => {
         if (!li.lineItem) return;
@@ -846,7 +860,7 @@ function _buildActualsMap() {
           const amount = parseFloat(li.amount) || 0;
           if (!_fringeActuals[secId]) _fringeActuals[secId] = { total: 0, contributions: [] };
           _fringeActuals[secId].total += amount;
-          _fringeActuals[secId].contributions.push({ folder: p.folder || '—', vendor: p.vendor || '—', amount });
+          _fringeActuals[secId].contributions.push({ id: p.id, folder: p.folder || '—', vendor: p.vendor || '—', amount });
           return;
         }
 
@@ -859,7 +873,7 @@ function _buildActualsMap() {
         const entry  = _actualsMap.get(padded);
         const amount = parseFloat(li.amount) || 0;
         entry.total += amount;
-        entry.contributions.push({ folder: p.folder || '—', vendor: p.vendor || '—', amount });
+        entry.contributions.push({ id: p.id, folder: p.folder || '—', vendor: p.vendor || '—', amount });
       });
     });
 

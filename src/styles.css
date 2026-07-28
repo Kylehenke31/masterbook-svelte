@@ -4404,6 +4404,9 @@ textarea {
 .ap-td--folder { font-weight: 600; width: 68px; }
 .ap-td--amt    { text-align: right; font-variant-numeric: tabular-nums; }
 
+.ap-row--clickable { cursor: pointer; }
+.ap-row--clickable:hover .ap-td { background: var(--bg-surface); }
+
 .ap-total-row .ap-td {
   border-bottom: none;
   border-top: 1px solid var(--border);
