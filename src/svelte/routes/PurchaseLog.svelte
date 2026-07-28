@@ -3,7 +3,19 @@
   import { getPurchases, deletePurchase, voidPurchase, approvePurchase, sendBackPurchase,
            calcSummary, getPurchaseById, togglePaid, updatePurchase } from '../../data.js';
   import { getBudgetLineMap } from '../../budget.js';
+  import { generateAndDownloadPOSummary } from '../lib/poSummary.js';
   import { PDFDocument } from 'pdf-lib';
+
+  /* Once a PO is both Approved and Paid, silently generate its PO Summary
+     PDF — guarded by poSummaryGenerated so re-toggling Paid doesn't
+     re-trigger the download. */
+  function maybeGeneratePOSummary(id) {
+    const p = getPurchaseById(id);
+    if (p && p.method === 'PO' && p.status === 'Approved' && p.paid === true && !p.poSummaryGenerated) {
+      generateAndDownloadPOSummary(p).catch(err => console.error('[PO Summary] generation failed:', err));
+      updatePurchase(id, { poSummaryGenerated: true });
+    }
+  }
 
   let container;
   let sortKey  = 'createdAt';
@@ -165,9 +177,9 @@
   function handleAction(action, id, fromQueue=false) {
     if(action==='delete'){if(confirm('Delete this record permanently?')){deletePurchase(id);refreshView();if(fromQueue)renderQueueRows();}}
     else if(action==='void'){const p=getPurchaseById(id),msg=p&&p.status==='Approved'?`VOID submission "${p.folder} — ${p.vendor}"?\n\nThis will remove all data from the budget and logs. The folder will be renamed with VOID. This action CANNOT be undone.`:p?`VOID submission "${p.folder??''} — ${p.vendor??''}"?\n\nThe folder will be renamed with VOID. This action CANNOT be undone.`:'VOID?';if(confirm(msg)){voidPurchase(id);refreshView();if(fromQueue)renderQueueRows();window.dispatchEvent(new Event('ledger-data-changed'));}}
-    else if(action==='approve'){if(confirm('Approve this record?')){approvePurchase(id);refreshView();if(fromQueue)renderQueueRows();}}
+    else if(action==='approve'){if(confirm('Approve this record?')){approvePurchase(id);refreshView();if(fromQueue)renderQueueRows();maybeGeneratePOSummary(id);}}
     else if(action==='return'){if(confirm('Send this record back for correction?')){sendBackPurchase(id);refreshView();if(fromQueue)renderQueueRows();}}
-    else if(action==='toggle-paid'){togglePaid(id);refreshView();if(fromQueue)renderQueueRows();}
+    else if(action==='toggle-paid'){togglePaid(id);refreshView();if(fromQueue)renderQueueRows();maybeGeneratePOSummary(id);}
     else if(action==='detail'){openDetailPopup(id);}
   }
 
@@ -274,7 +286,7 @@
     // Approve
     host.querySelector('#btn-edit-approve').addEventListener('click',()=>{
       if(!_validateLI(form,host))return;
-      _commitEdits(form,host,record.id);updatePurchase(record.id,{status:'Approved'});isDirty=false;onClose?.('approved');
+      _commitEdits(form,host,record.id);updatePurchase(record.id,{status:'Approved'});isDirty=false;maybeGeneratePOSummary(record.id);onClose?.('approved');
     });
     // Return
     host.querySelector('#btn-edit-return').addEventListener('click',()=>{

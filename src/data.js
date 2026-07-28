@@ -10,7 +10,8 @@
     folder           : string (zero-padded, e.g. "0001" or "1003")
     date             : string (YYYY-MM-DD)
     vendor           : string
-    method           : "CC" | "PO-CC" | "PO" | "Check" | "Debit" | "ACH" | "Return"
+    method           : "CC" | "PO-CC" | "PO" | "Petty Cash" | "Check" | "Debit" | "ACH" | "Return"
+                        (PO-CC is legacy only — new submissions no longer produce it)
     ccLast4          : string | null  (only for CC / PO-CC)
     description      : string         (≤6 words)
     lineItem         : string         (budget line item)
@@ -25,6 +26,21 @@
     notes            : string
     isReturn         : boolean
     isQuote          : boolean
+
+    -- Purchase Order fields (method === "PO") --
+    poNumber         : string | null  (zero-padded, e.g. "0001" — separate sequence from `folder`)
+    poLineItems      : Array<{ lineNo, qty, item, description, unitPrice }>
+                        (lineTotal is never stored — always qty * unitPrice)
+    salesperson      : string
+    poSummaryGenerated : boolean      (set once the PO Summary PDF has auto-generated)
+
+    -- Petty Cash fields (method === "Petty Cash") --
+    pettyCashFund    : string         (which cash box/custodian — no envelope entity yet)
+
+    -- Vendor contact (denormalized copy at submission time; vendor records have no stable id) --
+    vendorPhone          : string
+    vendorStreetAddress  : string
+    vendorCityStateZip   : string
   }
 */
 
@@ -34,6 +50,11 @@ export const DB = {
   folderCounters: {
     low: 0,   // 0000–0999: PO, Check, Debit
     high: 0,  // 1000–1999: CC, PO-CC
+  },
+  // Purchase Order numbering — a separate sequence from folderCounters,
+  // since a PO gets both a generic filing "folder" number AND its own PO#.
+  poCounter: {
+    next: 1,
   },
 };
 
@@ -86,6 +107,18 @@ export function assignFolder(method, linkedFolder) {
   }
 
   return { folder: formatted, alert };
+}
+
+/**
+ * Assign the next sequential Purchase Order number ("0001", "0002", ...).
+ * Separate sequence from the generic folder numbering above — a PO gets
+ * both a filing "folder" number and its own PO#. Never reused/reclaimed,
+ * same as folder numbers.
+ */
+export function assignPONumber() {
+  const num = DB.poCounter.next;
+  DB.poCounter.next += 1;
+  return String(num).padStart(4, '0');
 }
 
 /* ── Seed Data ── */
@@ -334,16 +367,19 @@ export const SEED_PURCHASES = [
 
 /* ── Seed folder counter derivation ── */
 function deriveSeedCounters() {
-  let low = 0, high = 0;
+  let low = 0, high = 0, poNext = 1;
   for (const p of SEED_PURCHASES) {
     if (!p.isReturn) {
       const n = parseInt(p.folder, 10);
       if (n >= 1000) high = Math.max(high, n - 999);
       else low = Math.max(low, n + 1);
     }
+    const po = parseInt(p.poNumber, 10);
+    if (!isNaN(po)) poNext = Math.max(poNext, po + 1);
   }
   DB.folderCounters.low  = low;
   DB.folderCounters.high = high;
+  DB.poCounter.next = poNext;
 }
 
 /* ── Store Helpers ── */
@@ -360,6 +396,14 @@ export function addPurchase(record) {
     notes: '',
     isReturn: isRefund,
     isQuote: record.status === 'Quote',
+    poNumber: null,
+    poLineItems: [],
+    salesperson: '',
+    poSummaryGenerated: false,
+    pettyCashFund: '',
+    vendorPhone: '',
+    vendorStreetAddress: '',
+    vendorCityStateZip: '',
     ...record,
   };
   // Refund entries always get "Refunded" status and negative amount
@@ -447,10 +491,12 @@ export function sendBackPurchase(id) {
 /* ── LocalStorage Persistence ── */
 const STORAGE_KEY    = 'movie-ledger-v2';
 const COUNTERS_KEY   = 'movie-ledger-counters-v2';
+const PO_COUNTER_KEY = 'movie-ledger-po-counter-v1';
 
 export function persist() {
   localStorage.setItem(STORAGE_KEY,  JSON.stringify(DB.purchases));
   localStorage.setItem(COUNTERS_KEY, JSON.stringify(DB.folderCounters));
+  localStorage.setItem(PO_COUNTER_KEY, JSON.stringify(DB.poCounter));
 }
 
 /* ── Cloud helpers (imported lazily to avoid circular deps at boot) ── */
@@ -486,16 +532,20 @@ export async function hydrateFromCloud(projectId) {
     }
     DB.purchases = purchases;
     // Recompute folder counters from cloud data
-    let low = 0, high = 0;
+    let low = 0, high = 0, poNext = 1;
     for (const p of DB.purchases) {
-      if (p.isReturn) continue;
-      const n = parseInt(p.folder, 10);
-      if (!isNaN(n)) {
-        if (n >= 1000) high = Math.max(high, n - 999);
-        else           low  = Math.max(low,  n + 1);
+      if (!p.isReturn) {
+        const n = parseInt(p.folder, 10);
+        if (!isNaN(n)) {
+          if (n >= 1000) high = Math.max(high, n - 999);
+          else           low  = Math.max(low,  n + 1);
+        }
       }
+      const po = parseInt(p.poNumber, 10);
+      if (!isNaN(po)) poNext = Math.max(poNext, po + 1);
     }
     DB.folderCounters = { low, high };
+    DB.poCounter = { next: poNext };
     persist();
     window.dispatchEvent(new CustomEvent('masterbook-purchases-loaded'));
   } catch (e) {
@@ -506,12 +556,16 @@ export async function hydrateFromCloud(projectId) {
 export function hydrate() {
   const rawPurchases = localStorage.getItem(STORAGE_KEY);
   const rawCounters  = localStorage.getItem(COUNTERS_KEY);
+  const rawPoCounter = localStorage.getItem(PO_COUNTER_KEY);
 
   if (rawPurchases) {
     DB.purchases = JSON.parse(rawPurchases);
     DB.folderCounters = rawCounters
       ? JSON.parse(rawCounters)
       : { low: 0, high: 0 };
+    DB.poCounter = rawPoCounter
+      ? JSON.parse(rawPoCounter)
+      : { next: 1 };
     // Migrate: rename "Returned" status → "Refunded" for refund entries,
     // and ensure refund amounts are negative
     let migrated = false;

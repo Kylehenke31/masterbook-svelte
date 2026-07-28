@@ -24,7 +24,7 @@ export const PROJECT_DATA_KEYS = [
   'movie-ledger-script-order', 'movie-ledger-calendar-accounting',
   'movie-ledger-daytypes-accounting', 'movie-ledger-cs-email-template',
   'movie-ledger-crew-schedule', 'movie-ledger-cast-v1-backup',
-  'movie-ledger-counters-v2', 'movie-ledger-budget-lock',
+  'movie-ledger-counters-v2', 'movie-ledger-po-counter-v1', 'movie-ledger-budget-lock',
   'movie-ledger-hot-costs', 'movie-ledger-fringe-actuals',
   'movie-ledger-auto-prep', 'anthropic-api-key',
   'movie-ledger-creative', 'movie-ledger-crew-checkcols',

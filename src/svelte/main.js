@@ -1,6 +1,6 @@
 import { mount } from 'svelte';
 import App from './App.svelte';
-import { hydrate } from './stores/purchases.js';
+import { hydrate } from '../data.js';
 import '../styles.css';
 
 // Restore theme before mount to avoid flash

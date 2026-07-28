@@ -1,6 +1,6 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
-  import { addPurchase, assignFolder } from '../../data.js';
+  import { addPurchase, assignFolder, assignPONumber, DB } from '../../data.js';
 
   let { onDone = null } = $props();
 
@@ -11,6 +11,27 @@
   const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
   const MAX_RECEIPT_BYTES = 25 * 1024 * 1024;
   const MAX_SUPPORT_BYTES = 10 * 1024 * 1024;
+  const VENDORS_KEY       = 'movie-ledger-vendors';
+
+  /* Submission Type → underlying `method` value. Petty Cash and Production
+     Credit Card have no dedicated data model yet (Phase 1) — they're a
+     friendlier front-end over the same purchase schema. PO-CC is retired:
+     a charge is either a Purchase Order or a Credit Card charge. */
+  const TYPE_METHOD_MAP = {
+    'Purchase Order':          'PO',
+    'Petty Cash':               'Petty Cash',
+    'Production Credit Card':  'CC',
+    'Return':                   'Return',
+  };
+  const METHOD_TYPE_MAP = {
+    PO: 'Purchase Order',
+    CC: 'Production Credit Card',
+    Return: 'Return',
+  };
+
+  function esc(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+  }
 
   /* ── HTML ── */
   function buildHTML() {
@@ -89,10 +110,48 @@
 
                 <!-- Vendor -->
                 <div class="field">
-                  <label for="f-vendor">Vendor <span class="req">*</span></label>
-                  <input type="text" id="f-vendor" name="vendor"
-                         placeholder="Upload receipt to autofill" required />
+                  <label for="f-vendor-select">Vendor <span class="req">*</span></label>
+                  <select id="f-vendor-select" required>
+                    <option value="">Select vendor…</option>
+                    <option value="__new__">+ Add New Vendor</option>
+                  </select>
                   <span class="field-error" id="err-vendor"></span>
+                </div>
+
+                <!-- Add New Vendor (conditional) -->
+                <div class="field field--full field--conditional" id="field-new-vendor">
+                  <span class="form-section-label">New Vendor</span>
+                  <div class="form-grid new-vendor-grid">
+                    <div class="field">
+                      <label for="f-nv-name">Vendor Name <span class="req">*</span></label>
+                      <input type="text" id="f-nv-name" placeholder="Vendor name" />
+                      <span class="field-error" id="err-nv-name"></span>
+                    </div>
+                    <div class="field">
+                      <label for="f-nv-type">Vendor Type</label>
+                      <input type="text" id="f-nv-type" placeholder="e.g. Equipment Rental" />
+                    </div>
+                    <div class="field">
+                      <label for="f-nv-contact">Contact Person</label>
+                      <input type="text" id="f-nv-contact" />
+                    </div>
+                    <div class="field">
+                      <label for="f-nv-phone">Phone</label>
+                      <input type="text" id="f-nv-phone" />
+                    </div>
+                    <div class="field">
+                      <label for="f-nv-email">Email</label>
+                      <input type="email" id="f-nv-email" />
+                    </div>
+                    <div class="field">
+                      <label for="f-nv-street">Street Address</label>
+                      <input type="text" id="f-nv-street" />
+                    </div>
+                    <div class="field field--full">
+                      <label for="f-nv-citystate">City, State ZIP</label>
+                      <input type="text" id="f-nv-citystate" />
+                    </div>
+                  </div>
                 </div>
 
                 <!-- Amount -->
@@ -116,19 +175,19 @@
                   <span class="field-error" id="err-status"></span>
                 </div>
 
-                <!-- Method -->
+                <!-- Submission Type -->
                 <div class="field">
-                  <label for="f-method">Payment Method</label>
-                  <select id="f-method" name="method">
-                    <option value="CC">Credit Card (CC)</option>
-                    <option value="PO-CC">PO via Credit Card (PO-CC)</option>
-                    <option value="PO">Purchase Order (PO)</option>
-                    <option value="Check">Check</option>
-                    <option value="Debit">Debit</option>
-                    <option value="ACH">ACH / Wire Transfer</option>
+                  <label for="f-type">Submission Type <span class="req">*</span></label>
+                  <select id="f-type" name="type" required>
+                    <option value="">Select…</option>
+                    <option value="Purchase Order">Purchase Order</option>
+                    <option value="Petty Cash">Petty Cash</option>
+                    <option value="Production Credit Card">Production Credit Card</option>
                     <option value="Return">Return</option>
                   </select>
+                  <span class="field-error" id="err-type"></span>
                 </div>
+                <input type="hidden" id="f-method" name="method" value="" />
 
                 <!-- CC Last 4 (conditional) -->
                 <div class="field field--conditional" id="field-cc-last4">
@@ -143,6 +202,47 @@
                   <label for="f-linked-folder">Linked Folder # (original)</label>
                   <input type="text" id="f-linked-folder" name="linkedFolder" placeholder="e.g. 0002" />
                   <span class="field-error" id="err-linked-folder"></span>
+                </div>
+
+                <!-- Petty Cash Fund (Petty Cash only) -->
+                <div class="field field--conditional" id="field-petty-cash-fund">
+                  <label for="f-petty-cash-fund">Petty Cash Fund</label>
+                  <input type="text" id="f-petty-cash-fund" name="pettyCashFund"
+                         placeholder="e.g. Art Dept petty cash box" />
+                </div>
+
+                <!-- Purchase Order section (PO only) -->
+                <div class="field field--full field--conditional" id="field-po-section">
+                  <span class="form-section-label">Purchase Order Details</span>
+                  <div class="form-grid">
+                    <div class="field">
+                      <label for="f-po-number-display">PO Number</label>
+                      <input type="text" id="f-po-number-display" disabled placeholder="Assigned on submit" />
+                    </div>
+                    <div class="field">
+                      <label for="f-po-salesperson">Salesperson</label>
+                      <input type="text" id="f-po-salesperson" name="salesperson" placeholder="Optional" />
+                    </div>
+                  </div>
+
+                  <div class="po-line-items">
+                    <table class="po-line-table">
+                      <thead>
+                        <tr>
+                          <th class="po-line-th-num">Line #</th>
+                          <th class="po-line-th-qty">Qty</th>
+                          <th>Item</th>
+                          <th>Description</th>
+                          <th class="po-line-th-num">Unit Price</th>
+                          <th class="po-line-th-num">Line Total</th>
+                          <th class="po-line-th-del"></th>
+                        </tr>
+                      </thead>
+                      <tbody id="po-line-tbody"></tbody>
+                    </table>
+                    <button type="button" class="btn btn--ghost btn--sm" id="btn-add-po-line">+ Add Row</button>
+                    <span class="field-error" id="err-po-lines"></span>
+                  </div>
                 </div>
 
                 <!-- Description -->
@@ -251,16 +351,32 @@
 
   /* ── Conditional Fields ── */
   function updateConditionalFields(c) {
-    const method    = c.querySelector('#f-method').value;
+    const type      = c.querySelector('#f-type').value;
+    const method    = TYPE_METHOD_MAP[type] || '';
+    const methodEl  = c.querySelector('#f-method');
+    if (methodEl) methodEl.value = method;
     const statusVal = c.querySelector('#f-status')?.value;
 
     c.querySelector('#field-cc-last4').classList.toggle('visible',
-      method === 'CC' || method === 'PO-CC');
+      type === 'Production Credit Card');
 
     c.querySelector('#field-linked-folder').classList.toggle('visible',
-      method === 'Return');
+      type === 'Return');
 
-    const docsRequired = method === 'PO' && statusVal !== 'Quote';
+    c.querySelector('#field-petty-cash-fund').classList.toggle('visible',
+      type === 'Petty Cash');
+
+    const isPO = type === 'Purchase Order';
+    c.querySelector('#field-po-section').classList.toggle('visible', isPO);
+    if (isPO) {
+      const poDisplay = c.querySelector('#f-po-number-display');
+      if (poDisplay) poDisplay.placeholder = `Next: ${String(DB.poCounter.next).padStart(4, '0')}`;
+      // Start with one blank row the first time the PO section is shown.
+      const tbody = c.querySelector('#po-line-tbody');
+      if (tbody && tbody.children.length === 0) addPOLineRow(c);
+    }
+
+    const docsRequired = isPO && statusVal !== 'Quote';
     [['w9', 'w9-req-marker', 'doc-item-w9', 'w9-doc-note'],
      ['pay', 'pay-doc-req-marker', 'doc-item-pay', 'pay-doc-note']].forEach(([, reqId, itemId, noteId]) => {
       const reqEl  = c.querySelector('#' + reqId);
@@ -269,12 +385,135 @@
       if (reqEl)  reqEl.style.display = docsRequired ? 'inline' : 'none';
       if (itemEl) itemEl.classList.toggle('doc-required', docsRequired);
       if (noteEl) {
-        noteEl.textContent = docsRequired ? 'Required for PO · PDF, max 10 MB' : 'PDF, max 10 MB';
+        noteEl.textContent = docsRequired ? 'Required for Purchase Orders · PDF, max 10 MB' : 'PDF, max 10 MB';
         noteEl.className   = docsRequired ? 'doc-note doc-note--required' : 'doc-note';
       }
     });
 
     refreshDocFilenames(c);
+  }
+
+  /* ── Vendor picker ── */
+  function loadVendors(c) {
+    try { c._vendors = JSON.parse(localStorage.getItem(VENDORS_KEY)) || []; }
+    catch { c._vendors = []; }
+  }
+
+  function refreshVendorSelect(c) {
+    const sel = c.querySelector('#f-vendor-select');
+    if (!sel) return;
+    const current = sel.value;
+    sel.innerHTML = '<option value="">Select vendor…</option>' +
+      c._vendors.map((v, i) => `<option value="${i}">${esc(v.name)}</option>`).join('') +
+      '<option value="__new__">+ Add New Vendor</option>';
+    if ([...sel.options].some(o => o.value === current)) sel.value = current;
+  }
+
+  function updateVendorVisibility(c) {
+    const sel = c.querySelector('#f-vendor-select');
+    c.querySelector('#field-new-vendor').classList.toggle('visible', sel?.value === '__new__');
+  }
+
+  /** Resolve the currently-selected vendor into a plain contact object, or null. */
+  function resolveVendor(c) {
+    const sel = c.querySelector('#f-vendor-select');
+    if (!sel || !sel.value) return null;
+    if (sel.value === '__new__') {
+      const name = c.querySelector('#f-nv-name')?.value.trim();
+      if (!name) return null;
+      return {
+        isNew: true,
+        type:          c.querySelector('#f-nv-type')?.value.trim() || '',
+        name,
+        contact:       c.querySelector('#f-nv-contact')?.value.trim() || '',
+        phone:         c.querySelector('#f-nv-phone')?.value.trim() || '',
+        email:         c.querySelector('#f-nv-email')?.value.trim() || '',
+        streetAddress: c.querySelector('#f-nv-street')?.value.trim() || '',
+        cityStateZip:  c.querySelector('#f-nv-citystate')?.value.trim() || '',
+        quotes: '', notes: '',
+      };
+    }
+    const idx = parseInt(sel.value, 10);
+    if (isNaN(idx) || !c._vendors?.[idx]) return null;
+    return { isNew: false, ...c._vendors[idx] };
+  }
+
+  /** Try to match an OCR-guessed vendor name to an existing vendor; else drop into "Add New Vendor". */
+  function applyVendorFromOcr(vendorName, c) {
+    if (!vendorName) return;
+    loadVendors(c);
+    refreshVendorSelect(c);
+    const idx = c._vendors.findIndex(v => (v.name || '').toLowerCase() === String(vendorName).toLowerCase());
+    const sel = c.querySelector('#f-vendor-select');
+    if (!sel) return;
+    if (idx >= 0) {
+      sel.value = String(idx);
+    } else {
+      sel.value = '__new__';
+      const nameEl = c.querySelector('#f-nv-name');
+      if (nameEl) { nameEl.value = vendorName; nameEl.classList.add('ocr-filled'); }
+    }
+    sel.classList.add('ocr-filled');
+    updateVendorVisibility(c);
+  }
+
+  /* ── PO Line Items ── */
+  function poLineRowHTML() {
+    return `<tr class="po-line-row">
+      <td class="po-line-linenum"></td>
+      <td><input type="number" class="po-line-qty" min="0" step="1" value="1"></td>
+      <td><input type="text" class="po-line-item" placeholder="Item"></td>
+      <td><input type="text" class="po-line-desc" placeholder="Description"></td>
+      <td><input type="number" class="po-line-price" min="0" step="0.01" value="0"></td>
+      <td class="po-line-total">$0.00</td>
+      <td><button type="button" class="btn btn--ghost btn--sm po-line-remove" title="Remove row">✕</button></td>
+    </tr>`;
+  }
+
+  function renumberPOLines(c) {
+    c.querySelectorAll('.po-line-row').forEach((row, i) => {
+      row.querySelector('.po-line-linenum').textContent = i + 1;
+    });
+  }
+
+  function wirePOLineRow(c, row) {
+    const qty   = row.querySelector('.po-line-qty');
+    const price = row.querySelector('.po-line-price');
+    const total = row.querySelector('.po-line-total');
+    function recalc() {
+      const q = parseFloat(qty.value) || 0;
+      const p = parseFloat(price.value) || 0;
+      total.textContent = '$' + (q * p).toFixed(2);
+    }
+    qty.addEventListener('input', recalc);
+    price.addEventListener('input', recalc);
+    row.querySelector('.po-line-remove').addEventListener('click', () => {
+      row.remove();
+      renumberPOLines(c);
+    });
+    recalc();
+  }
+
+  function addPOLineRow(c) {
+    const tbody = c.querySelector('#po-line-tbody');
+    if (!tbody) return;
+    tbody.insertAdjacentHTML('beforeend', poLineRowHTML());
+    wirePOLineRow(c, tbody.lastElementChild);
+    renumberPOLines(c);
+  }
+
+  function collectPOLineItems(c) {
+    const items = [];
+    c.querySelectorAll('.po-line-row').forEach((row, i) => {
+      const qty         = parseFloat(row.querySelector('.po-line-qty').value) || 0;
+      const item        = row.querySelector('.po-line-item').value.trim();
+      const description = row.querySelector('.po-line-desc').value.trim();
+      const unitPrice    = parseFloat(row.querySelector('.po-line-price').value) || 0;
+      if (item || description || unitPrice) {
+        items.push({ lineNo: i + 1, qty, item, description, unitPrice });
+      }
+    });
+    return items;
   }
 
   /* ── Preview ── */
@@ -534,15 +773,22 @@ Rules:
   }
 
   function clearOcrFields(c) {
-    ['f-vendor','f-date','f-amount','f-cc-last4','f-description','f-charge-type','f-notes'].forEach(id => {
+    ['f-date','f-amount','f-cc-last4','f-description','f-charge-type','f-notes'].forEach(id => {
       const el = c.querySelector('#' + id);
       if (!el) return;
       el.value = '';
       el.classList.remove('ocr-filled','invalid');
     });
-    const methodEl = c.querySelector('#f-method');
-    if (methodEl) { methodEl.value = 'CC'; methodEl.classList.remove('ocr-filled'); updateConditionalFields(c); }
-    ['err-vendor','err-date','err-amount'].forEach(id => { const el = c.querySelector('#'+id); if(el) el.textContent=''; });
+    // Reset vendor picker
+    const vendorSel = c.querySelector('#f-vendor-select');
+    if (vendorSel) { vendorSel.value = ''; vendorSel.classList.remove('ocr-filled'); }
+    const nvName = c.querySelector('#f-nv-name');
+    if (nvName) { nvName.value = ''; nvName.classList.remove('ocr-filled'); }
+    updateVendorVisibility(c);
+    // Reset type (and, via updateConditionalFields, the hidden method field)
+    const typeEl = c.querySelector('#f-type');
+    if (typeEl) { typeEl.value = ''; typeEl.classList.remove('ocr-filled'); updateConditionalFields(c); }
+    ['err-vendor','err-date','err-amount','err-type'].forEach(id => { const el = c.querySelector('#'+id); if(el) el.textContent=''; });
   }
 
   function applyOcrResults(parsed, c) {
@@ -554,17 +800,19 @@ Rules:
       el.value = (id === 'f-amount') ? Number(value).toFixed(2) : String(value);
       el.classList.add('ocr-filled');
     }
-    fill('f-vendor',      parsed.vendor);
+    applyVendorFromOcr(parsed.vendor, c);
     fill('f-date',        parsed.date);
     fill('f-amount',      parsed.amount);
     fill('f-cc-last4',    parsed.ccLast4);
     fill('f-charge-type', parsed.chargeType);
     fill('f-description', parsed.description);
     fill('f-notes',       parsed.lineItemSummary);
-    const methodEl = c.querySelector('#f-method');
-    if (methodEl) {
-      if (parsed.method) { methodEl.value = parsed.method; methodEl.classList.add('ocr-filled'); }
-      else { methodEl.value = 'PO'; }
+    const typeEl = c.querySelector('#f-type');
+    if (typeEl) {
+      const guessedType = parsed.method && METHOD_TYPE_MAP[parsed.method];
+      if (guessedType) { typeEl.value = guessedType; typeEl.classList.add('ocr-filled'); }
+      // Otherwise leave whatever Type the user already had selected — the
+      // hidden `method` still needs to be resynced either way.
       updateConditionalFields(c);
     }
     if (parsed.ccLast4) refreshDocFilenames(c);
@@ -638,7 +886,7 @@ Rules:
   }
 
   function showGeneratedFilename(key, c) {
-    const vendor     = c.querySelector('#f-vendor')?.value.trim() || 'Unknown';
+    const vendor     = resolveVendor(c)?.name || 'Unknown';
     const today      = new Date().toISOString().slice(0, 10);
     const safeVendor = vendor.replace(/[^a-zA-Z0-9_-]/g, '_').replace(/_+/g, '_');
     const filename   = key === 'w9' ? `W9_${safeVendor}_${today}.pdf` : `Payment_Method_${safeVendor}_${today}.pdf`;
@@ -733,16 +981,52 @@ Rules:
       if (!el.value.trim()) { if (err) err.textContent = 'This field is required.'; el.classList.add('invalid'); return false; }
       if (err) err.textContent = ''; el.classList.remove('invalid'); return true;
     }
-    ok = requireField('f-vendor', 'err-vendor') && ok;
+    ok = requireVendor(form, c)  && ok;
     ok = requireField('f-date',   'err-date')   && ok;
     ok = requireField('f-amount', 'err-amount') && ok;
     ok = requireField('f-status', 'err-status') && ok;
+    ok = requireField('f-type',   'err-type')   && ok;
     const selectedStatus = form.querySelector('#f-status')?.value;
-    if (form.querySelector('#f-method').value === 'PO' && selectedStatus !== 'Quote') {
+    const type = form.querySelector('#f-type')?.value;
+    if (type === 'Purchase Order' && selectedStatus !== 'Quote') {
       ok = requireFile(form.querySelector('#f-w9'),      c.querySelector('#err-w9'),      'W9 required for Purchase Orders.') && ok;
       ok = requireFile(form.querySelector('#f-pay-doc'), c.querySelector('#err-pay-doc'), 'ACH / Wire info required for Purchase Orders.') && ok;
     }
+    if (type === 'Purchase Order') {
+      const items    = collectPOLineItems(c);
+      const linesErr = c.querySelector('#err-po-lines');
+      const valid    = items.length > 0 && items.every(it => it.item && it.unitPrice > 0);
+      if (!valid) { if (linesErr) linesErr.textContent = 'Add at least one line item with an item name and unit price.'; ok = false; }
+      else if (linesErr) { linesErr.textContent = ''; }
+    }
     return ok;
+  }
+
+  /** Shared by validateForm and validateMinimal — the vendor picker isn't a plain required text field. */
+  function requireVendor(form, c) {
+    const sel = form.querySelector('#f-vendor-select');
+    const err = c.querySelector('#err-vendor');
+    if (!sel) return true;
+    if (!sel.value) {
+      if (err) err.textContent = 'Please select a vendor.';
+      sel.classList.add('invalid');
+      return false;
+    }
+    sel.classList.remove('invalid');
+    if (sel.value === '__new__') {
+      const nameEl = form.querySelector('#f-nv-name');
+      const nvErr  = c.querySelector('#err-nv-name');
+      if (!nameEl.value.trim()) {
+        if (nvErr) nvErr.textContent = 'Vendor name is required.';
+        nameEl.classList.add('invalid');
+        if (err) err.textContent = '';
+        return false;
+      }
+      if (nvErr) nvErr.textContent = '';
+      nameEl.classList.remove('invalid');
+    }
+    if (err) err.textContent = '';
+    return true;
   }
 
   function validateMinimal(form, c) {
@@ -753,7 +1037,7 @@ Rules:
       if (!el.value.trim()) { if (err) err.textContent = 'This field is required.'; el.classList.add('invalid'); return false; }
       if (err) err.textContent = ''; el.classList.remove('invalid'); return true;
     }
-    ok = requireField('f-vendor', 'err-vendor') && ok;
+    ok = requireVendor(form, c) && ok;
     ok = requireField('f-date',   'err-date')   && ok;
     ok = requireField('f-amount', 'err-amount') && ok;
     return ok;
@@ -767,13 +1051,34 @@ Rules:
       if (['receipt','w9File','payDocFile'].includes(k)) continue;
       data[k] = v;
     }
+
+    // Resolve vendor (existing pick or newly-added) — the vendor picker
+    // isn't a named form field, so FormData never sees it directly.
+    const vendorInfo = resolveVendor(c);
+    if (vendorInfo?.isNew) {
+      let vendors = [];
+      try { vendors = JSON.parse(localStorage.getItem(VENDORS_KEY)) || []; } catch {}
+      vendors.push({
+        type: vendorInfo.type, name: vendorInfo.name, contact: vendorInfo.contact,
+        phone: vendorInfo.phone, email: vendorInfo.email,
+        streetAddress: vendorInfo.streetAddress, cityStateZip: vendorInfo.cityStateZip,
+        quotes: '', notes: '',
+      });
+      localStorage.setItem(VENDORS_KEY, JSON.stringify(vendors));
+      window.dispatchEvent(new CustomEvent('masterbook-section-changed', { detail: { section: 'vendors' } }));
+    }
+    data.vendor              = vendorInfo?.name || '';
+    data.vendorPhone         = vendorInfo?.phone || '';
+    data.vendorStreetAddress = vendorInfo?.streetAddress || '';
+    data.vendorCityStateZip  = vendorInfo?.cityStateZip || '';
+
     data.w9Attached           = (form.querySelector('#f-w9')?.files?.length ?? 0) > 0;
     data.payMethodDocAttached = (form.querySelector('#f-pay-doc')?.files?.length ?? 0) > 0;
 
-    const vendor = (data.vendor || 'Unknown').replace(/[^a-zA-Z0-9_-]/g, '_').replace(/_+/g, '_');
+    const vendorSlug = (data.vendor || 'Unknown').replace(/[^a-zA-Z0-9_-]/g, '_').replace(/_+/g, '_');
     const today  = new Date().toISOString().slice(0, 10);
-    if (data.w9Attached)           data.w9Filename    = `W9_${vendor}_${today}.pdf`;
-    if (data.payMethodDocAttached) data.payDocFilename = `Payment_Method_${vendor}_${today}.pdf`;
+    if (data.w9Attached)           data.w9Filename    = `W9_${vendorSlug}_${today}.pdf`;
+    if (data.payMethodDocAttached) data.payDocFilename = `Payment_Method_${vendorSlug}_${today}.pdf`;
 
     data.isReturn = data.method === 'Return';
     data.isQuote  = data.status === 'Quote';
@@ -783,6 +1088,11 @@ Rules:
       data.amount = -Math.abs(data.amount);
     } else {
       data.status = data.status || status;
+    }
+
+    if (data.type === 'Purchase Order') {
+      data.poNumber    = assignPONumber();
+      data.poLineItems = collectPOLineItems(c);
     }
 
     const { folder, alert } = assignFolder(data.method, data.linkedFolder || null);
@@ -797,6 +1107,11 @@ Rules:
     c.querySelectorAll('.ocr-filled').forEach(el => el.classList.remove('ocr-filled'));
     clearPreview(c);
     c.querySelectorAll('.doc-filename').forEach(el => el.textContent = '');
+    const poTbody = c.querySelector('#po-line-tbody');
+    if (poTbody) poTbody.innerHTML = '';
+    loadVendors(c);
+    refreshVendorSelect(c);
+    updateVendorVisibility(c);
     updateConditionalFields(c);
 
     if (!isDraft) {
@@ -820,17 +1135,25 @@ Rules:
     const c        = container;
     const form     = c.querySelector('#sub-form');
     const fileInput = c.querySelector('#f-receipt');
-    const methodSel = c.querySelector('#f-method');
+    const typeSel   = c.querySelector('#f-type');
     const statusSel = c.querySelector('#f-status');
+    const vendorSel = c.querySelector('#f-vendor-select');
 
     fileInput.addEventListener('change', () => handleFile(fileInput, c));
-    methodSel.addEventListener('change', () => updateConditionalFields(c));
+    typeSel.addEventListener('change', () => updateConditionalFields(c));
     statusSel.addEventListener('change', () => updateConditionalFields(c));
+
+    loadVendors(c);
+    refreshVendorSelect(c);
+    vendorSel.addEventListener('change', () => { updateVendorVisibility(c); refreshDocFilenames(c); });
+    updateVendorVisibility(c);
+
+    c.querySelector('#btn-add-po-line').addEventListener('click', () => addPOLineRow(c));
+
     updateConditionalFields(c);
 
     c.querySelector('#f-w9').addEventListener('change',      e => handleSupportingDoc(e.target, 'w9',  c));
     c.querySelector('#f-pay-doc').addEventListener('change', e => handleSupportingDoc(e.target, 'pay', c));
-    c.querySelector('#f-vendor').addEventListener('input',   () => refreshDocFilenames(c));
 
     c.querySelector('#btn-prev-page').addEventListener('click', () => {
       const pg = (c._previewCurrentPage ?? 1) - 1;
