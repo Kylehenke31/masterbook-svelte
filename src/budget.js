@@ -844,37 +844,47 @@ function _buildActualsMap() {
     purchases = raw ? JSON.parse(raw) : [];
   } catch { /* ignore */ }
 
+  const addContribution = (p, lineItemVal, amount) => {
+    if (!lineItemVal) return;
+    const liVal = String(lineItemVal).trim();
+    if (!liVal) return;
+
+    // "Group X" fringe line codes → route to fringe actuals
+    const groupMatch = liVal.match(/^Group\s+([A-Za-z]{1,2})$/i);
+    if (groupMatch) {
+      const secId = groupMatch[1].toUpperCase();
+      if (!_fringeActuals[secId]) _fringeActuals[secId] = { total: 0, contributions: [] };
+      _fringeActuals[secId].total += amount;
+      _fringeActuals[secId].contributions.push({ id: p.id, folder: p.folder || '—', vendor: p.vendor || '—', amount });
+      return;
+    }
+
+    const digits = liVal.replace(/\D/g, '');
+    if (!digits) return;
+    const padded = digits.padStart(4, '0');
+    if (!_actualsMap.has(padded)) {
+      _actualsMap.set(padded, { total: 0, contributions: [] });
+    }
+    const entry = _actualsMap.get(padded);
+    entry.total += amount;
+    entry.contributions.push({ id: p.id, folder: p.folder || '—', vendor: p.vendor || '—', amount });
+  };
+
   purchases
     // Actualize only once a charge is both Approved and Paid — an approval
     // alone isn't a completed transaction yet.
-    .filter(p => p.status === 'Approved' && p.paid === true && Array.isArray(p.lineItems) && p.lineItems.length > 0)
+    .filter(p => p.status === 'Approved' && p.paid === true)
     .forEach(p => {
-      p.lineItems.forEach(li => {
-        if (!li.lineItem) return;
-        const liVal = String(li.lineItem).trim();
-
-        // "Group X" fringe line codes → route to fringe actuals
-        const groupMatch = liVal.match(/^Group\s+([A-Za-z]{1,2})$/i);
-        if (groupMatch) {
-          const secId  = groupMatch[1].toUpperCase();
-          const amount = parseFloat(li.amount) || 0;
-          if (!_fringeActuals[secId]) _fringeActuals[secId] = { total: 0, contributions: [] };
-          _fringeActuals[secId].total += amount;
-          _fringeActuals[secId].contributions.push({ id: p.id, folder: p.folder || '—', vendor: p.vendor || '—', amount });
-          return;
-        }
-
-        const digits = liVal.replace(/\D/g, '');
-        if (!digits) return;
-        const padded = digits.padStart(4, '0');
-        if (!_actualsMap.has(padded)) {
-          _actualsMap.set(padded, { total: 0, contributions: [] });
-        }
-        const entry  = _actualsMap.get(padded);
-        const amount = parseFloat(li.amount) || 0;
-        entry.total += amount;
-        entry.contributions.push({ id: p.id, folder: p.folder || '—', vendor: p.vendor || '—', amount });
-      });
+      if (Array.isArray(p.lineItems) && p.lineItems.length > 0) {
+        // Detailed per-item breakdown, assigned via the Review Queue's
+        // Line Items table.
+        p.lineItems.forEach(li => addContribution(p, li.lineItem, parseFloat(li.amount) || 0));
+      } else if (p.lineItem) {
+        // Fallback: the single Line Item field set right on the Submission
+        // Form, with no itemized breakdown — same fallback the Hot Cost
+        // Summary already uses for this case.
+        addContribution(p, p.lineItem, parseFloat(p.amount) || 0);
+      }
     });
 
   // Build a per-section, per-row lookup for O(1) access during rendering
