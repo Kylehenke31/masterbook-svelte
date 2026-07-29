@@ -91,6 +91,14 @@ export const SECTIONS = {
     table: 'creative',      // same Supabase table as creative — stored in same blob, different keys
     keys: ['movie-ledger-files'],
   },
+  creditCards: {
+    table: 'credit_cards',
+    keys: ['movie-ledger-credit-cards', 'movie-ledger-cc-log-counters-v1'],
+  },
+  pettyCash: {
+    table: 'petty_cash',
+    keys: ['movie-ledger-petty-cash-envelopes'],
+  },
 };
 
 /* ── Snapshot helpers ───────────────────────────────────────────── */

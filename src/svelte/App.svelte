@@ -28,6 +28,9 @@
   import OneLiner       from './routes/OneLiner.svelte';
   import Breakdowns     from './routes/Breakdowns.svelte';
   import PurchaseLog    from './routes/PurchaseLog.svelte';
+  import PurchaseOrdersLog from './routes/PurchaseOrdersLog.svelte';
+  import CreditCards    from './routes/CreditCards.svelte';
+  import PettyCash      from './routes/PettyCash.svelte';
   import SubmissionForm from './routes/SubmissionForm.svelte';
   import CallSheet      from './routes/CallSheet.svelte';
   import Budget         from './routes/Budget.svelte';
@@ -109,6 +112,15 @@
   let dropdownRegistry  = $state([]);
   let dropdownActiveId  = $state(null);
 
+  /* ── Ledgers dropdown ── */
+  let showLedgersDropdown = $state(false);
+  const LEDGERS_ROUTES = [
+    { id: 'log',           label: 'All Expenses' },
+    { id: 'po-log',        label: 'Purchase Orders' },
+    { id: 'credit-cards',  label: 'Credit Cards' },
+    { id: 'petty-cash',    label: 'Petty Cash' },
+  ];
+
   /* ── Chat trigger (button lives in sidebar; panel owned by Chat.svelte) ── */
   let chatOpen   = $state(false);
   let chatUnread = $state(0);
@@ -126,6 +138,7 @@
   currentRoute.subscribe(r => {
     route = r;
     showDropdown = false; // close dropdown on every navigation
+    showLedgersDropdown = false;
     refreshProjectStore();
   });
 
@@ -220,6 +233,7 @@
     'creative', 'creative-camera', 'creative-locations',
     'creative-prod-design', 'creative-costume', 'creative-property',
     'creative-hair-makeup', 'creative-stunts', 'creative-continuity',
+    'po-log', 'credit-cards', 'petty-cash',
   ]);
 
   /** Which top-level "group" (macro sidebar section) is the current route in? */
@@ -228,6 +242,7 @@
     if (['schedules','breakdowns','one-liner','script-order','shooting-schedule',
          'elements-report','day-out-of-days'].includes(r)) return 'schedules';
     if (['budget','budget-lines','hot-costs','budget-drafts'].includes(r)) return 'budget';
+    if (['log','po-log','credit-cards','petty-cash'].includes(r)) return 'ledgers';
     if (r.startsWith('creative')) return 'creative';
     if (r === 'call-sheet') return 'callsheet';
     if (r === 'vendors') return 'vendors';
@@ -283,9 +298,10 @@
   });
 </script>
 
-<!-- Close profile dropdown on outside click -->
+<!-- Close profile / Ledgers dropdowns on outside click -->
 <svelte:window onclick={(e) => {
   if (showDropdown && !e.target.closest('.profile-wrap')) closeDropdown();
+  if (showLedgersDropdown && !e.target.closest('.ledgers-wrap')) showLedgersDropdown = false;
 }} />
 
 <!-- ── Auth gate ── -->
@@ -377,10 +393,25 @@
     <div class="macro-sidebar-divider"></div>
 
     <!-- Second section: plain-text "folder" list, no icons -->
-    <button class="macro-btn macro-btn--text" class:macro-active={route === 'log'}
-      onclick={() => { window.location.hash = '#log'; }}>
-      <span class="macro-label">Purchase Log</span>
-    </button>
+    <div class="ledgers-wrap">
+      {#if showLedgersDropdown}
+        <div class="ledgers-dropdown" role="menu">
+          {#each LEDGERS_ROUTES as r (r.id)}
+            <button class="pd-action-btn" class:pd-action-btn--active={route === r.id}
+              role="menuitem" onclick={() => { window.location.hash = '#' + r.id; }}>
+              {r.label}
+            </button>
+          {/each}
+        </div>
+      {/if}
+      <button class="macro-btn macro-btn--text" class:macro-active={routeGroup(route) === 'ledgers'}
+        onclick={() => { showLedgersDropdown = !showLedgersDropdown; }}>
+        <span class="macro-label">Ledgers</span>
+        <svg class="ledgers-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </button>
+    </div>
 
     <button class="macro-btn macro-btn--text" class:macro-active={route === 'calendar'}
       onclick={() => { window.location.hash = '#calendar'; }}>
@@ -482,6 +513,12 @@
   <main class="app-main" class:app-main--full={route === 'crew' || route === 'budget-lines'}>
     {#if route === 'log'}
       <PurchaseLog />
+    {:else if route === 'po-log'}
+      <PurchaseOrdersLog />
+    {:else if route === 'credit-cards'}
+      <CreditCards />
+    {:else if route === 'petty-cash'}
+      <PettyCash />
     {:else if route === 'submit'}
       <SubmissionForm onDone={() => { window.location.hash = '#log'; }} />
     {:else if route === 'call-sheet'}
@@ -836,6 +873,26 @@
 
   .pd-action-btn--signout { color: #e66; }
   .pd-action-btn--signout:hover { background: rgba(220,60,60,0.08); color: #e88; }
+  .pd-action-btn--active { color: var(--gold, #c9a84c); font-weight: 600; }
+
+  /* Ledgers dropdown — same shape as the profile dropdown, opens downward
+     from the sidebar trigger instead of upward from the bottom bar. */
+  .ledgers-wrap { position: relative; }
+  .ledgers-wrap .macro-btn { justify-content: space-between; }
+  .ledgers-caret { flex-shrink: 0; opacity: 0.6; }
+  .ledgers-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 8px;
+    right: 8px;
+    min-width: 180px;
+    padding: 4px 0;
+    background: var(--bg-surface, #1a1a1a);
+    border: 1px solid var(--border, #333);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    z-index: 200;
+    overflow: hidden;
+  }
 
   /* Main content */
   .app-main {

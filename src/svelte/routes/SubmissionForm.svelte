@@ -12,6 +12,8 @@
   const MAX_RECEIPT_BYTES = 25 * 1024 * 1024;
   const MAX_SUPPORT_BYTES = 10 * 1024 * 1024;
   const VENDORS_KEY       = 'movie-ledger-vendors';
+  const CARDS_KEY         = 'movie-ledger-credit-cards';
+  const ENVELOPES_KEY     = 'movie-ledger-petty-cash-envelopes';
 
   /* Submission Type → underlying `method` value. Petty Cash and Production
      Credit Card have no dedicated data model yet (Phase 1) — they're a
@@ -189,12 +191,14 @@
                 </div>
                 <input type="hidden" id="f-method" name="method" value="" />
 
-                <!-- CC Last 4 (conditional) -->
-                <div class="field field--conditional" id="field-cc-last4">
-                  <label for="f-cc-last4">CC Last 4 Digits</label>
-                  <input type="text" id="f-cc-last4" name="ccLast4"
-                         maxlength="4" pattern="[0-9]{4}" placeholder="1234" inputmode="numeric" />
-                  <span class="field-error" id="err-cc-last4"></span>
+                <!-- Credit Card (conditional) -->
+                <div class="field field--conditional" id="field-cc-select">
+                  <label for="f-cc-select">Credit Card <span class="req">*</span></label>
+                  <select id="f-cc-select">
+                    <option value="">Select card…</option>
+                  </select>
+                  <span class="field-error" id="err-cc-select"></span>
+                  <small class="field-hint" id="cc-select-hint"></small>
                 </div>
 
                 <!-- Linked Folder (Return only) -->
@@ -204,11 +208,14 @@
                   <span class="field-error" id="err-linked-folder"></span>
                 </div>
 
-                <!-- Petty Cash Fund (Petty Cash only) -->
-                <div class="field field--conditional" id="field-petty-cash-fund">
-                  <label for="f-petty-cash-fund">Petty Cash Fund</label>
-                  <input type="text" id="f-petty-cash-fund" name="pettyCashFund"
-                         placeholder="e.g. Art Dept petty cash box" />
+                <!-- Petty Cash Envelope (conditional) -->
+                <div class="field field--conditional" id="field-petty-cash-envelope">
+                  <label for="f-pc-envelope">Petty Cash Envelope <span class="req">*</span></label>
+                  <select id="f-pc-envelope">
+                    <option value="">Select envelope…</option>
+                  </select>
+                  <span class="field-error" id="err-pc-envelope"></span>
+                  <small class="field-hint" id="pc-envelope-hint"></small>
                 </div>
 
                 <!-- Purchase Order section (PO only) -->
@@ -357,13 +364,13 @@
     if (methodEl) methodEl.value = method;
     const statusVal = c.querySelector('#f-status')?.value;
 
-    c.querySelector('#field-cc-last4').classList.toggle('visible',
+    c.querySelector('#field-cc-select').classList.toggle('visible',
       type === 'Production Credit Card');
 
     c.querySelector('#field-linked-folder').classList.toggle('visible',
       type === 'Return');
 
-    c.querySelector('#field-petty-cash-fund').classList.toggle('visible',
+    c.querySelector('#field-petty-cash-envelope').classList.toggle('visible',
       type === 'Petty Cash');
 
     const isPO = type === 'Purchase Order';
@@ -455,6 +462,55 @@
     }
     sel.classList.add('ocr-filled');
     updateVendorVisibility(c);
+  }
+
+  /* ── Credit Card picker ── */
+  function loadCards(c) {
+    try { c._cards = JSON.parse(localStorage.getItem(CARDS_KEY)) || []; }
+    catch { c._cards = []; }
+  }
+
+  function refreshCardSelect(c) {
+    const sel = c.querySelector('#f-cc-select');
+    if (!sel) return;
+    const current = sel.value;
+    sel.innerHTML = '<option value="">Select card…</option>' +
+      c._cards.map((card, i) => `<option value="${i}">${esc(card.cardholderName)} — ${esc(card.cardType)} ${esc(card.last4)}</option>`).join('');
+    if ([...sel.options].some(o => o.value === current)) sel.value = current;
+    const hint = c.querySelector('#cc-select-hint');
+    if (hint) hint.textContent = c._cards.length ? '' : 'No cards on file — add one from the Credit Cards page first.';
+  }
+
+  /** Resolve the currently-selected Credit Card into a plain object, or null. */
+  function resolveCard(c) {
+    const sel = c.querySelector('#f-cc-select');
+    if (!sel || !sel.value) return null;
+    const idx = parseInt(sel.value, 10);
+    if (isNaN(idx) || !c._cards?.[idx]) return null;
+    return c._cards[idx];
+  }
+
+  /* ── Petty Cash envelope picker ── */
+  function loadEnvelopes(c) {
+    try { c._envelopes = (JSON.parse(localStorage.getItem(ENVELOPES_KEY)) || []).filter(e => e.status === 'Active'); }
+    catch { c._envelopes = []; }
+  }
+
+  function refreshEnvelopeSelect(c) {
+    const sel = c.querySelector('#f-pc-envelope');
+    if (!sel) return;
+    const current = sel.value;
+    sel.innerHTML = '<option value="">Select envelope…</option>' +
+      c._envelopes.map(env => `<option value="${env.id}">${esc(env.custodianName)}</option>`).join('');
+    if ([...sel.options].some(o => o.value === current)) sel.value = current;
+    const hint = c.querySelector('#pc-envelope-hint');
+    if (hint) hint.textContent = c._envelopes.length ? '' : 'No active envelopes — open one from the Petty Cash page first.';
+  }
+
+  /** Resolve the currently-selected Petty Cash envelope id, or null. */
+  function resolveEnvelope(c) {
+    const sel = c.querySelector('#f-pc-envelope');
+    return sel?.value || null;
   }
 
   /* ── PO Line Items ── */
@@ -773,7 +829,7 @@ Rules:
   }
 
   function clearOcrFields(c) {
-    ['f-date','f-amount','f-cc-last4','f-description','f-charge-type','f-notes'].forEach(id => {
+    ['f-date','f-amount','f-description','f-charge-type','f-notes'].forEach(id => {
       const el = c.querySelector('#' + id);
       if (!el) return;
       el.value = '';
@@ -785,6 +841,9 @@ Rules:
     const nvName = c.querySelector('#f-nv-name');
     if (nvName) { nvName.value = ''; nvName.classList.remove('ocr-filled'); }
     updateVendorVisibility(c);
+    // Reset Credit Card picker
+    const cardSel = c.querySelector('#f-cc-select');
+    if (cardSel) { cardSel.value = ''; cardSel.classList.remove('ocr-filled'); }
     // Reset type (and, via updateConditionalFields, the hidden method field)
     const typeEl = c.querySelector('#f-type');
     if (typeEl) { typeEl.value = ''; typeEl.classList.remove('ocr-filled'); updateConditionalFields(c); }
@@ -803,7 +862,6 @@ Rules:
     applyVendorFromOcr(parsed.vendor, c);
     fill('f-date',        parsed.date);
     fill('f-amount',      parsed.amount);
-    fill('f-cc-last4',    parsed.ccLast4);
     fill('f-charge-type', parsed.chargeType);
     fill('f-description', parsed.description);
     fill('f-notes',       parsed.lineItemSummary);
@@ -815,7 +873,15 @@ Rules:
       // hidden `method` still needs to be resynced either way.
       updateConditionalFields(c);
     }
-    if (parsed.ccLast4) refreshDocFilenames(c);
+    // Try to match an OCR-guessed last-4 to an existing Credit Card profile.
+    if (parsed.ccLast4) {
+      loadCards(c);
+      refreshCardSelect(c);
+      const idx = c._cards.findIndex(card => card.last4 === String(parsed.ccLast4));
+      const cardSel = c.querySelector('#f-cc-select');
+      if (cardSel && idx >= 0) { cardSel.value = String(idx); cardSel.classList.add('ocr-filled'); }
+      refreshDocFilenames(c);
+    }
   }
 
   /* ── File Handler ── */
@@ -999,7 +1065,28 @@ Rules:
       if (!valid) { if (linesErr) linesErr.textContent = 'Add at least one line item with an item name and unit price.'; ok = false; }
       else if (linesErr) { linesErr.textContent = ''; }
     }
+    if (type === 'Production Credit Card') ok = requireCard(form, c) && ok;
+    if (type === 'Petty Cash')              ok = requireEnvelope(form, c) && ok;
     return ok;
+  }
+
+  /** Shared pattern with requireVendor — a plain required-select check. */
+  function requireCard(form, c) {
+    const sel = form.querySelector('#f-cc-select');
+    const err = c.querySelector('#err-cc-select');
+    if (!sel?.value) { if (err) err.textContent = 'Please select a card.'; sel?.classList.add('invalid'); return false; }
+    sel.classList.remove('invalid');
+    if (err) err.textContent = '';
+    return true;
+  }
+
+  function requireEnvelope(form, c) {
+    const sel = form.querySelector('#f-pc-envelope');
+    const err = c.querySelector('#err-pc-envelope');
+    if (!sel?.value) { if (err) err.textContent = 'Please select an envelope.'; sel?.classList.add('invalid'); return false; }
+    sel.classList.remove('invalid');
+    if (err) err.textContent = '';
+    return true;
   }
 
   /** Shared by validateForm and validateMinimal — the vendor picker isn't a plain required text field. */
@@ -1071,6 +1158,15 @@ Rules:
     data.vendorPhone         = vendorInfo?.phone || '';
     data.vendorStreetAddress = vendorInfo?.streetAddress || '';
     data.vendorCityStateZip  = vendorInfo?.cityStateZip || '';
+
+    // Resolve Credit Card / Petty Cash envelope pickers — neither is a
+    // named form field, so FormData never sees them directly.
+    const cardInfo = resolveCard(c);
+    data.ccCardholderName = cardInfo?.cardholderName || '';
+    data.ccCardType       = cardInfo?.cardType || '';
+    data.ccLast4          = cardInfo?.last4 || '';
+
+    data.pettyCashEnvelopeId = resolveEnvelope(c);
 
     data.w9Attached           = (form.querySelector('#f-w9')?.files?.length ?? 0) > 0;
     data.payMethodDocAttached = (form.querySelector('#f-pay-doc')?.files?.length ?? 0) > 0;
@@ -1148,7 +1244,20 @@ Rules:
     vendorSel.addEventListener('change', () => { updateVendorVisibility(c); refreshDocFilenames(c); });
     updateVendorVisibility(c);
 
+    loadCards(c);
+    refreshCardSelect(c);
+
+    loadEnvelopes(c);
+    refreshEnvelopeSelect(c);
+
     c.querySelector('#btn-add-po-line').addEventListener('click', () => addPOLineRow(c));
+
+    // Deep-link from Purchase Orders view's "+ New PO" shortcut
+    const pendingType = sessionStorage.getItem('masterbook-pending-submit-type');
+    if (pendingType) {
+      sessionStorage.removeItem('masterbook-pending-submit-type');
+      typeSel.value = pendingType;
+    }
 
     updateConditionalFields(c);
 

@@ -35,7 +35,17 @@
     poSummaryGenerated : boolean      (set once the PO Summary PDF has auto-generated)
 
     -- Petty Cash fields (method === "Petty Cash") --
-    pettyCashFund    : string         (which cash box/custodian — no envelope entity yet)
+    pettyCashFund       : string       (legacy free-text — superseded by pettyCashEnvelopeId)
+    pettyCashEnvelopeId : string | null (which envelope this charge posts against)
+
+    -- Credit Card fields (method === "CC") --
+    ccCardholderName : string         (denormalized copy of the picked Credit Card profile)
+    ccCardType       : string         ("VISA" | "AMEX" | "Mastercard", denormalized)
+    ccEnvelopeNum    : string         (manually assigned when preparing a CC Log)
+    ccReceiptNum     : string         (manually assigned when preparing a CC Log)
+    ccLogNumbers     : Array<string>  (every CC Log number this charge has appeared on —
+                                        append-only; a charge can legitimately appear on
+                                        both a period log and a later full-history log)
 
     -- Vendor contact (denormalized copy at submission time; vendor records have no stable id) --
     vendorPhone          : string
@@ -56,6 +66,9 @@ export const DB = {
   poCounter: {
     next: 1,
   },
+  // CC Log numbering — one independent sequence per card, keyed by
+  // "${cardType} ${last4}" (e.g. "VISA 9773").
+  ccLogCounters: {},
 };
 
 /* ── Folder Numbering ── */
@@ -119,6 +132,19 @@ export function assignPONumber() {
   const num = DB.poCounter.next;
   DB.poCounter.next += 1;
   return String(num).padStart(4, '0');
+}
+
+/**
+ * Assign the next sequential CC Log number for a given card ("001", "002", ...).
+ * One independent sequence per card, keyed by "${cardType} ${last4}". A period
+ * batch log and a later full-history log both consume from the same sequence —
+ * neither is exclusive, since a charge can legitimately appear on more than one log.
+ */
+export function assignCCLogNumber(cardKey) {
+  if (!DB.ccLogCounters[cardKey]) DB.ccLogCounters[cardKey] = { next: 1 };
+  const num = DB.ccLogCounters[cardKey].next;
+  DB.ccLogCounters[cardKey].next += 1;
+  return String(num).padStart(3, '0');
 }
 
 /* ── Seed Data ── */
@@ -401,6 +427,12 @@ export function addPurchase(record) {
     salesperson: '',
     poSummaryGenerated: false,
     pettyCashFund: '',
+    pettyCashEnvelopeId: null,
+    ccCardholderName: '',
+    ccCardType: '',
+    ccEnvelopeNum: '',
+    ccReceiptNum: '',
+    ccLogNumbers: [],
     vendorPhone: '',
     vendorStreetAddress: '',
     vendorCityStateZip: '',
@@ -489,14 +521,16 @@ export function sendBackPurchase(id) {
 }
 
 /* ── LocalStorage Persistence ── */
-const STORAGE_KEY    = 'movie-ledger-v2';
-const COUNTERS_KEY   = 'movie-ledger-counters-v2';
-const PO_COUNTER_KEY = 'movie-ledger-po-counter-v1';
+const STORAGE_KEY        = 'movie-ledger-v2';
+const COUNTERS_KEY       = 'movie-ledger-counters-v2';
+const PO_COUNTER_KEY     = 'movie-ledger-po-counter-v1';
+const CC_LOG_COUNTER_KEY = 'movie-ledger-cc-log-counters-v1';
 
 export function persist() {
   localStorage.setItem(STORAGE_KEY,  JSON.stringify(DB.purchases));
   localStorage.setItem(COUNTERS_KEY, JSON.stringify(DB.folderCounters));
   localStorage.setItem(PO_COUNTER_KEY, JSON.stringify(DB.poCounter));
+  localStorage.setItem(CC_LOG_COUNTER_KEY, JSON.stringify(DB.ccLogCounters));
 }
 
 /* ── Cloud helpers (imported lazily to avoid circular deps at boot) ── */
@@ -533,6 +567,7 @@ export async function hydrateFromCloud(projectId) {
     DB.purchases = purchases;
     // Recompute folder counters from cloud data
     let low = 0, high = 0, poNext = 1;
+    const ccLogNext = {};
     for (const p of DB.purchases) {
       if (!p.isReturn) {
         const n = parseInt(p.folder, 10);
@@ -543,9 +578,19 @@ export async function hydrateFromCloud(projectId) {
       }
       const po = parseInt(p.poNumber, 10);
       if (!isNaN(po)) poNext = Math.max(poNext, po + 1);
+      if (p.ccCardType && p.ccLast4 && Array.isArray(p.ccLogNumbers)) {
+        const cardKey = `${p.ccCardType} ${p.ccLast4}`;
+        for (const logNum of p.ccLogNumbers) {
+          const n = parseInt(logNum, 10);
+          if (!isNaN(n)) ccLogNext[cardKey] = Math.max(ccLogNext[cardKey] || 1, n + 1);
+        }
+      }
     }
     DB.folderCounters = { low, high };
     DB.poCounter = { next: poNext };
+    DB.ccLogCounters = Object.fromEntries(
+      Object.entries(ccLogNext).map(([k, next]) => [k, { next }])
+    );
     persist();
     window.dispatchEvent(new CustomEvent('masterbook-purchases-loaded'));
   } catch (e) {
@@ -554,9 +599,10 @@ export async function hydrateFromCloud(projectId) {
 }
 
 export function hydrate() {
-  const rawPurchases = localStorage.getItem(STORAGE_KEY);
-  const rawCounters  = localStorage.getItem(COUNTERS_KEY);
-  const rawPoCounter = localStorage.getItem(PO_COUNTER_KEY);
+  const rawPurchases    = localStorage.getItem(STORAGE_KEY);
+  const rawCounters     = localStorage.getItem(COUNTERS_KEY);
+  const rawPoCounter    = localStorage.getItem(PO_COUNTER_KEY);
+  const rawCcLogCounter = localStorage.getItem(CC_LOG_COUNTER_KEY);
 
   if (rawPurchases) {
     DB.purchases = JSON.parse(rawPurchases);
@@ -566,6 +612,9 @@ export function hydrate() {
     DB.poCounter = rawPoCounter
       ? JSON.parse(rawPoCounter)
       : { next: 1 };
+    DB.ccLogCounters = rawCcLogCounter
+      ? JSON.parse(rawCcLogCounter)
+      : {};
     // Migrate: rename "Returned" status → "Refunded" for refund entries,
     // and ensure refund amounts are negative
     let migrated = false;
