@@ -11,6 +11,7 @@
   } from './stores/project.js';
   import { hydrate, hydrateFromCloud } from '../../src/data.js';
   import { syncAllSectionsFromCloud, pushAllSectionsToCloud, saveSectionToCloud } from './lib/sections.js';
+  import { handleDropboxRedirect } from './lib/dropbox.js';
 
   import Home           from './routes/Home.svelte';
   import ElementsReport from './routes/ElementsReport.svelte';
@@ -287,6 +288,11 @@
     // One-time migration: wrap legacy single project into multi-project registry
     migrateToMultiProject();
     refreshProjectStore();
+
+    // Complete a Dropbox connect flow if we just landed back from it
+    handleDropboxRedirect()
+      .then(connected => { if (connected) window.location.hash = '#settings'; })
+      .catch(err => console.error('[Dropbox] connect failed:', err));
 
     window.addEventListener('hashchange', resolveRoute);
     window.addEventListener('masterbook-section-changed', handleSectionChanged);

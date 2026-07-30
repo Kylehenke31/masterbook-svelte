@@ -106,3 +106,33 @@ export async function saveSection(tableName, projectId, sectionData) {
     .upsert({ project_id: projectId, data: sectionData });
   if (error) console.warn(`[db] saveSection(${tableName}) error:`, error.message);
 }
+
+/* ── Dropbox connection (per-user, not per-project) ─────────────── */
+
+export async function saveDropboxToken(refreshToken) {
+  const user = await getUser();
+  if (!user) return;
+  const { error } = await supabase
+    .from('dropbox_tokens')
+    .upsert({ owner_id: user.id, refresh_token: refreshToken });
+  if (error) console.warn('[db] saveDropboxToken error:', error.message);
+}
+
+export async function loadDropboxToken() {
+  const user = await getUser();
+  if (!user) return null;
+  const { data, error } = await supabase
+    .from('dropbox_tokens')
+    .select('refresh_token')
+    .eq('owner_id', user.id)
+    .maybeSingle();
+  if (error) { console.warn('[db] loadDropboxToken error:', error.message); return null; }
+  return data?.refresh_token ?? null;
+}
+
+export async function disconnectDropbox() {
+  const user = await getUser();
+  if (!user) return;
+  const { error } = await supabase.from('dropbox_tokens').delete().eq('owner_id', user.id);
+  if (error) console.warn('[db] disconnectDropbox error:', error.message);
+}

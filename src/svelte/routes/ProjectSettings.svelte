@@ -1,6 +1,7 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
   import { getProject, saveProject, refreshProjectStore } from '../stores/project.js';
+  import { startDropboxAuth, disconnectDropbox, isDropboxConnected } from '../lib/dropbox.js';
 
   let container;
 
@@ -188,7 +189,16 @@
                 <label for="ps-dropbox">Dropbox Folder Path</label>
                 <input type="text" id="ps-dropbox" name="dropboxPath" value="${v('dropboxPath')}"
                   placeholder="Local Dropbox path for receipt folders" maxlength="300" />
-                <span class="setup-hint">Local Dropbox path where receipt folders are stored. Used as a reference — no cloud connection is made by this app.</span>
+                <span class="setup-hint">Local Dropbox path where receipt folders are stored. Used as a reference only.</span>
+              </div>
+              <div class="field field--full">
+                <label>Dropbox Connection</label>
+                <div class="dropbox-connect-row">
+                  <span id="ps-dropbox-status" class="dropbox-status">Checking connection…</span>
+                  <button type="button" id="ps-dropbox-connect" class="btn btn--primary btn--sm hidden">Connect Dropbox</button>
+                  <button type="button" id="ps-dropbox-disconnect" class="btn btn--ghost btn--sm hidden">Disconnect</button>
+                </div>
+                <span class="setup-hint">Connects your Dropbox account so CC Log receipts can be filed into "05. LOGS" automatically once a charge is approved.</span>
               </div>
               <div class="field field--full">
                 <label for="ps-api-key">Anthropic API Key</label>
@@ -351,6 +361,24 @@
     });
   }
 
+  async function _refreshDropboxStatus(c) {
+    const statusEl     = c.querySelector('#ps-dropbox-status');
+    const connectBtn    = c.querySelector('#ps-dropbox-connect');
+    const disconnectBtn = c.querySelector('#ps-dropbox-disconnect');
+    if (!statusEl) return;
+    try {
+      const connected = await isDropboxConnected();
+      statusEl.textContent = connected ? '✔ Connected' : 'Not connected';
+      statusEl.classList.toggle('dropbox-status--connected', connected);
+      connectBtn?.classList.toggle('hidden', connected);
+      disconnectBtn?.classList.toggle('hidden', !connected);
+    } catch (e) {
+      statusEl.textContent = 'Could not check connection status.';
+      connectBtn?.classList.remove('hidden');
+      disconnectBtn?.classList.add('hidden');
+    }
+  }
+
   function _wire(c) {
     const form = c.querySelector('#settings-form');
 
@@ -372,6 +400,15 @@
     c.querySelector('#ps-btn-back')?.addEventListener('click', () => {
       window.location.hash = '#log';
     });
+
+    // Dropbox connection
+    c.querySelector('#ps-dropbox-connect')?.addEventListener('click', () => { startDropboxAuth(); });
+    c.querySelector('#ps-dropbox-disconnect')?.addEventListener('click', async () => {
+      if (!confirm('Disconnect Dropbox? CC Log receipts will stop being filed automatically until you reconnect.')) return;
+      await disconnectDropbox();
+      _refreshDropboxStatus(c);
+    });
+    _refreshDropboxStatus(c);
 
     // Staff: show add form
     c.querySelector('#ps-btn-add-staff')?.addEventListener('click', () => {
@@ -494,6 +531,21 @@
     width: 100%;
     max-width: 860px;
     margin: 0 auto;
+  }
+
+  :global(.dropbox-connect-row) {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  :global(.dropbox-status) {
+    font-size: 0.85rem;
+    color: var(--text-muted, #888);
+  }
+  :global(.dropbox-status--connected) {
+    color: var(--earth-green, #7aaa7a);
+    font-weight: 600;
   }
 
   /* Scoped badge/lock indicator */
