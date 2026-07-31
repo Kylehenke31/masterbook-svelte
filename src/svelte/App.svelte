@@ -10,7 +10,7 @@
     PROJECT_DATA_KEYS,
   } from './stores/project.js';
   import { hydrate, hydrateFromCloud } from '../../src/data.js';
-  import { syncAllSectionsFromCloud, pushAllSectionsToCloud, saveSectionToCloud } from './lib/sections.js';
+  import { syncAllSectionsFromCloud, pushAllSectionsToCloud, saveSectionToCloud, bumpSectionVersion } from './lib/sections.js';
   import { handleDropboxRedirect } from './lib/dropbox.js';
 
   import Home           from './routes/Home.svelte';
@@ -92,6 +92,7 @@
   function handleSectionChanged(e) {
     const sectionName = e?.detail?.section;
     const projectId   = getActiveProjectId();
+    if (sectionName) bumpSectionVersion(sectionName);
     if (!projectId) return;
 
     if (sectionName) {

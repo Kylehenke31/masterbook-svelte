@@ -136,6 +136,20 @@ function sectionHasData(sectionName) {
   });
 }
 
+/* ── Staleness guard ────────────────────────────────────────────── */
+// A cloud load/sync is a background fetch that can take a real moment.
+// If the user edits a section (e.g. adds a Credit Card) while one of these
+// is still in flight, the fetch resolves with a snapshot from *before*
+// that edit and would silently overwrite it — same race as data.js's
+// hydrateFromCloud/_mutationVersion, generalized to every section here.
+// App.svelte bumps this the instant a 'masterbook-section-changed' event
+// fires, i.e. right after the section's own localStorage write.
+const _sectionVersions = {};
+
+export function bumpSectionVersion(sectionName) {
+  _sectionVersions[sectionName] = (_sectionVersions[sectionName] || 0) + 1;
+}
+
 /* ── Cloud save / load ──────────────────────────────────────────── */
 
 /**
@@ -161,8 +175,13 @@ export async function saveSectionToCloud(sectionName, projectId) {
 export async function loadSectionFromCloud(sectionName, projectId) {
   if (!projectId) return false;
   const { table } = SECTIONS[sectionName];
+  const versionAtStart = _sectionVersions[sectionName] || 0;
   try {
     const blob = await loadSection(table, projectId);
+    if ((_sectionVersions[sectionName] || 0) !== versionAtStart) {
+      console.warn(`[sections] loadSectionFromCloud(${sectionName}): local edit happened mid-fetch, skipping stale overwrite`);
+      return false;
+    }
     if (blob) {
       restoreSection(sectionName, blob);
       return true;
@@ -191,8 +210,14 @@ export async function syncAllSectionsFromCloud(projectId) {
 
     // Find all section names using this table
     const sameTable = names.filter(n => SECTIONS[n].table === table);
+    const versionsAtStart = Object.fromEntries(sameTable.map(n => [n, _sectionVersions[n] || 0]));
     try {
       const blob = await loadSection(table, projectId);
+      const changedMidFetch = sameTable.some(n => (_sectionVersions[n] || 0) !== versionsAtStart[n]);
+      if (changedMidFetch) {
+        console.warn(`[sections] syncAllSectionsFromCloud(${table}): local edit happened mid-fetch, skipping stale overwrite`);
+        return;
+      }
       if (blob) {
         // Restore each section that uses this table
         for (const n of sameTable) restoreSection(n, blob);
