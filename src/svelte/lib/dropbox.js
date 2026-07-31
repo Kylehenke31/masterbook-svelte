@@ -80,6 +80,17 @@ export async function handleDropboxRedirect() {
   const data = await resp.json();
   const { saveDropboxToken } = await import('./db.js');
   await saveDropboxToken(data.refresh_token);
+
+  // Set up the project's Dropbox folder structure right away — best-effort,
+  // shouldn't block the connect flow from completing if it fails.
+  try {
+    const { getProject } = await import('../stores/project.js');
+    const project = getProject();
+    if (project) await provisionProjectFolders(project);
+  } catch (e) {
+    console.warn('[Dropbox] provisioning project folders failed:', e.message);
+  }
+
   return true;
 }
 
@@ -151,4 +162,42 @@ export async function dropboxUploadFile(path, bytes) {
     throw new Error(`Dropbox upload failed (${resp.status}): ${err?.error_summary || ''}`);
   }
   return await resp.json();
+}
+
+/** Dropbox forbids \, /, and trailing dots/spaces in a path component. */
+function sanitizeFolderSegment(name) {
+  return String(name || '').replace(/[\\/]/g, '-').trim().replace(/[. ]+$/, '') || 'Untitled';
+}
+
+/**
+ * Create the project's root Dropbox folder (named after the project, same
+ * convention as projectFolderName()) plus the full static subfolder tree
+ * from folderTree.js — the same structure shown in the app's Files window.
+ * Called once right after a successful connect. Best-effort: one folder
+ * failing doesn't stop the rest: they're independent creates.
+ */
+export async function provisionProjectFolders(project) {
+  const { projectFolderName } = await import('../stores/project.js');
+  const { FOLDER_TREE } = await import('./folderTree.js');
+
+  const rootName = sanitizeFolderSegment(projectFolderName(project));
+  const rootPath = `/${rootName}`;
+
+  const paths = [rootPath];
+  for (const node of FOLDER_TREE) {
+    paths.push(`${rootPath}/${node.label}`);
+    for (const child of node.children || []) {
+      paths.push(`${rootPath}/${node.label}/${child.label}`);
+    }
+  }
+
+  const results = await Promise.allSettled(paths.map(p => dropboxCreateFolder(p)));
+  const failed = results
+    .map((r, i) => ({ r, path: paths[i] }))
+    .filter(({ r }) => r.status === 'rejected');
+  if (failed.length) {
+    console.warn('[Dropbox] some project folders failed to create:',
+      failed.map(({ path, r }) => `${path}: ${r.reason?.message}`));
+  }
+  return { rootPath, failedCount: failed.length, totalCount: paths.length };
 }
