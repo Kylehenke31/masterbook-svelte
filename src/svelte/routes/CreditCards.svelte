@@ -1,6 +1,7 @@
 <script>
   import { getPurchases, updatePurchase, assignCCLogNumber } from '../../data.js';
   import { generateAndDownloadCCLog } from '../lib/ccLogSummary.js';
+  import { fileCCLogReceipts, isDropboxConnected } from '../lib/dropbox.js';
 
   const CARDS_KEY  = 'movie-ledger-credit-cards';
   const CARD_TYPES = ['VISA', 'AMEX', 'Mastercard'];
@@ -118,6 +119,19 @@
       });
       refreshLogRows();
       await generateAndDownloadCCLog(selectedCard, logNumber, included);
+
+      // File each included charge's receipt into this log's Dropbox folder.
+      const withReceipts = included.filter(p => p.receiptUrl);
+      if (withReceipts.length) {
+        if (await isDropboxConnected()) {
+          const result = await fileCCLogReceipts(selectedCard, logNumber, withReceipts);
+          if (result.failedCount) {
+            alert(`Log ${logNumber} generated. ${result.filedCount}/${withReceipts.length} receipts filed to Dropbox — ${result.failedCount} failed (see console for details).`);
+          }
+        } else {
+          alert(`Log ${logNumber} generated, but Dropbox isn't connected — receipts weren't filed. Connect it from Project Settings, then use "Recreate Project Folders" if needed.`);
+        }
+      }
     } finally {
       generating = false;
     }

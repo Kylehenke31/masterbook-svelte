@@ -1,6 +1,9 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
+  import { PDFDocument } from 'pdf-lib';
   import { addPurchase, assignFolder, assignPONumber, DB } from '../../data.js';
+  import { getActiveProjectId } from '../stores/project.js';
+  import { uploadDraftReceipt } from '../lib/db.js';
 
   let { onDone = null } = $props();
 
@@ -632,6 +635,7 @@
     if (layout) layout.classList.remove('has-preview');
     c._previewPdf         = null;
     c._previewCurrentPage = 1;
+    c._receiptPdfBytesPromise = null;
     const canvas = c.querySelector('#preview-canvas');
     const img    = c.querySelector('#preview-img');
     if (canvas) canvas.classList.add('hidden');
@@ -677,6 +681,31 @@
       reader.onerror = reject;
       reader.readAsDataURL(file);
     });
+  }
+
+  /**
+   * Normalize an uploaded receipt (PDF/JPEG/PNG) to a single-page PDF's raw
+   * bytes — a PDF passes through untouched; an image gets embedded onto a
+   * Letter page, scaled down (never up) to fit within margins. This is the
+   * canonical form stored for a receipt, independent of the OCR pipeline
+   * above (which works from its own base64 copy).
+   */
+  async function normalizeReceiptToPDF(file) {
+    if (file.type === 'application/pdf') {
+      return new Uint8Array(await file.arrayBuffer());
+    }
+    const imgBytes = new Uint8Array(await file.arrayBuffer());
+    const pdfDoc = await PDFDocument.create();
+    const img = file.type === 'image/png'
+      ? await pdfDoc.embedPng(imgBytes)
+      : await pdfDoc.embedJpg(imgBytes);
+    const pageW = 612, pageH = 792, margin = 36; // US Letter, points
+    const availW = pageW - margin * 2, availH = pageH - margin * 2;
+    const scale = Math.min(availW / img.width, availH / img.height, 1);
+    const w = img.width * scale, h = img.height * scale;
+    const page = pdfDoc.addPage([pageW, pageH]);
+    page.drawImage(img, { x: (pageW - w) / 2, y: (pageH - h) / 2, width: w, height: h });
+    return await pdfDoc.save();
   }
 
   /* ── OCR via Anthropic ── */
@@ -903,6 +932,10 @@ Rules:
 
     const filenameParsed = parseFilename(file.name);
     renderPreview(file, c).catch(err => console.warn('[Preview]', err));
+
+    // Kick off independently of OCR — resolved later at submit time.
+    c._receiptPdfBytesPromise = normalizeReceiptToPDF(file)
+      .catch(err => { console.warn('[Receipt] normalize failed:', err); return null; });
 
     try {
       const isPdf = file.type === 'application/pdf';
@@ -1131,7 +1164,7 @@ Rules:
   }
 
   /* ── Submit ── */
-  function submitRecord(form, c, status, isDraft = false) {
+  async function submitRecord(form, c, status, isDraft = false) {
     const fd = new FormData(form);
     const data = {};
     for (const [k, v] of fd.entries()) {
@@ -1197,6 +1230,26 @@ Rules:
     const alertEl = c.querySelector('#folder-alert');
     if (alert) { alertEl.textContent = alert; alertEl.classList.add('visible'); }
     else        { alertEl.classList.remove('visible'); }
+
+    // Receipt: normalized to PDF back in handleFile(). A draft save stages
+    // it in Supabase Storage (needs the purchase's id up front, so it's
+    // generated here rather than left to addPurchase's default); a direct
+    // submission just holds it as a data: URL on the record itself until
+    // it's later filed into Dropbox when its CC Log gets generated.
+    const receiptBytes = await c._receiptPdfBytesPromise;
+    if (receiptBytes) {
+      if (isDraft) {
+        data.id = data.id || crypto.randomUUID();
+        const projectId = getActiveProjectId();
+        data.receiptUrl = projectId
+          ? await uploadDraftReceipt(projectId, data.id, receiptBytes)
+          : null;
+      } else {
+        let binary = '';
+        for (const byte of receiptBytes) binary += String.fromCharCode(byte);
+        data.receiptUrl = `data:application/pdf;base64,${btoa(binary)}`;
+      }
+    }
 
     addPurchase(data);
     form.reset();
@@ -1274,15 +1327,15 @@ Rules:
       if (pg <= total) renderPreviewPage(c, pg);
     });
 
-    form.addEventListener('submit', e => {
+    form.addEventListener('submit', async e => {
       e.preventDefault();
       if (!validateForm(form, c)) return;
-      submitRecord(form, c, 'In Review');
+      await submitRecord(form, c, 'In Review');
     });
 
-    c.querySelector('#btn-save-profile').addEventListener('click', () => {
+    c.querySelector('#btn-save-profile').addEventListener('click', async () => {
       if (!validateMinimal(form, c)) return;
-      submitRecord(form, c, 'Submitted', true);
+      await submitRecord(form, c, 'Submitted', true);
     });
 
     c.querySelector('#btn-review-later').addEventListener('click', () => {

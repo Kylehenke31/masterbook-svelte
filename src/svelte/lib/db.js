@@ -136,3 +136,42 @@ export async function disconnectDropbox() {
   const { error } = await supabase.from('dropbox_tokens').delete().eq('owner_id', user.id);
   if (error) console.warn('[db] disconnectDropbox error:', error.message);
 }
+
+/* ── Draft receipt storage ───────────────────────────────────────
+   purchase.receiptUrl encodes where a receipt currently lives:
+     null                              — no receipt
+     data:application/pdf;base64,...   — held temporarily in this browser
+     supabase://tempdocs/{path}        — staged in Supabase Storage (draft)
+   Storage paths are prefixed with the owner's user id so the bucket's
+   RLS policy (folder[0] = auth.uid()) scopes each user to their own files. */
+
+const RECEIPTS_BUCKET = 'tempdocs';
+
+export async function uploadDraftReceipt(projectId, purchaseId, bytes) {
+  const user = await getUser();
+  if (!user) return null;
+  const path = `${user.id}/${projectId}/${purchaseId}.pdf`;
+  const { error } = await supabase.storage
+    .from(RECEIPTS_BUCKET)
+    .upload(path, bytes, { contentType: 'application/pdf', upsert: true });
+  if (error) { console.warn('[db] uploadDraftReceipt error:', error.message); return null; }
+  return `supabase://${RECEIPTS_BUCKET}/${path}`;
+}
+
+/** Accepts a `supabase://{bucket}/{path}` reference, returns an ArrayBuffer of the file's bytes. */
+export async function downloadDraftReceipt(supabaseUrl) {
+  const match = /^supabase:\/\/([^/]+)\/(.+)$/.exec(supabaseUrl || '');
+  if (!match) return null;
+  const [, bucket, path] = match;
+  const { data, error } = await supabase.storage.from(bucket).download(path);
+  if (error) { console.warn('[db] downloadDraftReceipt error:', error.message); return null; }
+  return await data.arrayBuffer();
+}
+
+export async function deleteDraftReceipt(supabaseUrl) {
+  const match = /^supabase:\/\/([^/]+)\/(.+)$/.exec(supabaseUrl || '');
+  if (!match) return;
+  const [, bucket, path] = match;
+  const { error } = await supabase.storage.from(bucket).remove([path]);
+  if (error) console.warn('[db] deleteDraftReceipt error:', error.message);
+}

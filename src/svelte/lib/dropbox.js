@@ -194,16 +194,106 @@ export async function dropboxUploadFile(path, bytes) {
     },
     body: bytes,
   });
-  if (!resp.ok) {
-    const err = await resp.json().catch(() => ({}));
-    throw new Error(`Dropbox upload failed (${resp.status}): ${err?.error_summary || ''}`);
+  if (resp.ok) return await resp.json();
+
+  if (resp.status === 429) {
+    const retryAfterMs = (Number(resp.headers.get('Retry-After')) || 1) * 1000;
+    const err = new Error('Dropbox rate limited (429)');
+    err.retryable = true;
+    err.retryAfterMs = retryAfterMs;
+    throw err;
   }
-  return await resp.json();
+  if (resp.status >= 500) {
+    const err = new Error(`Dropbox upload server error (${resp.status})`);
+    err.retryable = true;
+    throw err;
+  }
+  const err = await resp.json().catch(() => ({}));
+  if (err?.error?.['.tag'] === 'too_many_write_operations' || err?.error_summary?.includes('too_many_write_operations')) {
+    const e = new Error('Dropbox too_many_write_operations');
+    e.retryable = true;
+    throw e;
+  }
+  throw new Error(`Dropbox upload failed (${resp.status}): ${err?.error_summary || ''}`);
+}
+
+/** dropboxUploadFile with retry/backoff for the transient failures it flags as retryable. */
+async function uploadFileWithRetry(path, bytes, maxAttempts = 5) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await dropboxUploadFile(path, bytes);
+    } catch (e) {
+      if (!e.retryable || attempt === maxAttempts) throw e;
+      const delay = e.retryAfterMs || Math.min(500 * 2 ** (attempt - 1), 8000);
+      await new Promise(r => setTimeout(r, delay));
+    }
+  }
 }
 
 /** Dropbox forbids \, /, and trailing dots/spaces in a path component. */
 function sanitizeFolderSegment(name) {
   return String(name || '').replace(/[\\/]/g, '-').trim().replace(/[. ]+$/, '') || 'Untitled';
+}
+
+function base64ToBytes(base64) {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+function fmtMoneyForFilename(n) {
+  return (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+/**
+ * File each purchase's receipt into this card's Dropbox log folder —
+ * "{project root}/05. LOGS/{cardType}-{last4}_{cardholderName}_{logNumber}/receipts/"
+ * — named "{last4}_{logNumber}_{receiptNum}_{vendor}_{date}_${amount}.pdf",
+ * per the naming convention. Purchases with no receiptUrl are skipped.
+ * Sequential + retried, same reasoning as provisionProjectFolders: Dropbox
+ * rejects a burst of concurrent writes to the same parent folder.
+ */
+export async function fileCCLogReceipts(card, logNumber, purchases) {
+  const { projectFolderName, getProject } = await import('../stores/project.js');
+  const { downloadDraftReceipt } = await import('./db.js');
+
+  const project  = getProject();
+  const rootName = sanitizeFolderSegment(projectFolderName(project));
+  const cardFolder = sanitizeFolderSegment(`${card.cardType}-${card.last4}_${card.cardholderName}_${logNumber}`);
+  const receiptsPath = `/${rootName}/05. LOGS/${cardFolder}/receipts`;
+
+  await createFolderWithRetry(`/${rootName}/05. LOGS/${cardFolder}`);
+  await createFolderWithRetry(receiptsPath);
+
+  const failed = [];
+  let filedCount = 0;
+  for (const p of purchases) {
+    if (!p.receiptUrl) continue;
+    try {
+      let bytes;
+      if (p.receiptUrl.startsWith('data:')) {
+        bytes = base64ToBytes(p.receiptUrl.split(',')[1]);
+      } else if (p.receiptUrl.startsWith('supabase://')) {
+        const buf = await downloadDraftReceipt(p.receiptUrl);
+        if (!buf) throw new Error('could not download staged receipt');
+        bytes = new Uint8Array(buf);
+      } else {
+        continue; // unrecognized reference — nothing to file
+      }
+      const filename = sanitizeFolderSegment(
+        `${p.ccLast4}_${logNumber}_${p.ccReceiptNum || '00'}_${p.vendor}_${p.date}_$${fmtMoneyForFilename(p.amount)}`
+      ) + '.pdf';
+      await uploadFileWithRetry(`${receiptsPath}/${filename}`, bytes);
+      filedCount++;
+    } catch (e) {
+      failed.push({ purchaseId: p.id, message: e.message });
+    }
+  }
+  if (failed.length) {
+    console.warn('[Dropbox] some receipts failed to file:', failed);
+  }
+  return { receiptsPath, filedCount, failedCount: failed.length, failed };
 }
 
 /**
