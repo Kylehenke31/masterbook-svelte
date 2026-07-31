@@ -140,9 +140,46 @@ export async function dropboxCreateFolder(path) {
     body: JSON.stringify({ path, autorename: false }),
   });
   if (resp.ok) return true;
+
+  // 429 (rate limited) — Dropbox sends a Retry-After header.
+  if (resp.status === 429) {
+    const retryAfterMs = (Number(resp.headers.get('Retry-After')) || 1) * 1000;
+    const err = new Error(`Dropbox rate limited (429)`);
+    err.retryable = true;
+    err.retryAfterMs = retryAfterMs;
+    throw err;
+  }
+  // 5xx — transient server-side error.
+  if (resp.status >= 500) {
+    const err = new Error(`Dropbox create_folder_v2 server error (${resp.status})`);
+    err.retryable = true;
+    throw err;
+  }
+
   const err = await resp.json().catch(() => ({}));
   if (err?.error?.['.tag'] === 'path' && err.error.path?.['.tag'] === 'conflict') return true; // already exists
+  // Dropbox explicitly documents this one: too many concurrent writes to the
+  // *same parent folder* (which is exactly what creating a project's whole
+  // subfolder tree does) — their own guidance is to back off and retry.
+  if (err?.error?.['.tag'] === 'too_many_write_operations') {
+    const e = new Error('Dropbox too_many_write_operations');
+    e.retryable = true;
+    throw e;
+  }
   throw new Error(`Dropbox create_folder_v2 failed (${resp.status}): ${err?.error_summary || ''}`);
+}
+
+/** dropboxCreateFolder with retry/backoff for the transient failures it flags as retryable. */
+async function createFolderWithRetry(path, maxAttempts = 5) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await dropboxCreateFolder(path);
+    } catch (e) {
+      if (!e.retryable || attempt === maxAttempts) throw e;
+      const delay = e.retryAfterMs || Math.min(500 * 2 ** (attempt - 1), 8000);
+      await new Promise(r => setTimeout(r, delay));
+    }
+  }
 }
 
 /** Upload a file, overwriting any existing file at that exact path. */
@@ -173,8 +210,15 @@ function sanitizeFolderSegment(name) {
  * Create the project's root Dropbox folder (named after the project, same
  * convention as projectFolderName()) plus the full static subfolder tree
  * from folderTree.js — the same structure shown in the app's Files window.
- * Called once right after a successful connect. Best-effort: one folder
- * failing doesn't stop the rest: they're independent creates.
+ * Called once right after a successful connect.
+ *
+ * Creates paths one at a time, parents before children, with retry/backoff
+ * on transient failures. Dropbox explicitly rejects a burst of concurrent
+ * writes to the same parent folder (`too_many_write_operations`) — which is
+ * exactly what firing all these creates in parallel does, since several
+ * subfolders share the same parent (e.g. everything under "01. ACCOUNTING").
+ * Any path that still fails after retries is skipped rather than aborting
+ * the rest of the tree.
  */
 export async function provisionProjectFolders(project) {
   const { projectFolderName } = await import('../stores/project.js');
@@ -191,13 +235,16 @@ export async function provisionProjectFolders(project) {
     }
   }
 
-  const results = await Promise.allSettled(paths.map(p => dropboxCreateFolder(p)));
-  const failed = results
-    .map((r, i) => ({ r, path: paths[i] }))
-    .filter(({ r }) => r.status === 'rejected');
-  if (failed.length) {
-    console.warn('[Dropbox] some project folders failed to create:',
-      failed.map(({ path, r }) => `${path}: ${r.reason?.message}`));
+  const failed = [];
+  for (const path of paths) {
+    try {
+      await createFolderWithRetry(path);
+    } catch (e) {
+      failed.push({ path, message: e.message });
+    }
   }
-  return { rootPath, failedCount: failed.length, totalCount: paths.length };
+  if (failed.length) {
+    console.warn('[Dropbox] some project folders failed to create:', failed);
+  }
+  return { rootPath, failedCount: failed.length, totalCount: paths.length, failed };
 }

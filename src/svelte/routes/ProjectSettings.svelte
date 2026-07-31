@@ -1,7 +1,7 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
   import { getProject, saveProject, refreshProjectStore } from '../stores/project.js';
-  import { startDropboxAuth, disconnectDropbox, isDropboxConnected } from '../lib/dropbox.js';
+  import { startDropboxAuth, disconnectDropbox, isDropboxConnected, provisionProjectFolders } from '../lib/dropbox.js';
 
   let container;
 
@@ -196,6 +196,7 @@
                 <div class="dropbox-connect-row">
                   <span id="ps-dropbox-status" class="dropbox-status">Checking connection…</span>
                   <button type="button" id="ps-dropbox-connect" class="btn btn--primary btn--sm hidden">Connect Dropbox</button>
+                  <button type="button" id="ps-dropbox-recreate" class="btn btn--ghost btn--sm hidden">Recreate Project Folders</button>
                   <button type="button" id="ps-dropbox-disconnect" class="btn btn--ghost btn--sm hidden">Disconnect</button>
                 </div>
                 <span class="setup-hint">Connects your Dropbox account so CC Log receipts can be filed into "05. LOGS" automatically once a charge is approved.</span>
@@ -362,8 +363,9 @@
   }
 
   async function _refreshDropboxStatus(c) {
-    const statusEl     = c.querySelector('#ps-dropbox-status');
+    const statusEl      = c.querySelector('#ps-dropbox-status');
     const connectBtn    = c.querySelector('#ps-dropbox-connect');
+    const recreateBtn   = c.querySelector('#ps-dropbox-recreate');
     const disconnectBtn = c.querySelector('#ps-dropbox-disconnect');
     if (!statusEl) return;
     try {
@@ -371,10 +373,12 @@
       statusEl.textContent = connected ? '✔ Connected' : 'Not connected';
       statusEl.classList.toggle('dropbox-status--connected', connected);
       connectBtn?.classList.toggle('hidden', connected);
+      recreateBtn?.classList.toggle('hidden', !connected);
       disconnectBtn?.classList.toggle('hidden', !connected);
     } catch (e) {
       statusEl.textContent = 'Could not check connection status.';
       connectBtn?.classList.remove('hidden');
+      recreateBtn?.classList.add('hidden');
       disconnectBtn?.classList.add('hidden');
     }
   }
@@ -403,6 +407,24 @@
 
     // Dropbox connection
     c.querySelector('#ps-dropbox-connect')?.addEventListener('click', () => { startDropboxAuth(); });
+    c.querySelector('#ps-dropbox-recreate')?.addEventListener('click', async () => {
+      const btn = c.querySelector('#ps-dropbox-recreate');
+      const statusEl = c.querySelector('#ps-dropbox-status');
+      btn.disabled = true;
+      const prevText = statusEl.textContent;
+      statusEl.textContent = 'Creating folders…';
+      try {
+        const result = await provisionProjectFolders(getProject());
+        statusEl.textContent = result.failedCount
+          ? `✔ Connected — ${result.totalCount - result.failedCount}/${result.totalCount} folders created (see console for details)`
+          : `✔ Connected — all ${result.totalCount} folders created`;
+        statusEl.classList.add('dropbox-status--connected');
+      } catch (e) {
+        statusEl.textContent = `Folder creation failed: ${e.message}`;
+      } finally {
+        btn.disabled = false;
+      }
+    });
     c.querySelector('#ps-dropbox-disconnect')?.addEventListener('click', async () => {
       if (!confirm('Disconnect Dropbox? CC Log receipts will stop being filed automatically until you reconnect.')) return;
       await disconnectDropbox();
