@@ -409,6 +409,11 @@ function deriveSeedCounters() {
 }
 
 /* ── Store Helpers ── */
+// Bumped on every local mutation — lets hydrateFromCloud() detect whether
+// a local edit landed while its fetch was still in flight, so it doesn't
+// clobber a fresher local change with a stale cloud snapshot (see below).
+let _mutationVersion = 0;
+
 export function addPurchase(record) {
   const isRefund = record.method === 'Return';
   const purchase = {
@@ -444,6 +449,7 @@ export function addPurchase(record) {
     purchase.amount = -Math.abs(purchase.amount);
   }
   DB.purchases.unshift(purchase);
+  _mutationVersion++;
   persist();
   // Cloud sync — fire and forget
   getCloudHelpers().then(h => {
@@ -476,6 +482,7 @@ export function updatePurchase(id, changes) {
     merged.amount = -Math.abs(Number(merged.amount) || 0);
   }
   DB.purchases[idx] = merged;
+  _mutationVersion++;
   persist();
   // Cloud sync — fire and forget
   getCloudHelpers().then(h => {
@@ -488,6 +495,7 @@ export function updatePurchase(id, changes) {
 
 export function deletePurchase(id) {
   DB.purchases = DB.purchases.filter(p => p.id !== id);
+  _mutationVersion++;
   persist();
   // Cloud sync — fire and forget
   getCloudHelpers().then(h => {
@@ -553,9 +561,22 @@ async function getCloudHelpers() {
  */
 export async function hydrateFromCloud(projectId) {
   if (!projectId) return;
+  // Snapshot the mutation version before the fetch — if the user adds,
+  // edits, or deletes a purchase while this request is still in flight
+  // (very possible right after sign-in/project-switch, when this runs in
+  // the background while the UI is already interactive), the cloud
+  // snapshot we're about to fetch is stale by the time it lands. Applying
+  // it anyway would silently revert that local change until the next
+  // reload. Skip the overwrite instead — the fire-and-forget cloud save
+  // from that local mutation will reconcile Supabase on its own.
+  const versionAtStart = _mutationVersion;
   try {
     const { cloudLoadPurchases } = await import('./svelte/lib/db.js');
     const purchases = await cloudLoadPurchases(projectId);
+    if (_mutationVersion !== versionAtStart) {
+      console.warn('[data] hydrateFromCloud: local changes happened mid-fetch, skipping stale overwrite');
+      return;
+    }
     if (!purchases.length) {
       // No cloud data yet — push local data up to Supabase
       const h = await getCloudHelpers();

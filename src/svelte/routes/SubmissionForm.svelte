@@ -1327,15 +1327,34 @@ Rules:
       if (pg <= total) renderPreviewPage(c, pg);
     });
 
+    // Normalizing/uploading a receipt can take a moment (real network time
+    // for the Supabase Storage call) — without this, the button visibly
+    // does nothing until it resolves, which reads as broken.
+    async function withButtonLoading(activeBtn, loadingLabel, fn) {
+      const submitBtn = c.querySelector('#btn-submit');
+      const saveBtn   = c.querySelector('#btn-save-profile');
+      const originalLabel = activeBtn.textContent;
+      [submitBtn, saveBtn].forEach(b => { if (b) b.disabled = true; });
+      activeBtn.textContent = loadingLabel;
+      try {
+        await fn();
+      } finally {
+        [submitBtn, saveBtn].forEach(b => { if (b) b.disabled = false; });
+        activeBtn.textContent = originalLabel;
+      }
+    }
+
     form.addEventListener('submit', async e => {
       e.preventDefault();
       if (!validateForm(form, c)) return;
-      await submitRecord(form, c, 'In Review');
+      await withButtonLoading(c.querySelector('#btn-submit'), 'Submitting…',
+        () => submitRecord(form, c, 'In Review'));
     });
 
     c.querySelector('#btn-save-profile').addEventListener('click', async () => {
       if (!validateMinimal(form, c)) return;
-      await submitRecord(form, c, 'Submitted', true);
+      await withButtonLoading(c.querySelector('#btn-save-profile'), 'Saving…',
+        () => submitRecord(form, c, 'Submitted', true));
     });
 
     c.querySelector('#btn-review-later').addEventListener('click', () => {
