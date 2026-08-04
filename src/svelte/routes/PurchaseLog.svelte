@@ -4,7 +4,31 @@
            calcSummary, getPurchaseById, togglePaid, updatePurchase } from '../../data.js';
   import { getBudgetLineMap } from '../../budget.js';
   import { generateAndDownloadPOSummary } from '../lib/poSummary.js';
+  import { downloadDraftReceipt } from '../lib/db.js';
   import { PDFDocument } from 'pdf-lib';
+
+  /* ── Receipt resolution — shared by the Review Queue's edit form and the
+     read-only detail popup. purchase.receiptUrl is one of:
+       null                              — no receipt
+       data:application/pdf;base64,...   — held temporarily in this browser
+       supabase://tempdocs/{path}        — staged in Supabase Storage (draft)
+     Anything else (e.g. a future dropbox: reference) isn't inline-viewable
+     here yet. Returns raw PDF bytes, or null if there's nothing to show. */
+  async function resolveReceiptBytes(receiptUrl) {
+    if (!receiptUrl) return null;
+    if (receiptUrl.startsWith('data:')) {
+      const base64 = receiptUrl.split(',')[1] || '';
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      return bytes;
+    }
+    if (receiptUrl.startsWith('supabase://')) {
+      const buf = await downloadDraftReceipt(receiptUrl);
+      return buf ? new Uint8Array(buf) : null;
+    }
+    return null;
+  }
 
   /* Once a PO is both Approved and Paid, silently generate its PO Summary
      PDF — guarded by poSummaryGenerated so re-toggling Paid doesn't
@@ -146,6 +170,7 @@
         <div class="detail-field"><label>Payment Status</label><span class="${paidCls}">${paidLabel}</span></div>
         <div class="detail-field"><label>W9 / Tax Form</label><span>${p.w9Attached?'✔ Attached':'✘ Not attached'}</span></div>
         <div class="detail-field"><label>Pay Method Doc</label><span>${p.payMethodDocAttached?'✔ Attached':'✘ Not attached'}</span></div>
+        <div class="detail-field"><label>Receipt</label>${p.receiptUrl?`<button type="button" class="btn btn--ghost btn--sm" id="detail-view-receipt-btn">📄 View Receipt</button><span class="field-error" id="detail-receipt-error"></span>`:'<span class="detail-muted">None</span>'}</div>
         ${p.linkedFolder?`<div class="detail-field"><label>Linked Folder</label><span>${esc(p.linkedFolder)}</span></div>`:''}
         ${p.isFringe?`<div class="detail-field"><label>Fringe</label><span>Yes</span></div>`:''}
       </div>
@@ -156,6 +181,26 @@
     `;
     popup.classList.remove('hidden');
     document.body.style.overflow='hidden';
+    content.querySelector('#detail-view-receipt-btn')?.addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      const errEl = content.querySelector('#detail-receipt-error');
+      if (errEl) errEl.textContent = '';
+      btn.disabled = true;
+      const originalLabel = btn.textContent;
+      btn.textContent = 'Loading…';
+      try {
+        const bytes = await resolveReceiptBytes(p.receiptUrl);
+        if (!bytes) throw new Error('Receipt could not be loaded.');
+        const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+        window.open(url, '_blank');
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+      } catch (err) {
+        if (errEl) errEl.textContent = err.message || 'Could not load receipt.';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = originalLabel;
+      }
+    });
     if(p.status==='Approved') {
       content.querySelector('#detail-save-btn')?.addEventListener('click',()=>{
         const di=content.querySelector('#detail-edit-desc'),li=content.querySelector('#detail-edit-line');
@@ -260,6 +305,22 @@
 
     _prefillEditForm(host, record);
     _initLineItems(host, record);
+
+    // Show whatever receipt is already on file — fire-and-forget, doesn't
+    // block the form. A later manual upload (below) still overwrites the
+    // preview panel as normal.
+    if (record.receiptUrl) {
+      const ocr = host.querySelector('#ocr-status');
+      _setOcrStatus(ocr, 'Loading receipt on file…', '');
+      resolveReceiptBytes(record.receiptUrl).then(bytes => {
+        if (bytes) {
+          _renderExistingReceipt(host, bytes).catch(() => {});
+          _setOcrStatus(ocr, 'Showing the receipt already on file. Upload a new file to replace it.', 'success');
+        } else {
+          _setOcrStatus(ocr, 'Receipt on file could not be loaded.', '');
+        }
+      });
+    }
 
     let isDirty = false;
     const form = host.querySelector('#sub-form');
@@ -403,6 +464,17 @@
     host._previewPdf=null;host._previewCurrentPage=1;canvas.classList.add('hidden');img.classList.add('hidden');ph.classList.remove('hidden');pg.classList.add('hidden');fn.textContent=file.name;layout?.classList.add('has-preview');
     if(file.type==='application/pdf'){const ab=await file.arrayBuffer();const pdfjs=window.pdfjsLib;if(!pdfjs)return;pdfjs.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';const pdf=await pdfjs.getDocument({data:ab}).promise;host._previewPdf=pdf;if(pdf.numPages>1)pg.classList.remove('hidden');ph.classList.add('hidden');canvas.classList.remove('hidden');await _renderPreviewPage(host,1);}
     else{const url=URL.createObjectURL(file);img.src=url;img.onload=()=>URL.revokeObjectURL(url);ph.classList.add('hidden');img.classList.remove('hidden');}
+  }
+  /** Load the record's already-stored receipt (not a live File) into the same preview panel. */
+  async function _renderExistingReceipt(host,bytes){
+    const layout=host.querySelector('#submission-layout'),canvas=host.querySelector('#preview-canvas'),img=host.querySelector('#preview-img'),ph=host.querySelector('#preview-placeholder'),pg=host.querySelector('#preview-pagination'),fn=host.querySelector('#preview-filename');
+    host._previewPdf=null;host._previewCurrentPage=1;canvas.classList.add('hidden');img.classList.add('hidden');ph.classList.remove('hidden');pg.classList.add('hidden');fn.textContent='Receipt on file';layout?.classList.add('has-preview');
+    const pdfjs=window.pdfjsLib;if(!pdfjs)return;
+    pdfjs.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    const pdf=await pdfjs.getDocument({data:bytes}).promise;host._previewPdf=pdf;
+    if(pdf.numPages>1)pg.classList.remove('hidden');
+    ph.classList.add('hidden');canvas.classList.remove('hidden');
+    await _renderPreviewPage(host,1);
   }
   async function _renderPreviewPage(host,pageNum){
     const pdf=host._previewPdf;if(!pdf)return;
