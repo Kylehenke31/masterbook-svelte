@@ -34,6 +34,24 @@
     Return: 'Return',
   };
 
+  /* Submission Type accessors. The type is a radio group rather than a single
+     element, so every read/write goes through these instead of `.value`. */
+  function getType(c) {
+    return c.querySelector('input[name="type"]:checked')?.value || '';
+  }
+  /** Select `value` ('' clears), resync dependent fields, and optionally mark
+      the group as OCR-filled (the highlight lives on the list, not an input). */
+  function setType(c, value, { ocrFilled = false } = {}) {
+    c.querySelectorAll('input[name="type"]').forEach(r => { r.checked = r.value === value; });
+    c.querySelector('#f-type-list')?.classList.toggle('ocr-filled', ocrFilled && !!value);
+    updateConditionalFields(c);
+  }
+  /** Quote only means anything on a Purchase Order — the checkbox is hidden
+      otherwise, and a stale tick must not waive docs for another type. */
+  function isQuote(c) {
+    return getType(c) === 'Purchase Order' && !!c.querySelector('#f-is-quote')?.checked;
+  }
+
   function esc(s) {
     return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
   }
@@ -167,30 +185,45 @@
                   <span class="field-error" id="err-amount"></span>
                 </div>
 
-                <!-- Status -->
-                <div class="field">
-                  <label for="f-status">Status <span class="req">*</span></label>
-                  <select id="f-status" name="status" required>
-                    <option value="">Select…</option>
-                    <option value="In Review">Submit for Approval</option>
-                    <option value="Pending Approval">Pending Approval</option>
-                    <option value="Quote">Quote</option>
-                    <option value="Refunded">Refunded</option>
-                  </select>
-                  <span class="field-error" id="err-status"></span>
+                <!-- Submission Type — single-select checklist. Radio inputs
+                     (not checkboxes) so only one can ever be picked, and so
+                     FormData still sees a "type" entry the same as the old
+                     dropdown did. Styled as a checklist per the spec. -->
+                <div class="field field--full">
+                  <label id="f-type-label">Submission Type <span class="req">*</span></label>
+                  <div class="type-checklist" id="f-type-list" role="radiogroup" aria-labelledby="f-type-label">
+                    <label class="type-option">
+                      <input type="radio" name="type" value="Purchase Order" />
+                      <span class="type-option__box" aria-hidden="true"></span>
+                      <span class="type-option__label">Purchase Order</span>
+                    </label>
+                    <label class="type-option">
+                      <input type="radio" name="type" value="Petty Cash" />
+                      <span class="type-option__box" aria-hidden="true"></span>
+                      <span class="type-option__label">Petty Cash</span>
+                    </label>
+                    <label class="type-option">
+                      <input type="radio" name="type" value="Production Credit Card" />
+                      <span class="type-option__box" aria-hidden="true"></span>
+                      <span class="type-option__label">Production Credit Card</span>
+                    </label>
+                    <label class="type-option">
+                      <input type="radio" name="type" value="Return" />
+                      <span class="type-option__box" aria-hidden="true"></span>
+                      <span class="type-option__label">Return</span>
+                    </label>
+                  </div>
+                  <span class="field-error" id="err-type"></span>
                 </div>
 
-                <!-- Submission Type -->
-                <div class="field">
-                  <label for="f-type">Submission Type <span class="req">*</span></label>
-                  <select id="f-type" name="type" required>
-                    <option value="">Select…</option>
-                    <option value="Purchase Order">Purchase Order</option>
-                    <option value="Petty Cash">Petty Cash</option>
-                    <option value="Production Credit Card">Production Credit Card</option>
-                    <option value="Return">Return</option>
-                  </select>
-                  <span class="field-error" id="err-type"></span>
+                <!-- Quote modifier (Purchase Order only). Waives the W9 /
+                     payment-doc requirement — a quote is an estimate taken
+                     before vendor paperwork is collected. -->
+                <div class="field field--full field--conditional" id="field-quote-flag">
+                  <label class="quote-flag">
+                    <input type="checkbox" id="f-is-quote" />
+                    <span>This is a quote <small>— no vendor docs required yet</small></span>
+                  </label>
                 </div>
                 <input type="hidden" id="f-method" name="method" value="" />
 
@@ -361,11 +394,10 @@
 
   /* ── Conditional Fields ── */
   function updateConditionalFields(c) {
-    const type      = c.querySelector('#f-type').value;
+    const type      = getType(c);
     const method    = TYPE_METHOD_MAP[type] || '';
     const methodEl  = c.querySelector('#f-method');
     if (methodEl) methodEl.value = method;
-    const statusVal = c.querySelector('#f-status')?.value;
 
     c.querySelector('#field-cc-select').classList.toggle('visible',
       type === 'Production Credit Card');
@@ -377,6 +409,7 @@
       type === 'Petty Cash');
 
     const isPO = type === 'Purchase Order';
+    c.querySelector('#field-quote-flag').classList.toggle('visible', isPO);
     c.querySelector('#field-po-section').classList.toggle('visible', isPO);
     if (isPO) {
       const poDisplay = c.querySelector('#f-po-number-display');
@@ -386,7 +419,7 @@
       if (tbody && tbody.children.length === 0) addPOLineRow(c);
     }
 
-    const docsRequired = isPO && statusVal !== 'Quote';
+    const docsRequired = isPO && !isQuote(c);
     [['w9', 'w9-req-marker', 'doc-item-w9', 'w9-doc-note'],
      ['pay', 'pay-doc-req-marker', 'doc-item-pay', 'pay-doc-note']].forEach(([, reqId, itemId, noteId]) => {
       const reqEl  = c.querySelector('#' + reqId);
@@ -874,8 +907,10 @@ Rules:
     const cardSel = c.querySelector('#f-cc-select');
     if (cardSel) { cardSel.value = ''; cardSel.classList.remove('ocr-filled'); }
     // Reset type (and, via updateConditionalFields, the hidden method field)
-    const typeEl = c.querySelector('#f-type');
-    if (typeEl) { typeEl.value = ''; typeEl.classList.remove('ocr-filled'); updateConditionalFields(c); }
+    const quoteEl = c.querySelector('#f-is-quote');
+    if (quoteEl) quoteEl.checked = false;
+    setType(c, '');
+    c.querySelector('#f-type-list')?.classList.remove('invalid');
     ['err-vendor','err-date','err-amount','err-type'].forEach(id => { const el = c.querySelector('#'+id); if(el) el.textContent=''; });
   }
 
@@ -894,14 +929,11 @@ Rules:
     fill('f-charge-type', parsed.chargeType);
     fill('f-description', parsed.description);
     fill('f-notes',       parsed.lineItemSummary);
-    const typeEl = c.querySelector('#f-type');
-    if (typeEl) {
-      const guessedType = parsed.method && METHOD_TYPE_MAP[parsed.method];
-      if (guessedType) { typeEl.value = guessedType; typeEl.classList.add('ocr-filled'); }
-      // Otherwise leave whatever Type the user already had selected — the
-      // hidden `method` still needs to be resynced either way.
-      updateConditionalFields(c);
-    }
+    const guessedType = parsed.method && METHOD_TYPE_MAP[parsed.method];
+    if (guessedType) setType(c, guessedType, { ocrFilled: true });
+    // Otherwise leave whatever Type the user already had selected — the
+    // hidden `method` still needs to be resynced either way.
+    else updateConditionalFields(c);
     // Try to match an OCR-guessed last-4 to an existing Credit Card profile.
     if (parsed.ccLast4) {
       loadCards(c);
@@ -1083,11 +1115,9 @@ Rules:
     ok = requireVendor(form, c)  && ok;
     ok = requireField('f-date',   'err-date')   && ok;
     ok = requireField('f-amount', 'err-amount') && ok;
-    ok = requireField('f-status', 'err-status') && ok;
-    ok = requireField('f-type',   'err-type')   && ok;
-    const selectedStatus = form.querySelector('#f-status')?.value;
-    const type = form.querySelector('#f-type')?.value;
-    if (type === 'Purchase Order' && selectedStatus !== 'Quote') {
+    ok = requireType(c) && ok;
+    const type = getType(c);
+    if (type === 'Purchase Order' && !isQuote(c)) {
       ok = requireFile(form.querySelector('#f-w9'),      c.querySelector('#err-w9'),      'W9 required for Purchase Orders.') && ok;
       ok = requireFile(form.querySelector('#f-pay-doc'), c.querySelector('#err-pay-doc'), 'ACH / Wire info required for Purchase Orders.') && ok;
     }
@@ -1101,6 +1131,22 @@ Rules:
     if (type === 'Production Credit Card') ok = requireCard(form, c) && ok;
     if (type === 'Petty Cash')              ok = requireEnvelope(form, c) && ok;
     return ok;
+  }
+
+  /** Same contract as requireField, but for the Submission Type radio group —
+      there's no single element to read `.value` off, and the invalid styling
+      belongs on the list rather than any one radio. */
+  function requireType(c) {
+    const list = c.querySelector('#f-type-list');
+    const err  = c.querySelector('#err-type');
+    if (!getType(c)) {
+      if (err) err.textContent = 'Please choose a submission type.';
+      list?.classList.add('invalid');
+      return false;
+    }
+    if (err) err.textContent = '';
+    list?.classList.remove('invalid');
+    return true;
   }
 
   /** Shared pattern with requireVendor — a plain required-select check. */
@@ -1210,13 +1256,18 @@ Rules:
     if (data.payMethodDocAttached) data.payDocFilename = `Payment_Method_${vendorSlug}_${today}.pdf`;
 
     data.isReturn = data.method === 'Return';
-    data.isQuote  = data.status === 'Quote';
+    data.isQuote  = isQuote(c);
     data.amount   = parseFloat(data.amount) || 0;
+    // Status is no longer picked by hand — it's derived. A Return is always a
+    // refund, a quote sits outside the approval queue, and everything else
+    // takes the status of whichever button was pressed.
     if (data.isReturn) {
       data.status = 'Refunded';
       data.amount = -Math.abs(data.amount);
+    } else if (data.isQuote) {
+      data.status = 'Quote';
     } else {
-      data.status = data.status || status;
+      data.status = status;
     }
 
     if (data.type === 'Purchase Order') {
@@ -1284,13 +1335,16 @@ Rules:
     const c        = container;
     const form     = c.querySelector('#sub-form');
     const fileInput = c.querySelector('#f-receipt');
-    const typeSel   = c.querySelector('#f-type');
-    const statusSel = c.querySelector('#f-status');
     const vendorSel = c.querySelector('#f-vendor-select');
 
     fileInput.addEventListener('change', () => handleFile(fileInput, c));
-    typeSel.addEventListener('change', () => updateConditionalFields(c));
-    statusSel.addEventListener('change', () => updateConditionalFields(c));
+    c.querySelectorAll('input[name="type"]').forEach(r =>
+      r.addEventListener('change', () => {
+        // A hand-picked type supersedes the OCR guess highlight.
+        c.querySelector('#f-type-list')?.classList.remove('ocr-filled');
+        updateConditionalFields(c);
+      }));
+    c.querySelector('#f-is-quote').addEventListener('change', () => updateConditionalFields(c));
 
     loadVendors(c);
     refreshVendorSelect(c);
@@ -1309,7 +1363,7 @@ Rules:
     const pendingType = sessionStorage.getItem('masterbook-pending-submit-type');
     if (pendingType) {
       sessionStorage.removeItem('masterbook-pending-submit-type');
-      typeSel.value = pendingType;
+      setType(c, pendingType);
     }
 
     updateConditionalFields(c);
