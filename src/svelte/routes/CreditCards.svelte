@@ -120,7 +120,7 @@
       refreshLogRows();
       await generateAndDownloadCCLog(selectedCard, logNumber, included);
 
-      // File each included charge's receipt into this log's Dropbox folder.
+      // File each included charge's receipt into this card's Dropbox folder.
       const withReceipts = included.filter(p => p.receiptUrl);
       if (withReceipts.length) {
         if (await isDropboxConnected()) {

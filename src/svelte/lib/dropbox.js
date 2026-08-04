@@ -242,28 +242,40 @@ function base64ToBytes(base64) {
   return bytes;
 }
 
+/** Two decimals, no thousands separators — commas read badly in a filename. */
 function fmtMoneyForFilename(n) {
-  return (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return (Number(n) || 0).toFixed(2);
 }
 
 /**
- * File each purchase's receipt into this card's Dropbox log folder —
- * "{project root}/05. LOGS/{cardType}-{last4}_{cardholderName}_{logNumber}/receipts/"
+ * File each purchase's receipt into this card's Dropbox folder —
+ * "{project root}/01. ACCOUNTING/{n}. Credit Cards/{cardType} {last4}_{cardholderName}/Receipts/"
  * — named "{last4}_{logNumber}_{receiptNum}_{vendor}_{date}_${amount}.pdf",
  * per the naming convention. Purchases with no receiptUrl are skipped.
  * Sequential + retried, same reasoning as provisionProjectFolders: Dropbox
  * rejects a burst of concurrent writes to the same parent folder.
+ *
+ * The card folder is keyed on the card alone, not the log number, so every
+ * receipt for a card accumulates in one place across log periods. The log
+ * number stays in the *filename*, which is what now distinguishes receipts
+ * from different periods sharing that folder.
  */
 export async function fileCCLogReceipts(card, logNumber, purchases) {
   const { projectFolderName, getProject } = await import('../stores/project.js');
+  const { folderPathById } = await import('./folderTree.js');
   const { downloadDraftReceipt } = await import('./db.js');
 
   const project  = getProject();
   const rootName = sanitizeFolderSegment(projectFolderName(project));
-  const cardFolder = sanitizeFolderSegment(`${card.cardType}-${card.last4}_${card.cardholderName}_${logNumber}`);
-  const receiptsPath = `/${rootName}/05. LOGS/${cardFolder}/receipts`;
+  const cardsPath  = `/${rootName}/${folderPathById('01-accounting/credit-cards')}`;
+  const cardFolder = sanitizeFolderSegment(`${card.cardType} ${card.last4}_${card.cardholderName}`);
+  const receiptsPath = `${cardsPath}/${cardFolder}/Receipts`;
 
-  await createFolderWithRetry(`/${rootName}/05. LOGS/${cardFolder}`);
+  // The Credit Cards folder itself is provisioned with the project tree, but
+  // create it anyway — a project connected before this folder existed won't
+  // have it, and create-if-missing is a no-op when it's already there.
+  await createFolderWithRetry(cardsPath);
+  await createFolderWithRetry(`${cardsPath}/${cardFolder}`);
   await createFolderWithRetry(receiptsPath);
 
   const failed = [];
