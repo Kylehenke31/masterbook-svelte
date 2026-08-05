@@ -107,6 +107,89 @@ export async function saveSection(tableName, projectId, sectionData) {
   if (error) console.warn(`[db] saveSection(${tableName}) error:`, error.message);
 }
 
+/* ── Project membership ──────────────────────────────────────── */
+
+/**
+ * Everyone on a project, with the profile fields needed to show a name.
+ * Returns [{ userId, role, displayName, email }] sorted by display name.
+ *
+ * RLS restricts this to projects the caller belongs to, so an empty array
+ * means "not a member" just as much as it means "no members" — callers should
+ * not treat it as an error.
+ */
+export async function loadProjectMembers(projectId) {
+  if (!projectId) return [];
+  const { data, error } = await supabase
+    .from('project_members')
+    .select('user_id, role, profiles ( display_name, email )')
+    .eq('project_id', projectId);
+  if (error) { console.warn('[db] loadProjectMembers error:', error.message); return []; }
+  return (data ?? [])
+    .map(r => ({
+      userId:      r.user_id,
+      role:        r.role,
+      // display_name is only set when the user supplied one at sign-up, so
+      // fall back to the email local-part the same way getDisplayName does.
+      displayName: r.profiles?.display_name || r.profiles?.email?.split('@')[0] || 'Unknown',
+      email:       r.profiles?.email || '',
+    }))
+    .sort((a, b) => a.displayName.localeCompare(b.displayName));
+}
+
+/**
+ * The signed-in user's own profile row, or null when not signed in.
+ */
+export async function loadMyProfile() {
+  const user = await getUser();
+  if (!user) return null;
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, email, display_name')
+    .eq('id', user.id)
+    .maybeSingle();
+  if (error) { console.warn('[db] loadMyProfile error:', error.message); return null; }
+  return data ?? null;
+}
+
+/**
+ * Set the signed-in user's display name.
+ *
+ * Written to both profiles (what other members can read, and what names a
+ * credit card's Dropbox folder) and auth user_metadata (what getDisplayName
+ * falls back to before profiles has loaded). Keeping them in step avoids the
+ * UI showing two different names for the same person.
+ */
+export async function updateMyDisplayName(displayName) {
+  const user = await getUser();
+  if (!user) return null;
+  const name = String(displayName || '').trim();
+  if (!name) throw new Error('Display name cannot be empty');
+
+  const { error } = await supabase
+    .from('profiles')
+    .update({ display_name: name })
+    .eq('id', user.id);
+  if (error) throw new Error(error.message);
+
+  const { error: authErr } = await supabase.auth.updateUser({ data: { display_name: name } });
+  if (authErr) console.warn('[db] updateMyDisplayName auth metadata error:', authErr.message);
+  return name;
+}
+
+/** The signed-in user's role on a project, or null if they are not a member. */
+export async function getMyProjectRole(projectId) {
+  const user = await getUser();
+  if (!user || !projectId) return null;
+  const { data, error } = await supabase
+    .from('project_members')
+    .select('role')
+    .eq('project_id', projectId)
+    .eq('user_id', user.id)
+    .maybeSingle();
+  if (error) { console.warn('[db] getMyProjectRole error:', error.message); return null; }
+  return data?.role ?? null;
+}
+
 /* ── Dropbox connection (per-user, not per-project) ─────────────── */
 
 export async function saveDropboxToken(refreshToken) {

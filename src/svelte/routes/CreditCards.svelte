@@ -2,6 +2,10 @@
   import { getPurchases, updatePurchase, assignCCLogNumber } from '../../data.js';
   import { generateAndDownloadCCLog } from '../lib/ccLogSummary.js';
   import { fileCCLogReceipts, isDropboxConnected } from '../lib/dropbox.js';
+  import { onDestroy } from 'svelte';
+  import { loadProjectMembers } from '../lib/db.js';
+  import { getActiveProjectId } from '../stores/project.js';
+  import { authUser } from '../stores/auth.js';
 
   const CARDS_KEY  = 'movie-ledger-credit-cards';
   const CARD_TYPES = ['VISA', 'AMEX', 'Mastercard'];
@@ -13,10 +17,31 @@
 
   // Card form fields
   let fCardholderName = $state('');
+  let fUserId         = $state('');
   let fCardType       = $state('VISA');
   let fLast4          = $state('');
   let nameError        = $state(false);
+  let assigneeError    = $state(false);
   let last4Error        = $state(false);
+
+  // Project members, for assigning a card to a real person rather than typing
+  // a name. Loading is best-effort: if it fails (offline, or the membership
+  // row is missing) the form falls back to a free-text name so adding a card
+  // never becomes impossible.
+  //
+  // This waits for the auth store rather than firing on mount. The Supabase
+  // session is restored asynchronously, and a query issued before it lands is
+  // unauthenticated — RLS then correctly returns zero rows, which is
+  // indistinguishable from "this project has no members" and silently
+  // downgrades the picker to a text box.
+  let members       = $state([]);
+  let membersLoaded = $state(false);
+  const unsubAuth = authUser.subscribe(async (user) => {
+    if (!user) return;
+    members = await loadProjectMembers(getActiveProjectId());
+    membersLoaded = true;
+  });
+  onDestroy(() => unsubAuth());
 
   // Log view state
   let selectedCard = $state(null);
@@ -45,21 +70,55 @@
     editIdx = idx;
     const c = idx === null ? {} : cards[idx];
     fCardholderName = c.cardholderName || '';
+    fUserId         = c.userId || '';
     fCardType       = c.cardType || 'VISA';
     fLast4          = c.last4 || '';
     nameError = false;
+    assigneeError = false;
     last4Error = false;
     view = 'form';
   }
+
+  function onAssigneeChange() { assigneeError = false; }
+
+  /** Display name of the currently-picked person, for the folder-name preview. */
+  let assigneeName = $derived(members.find(m => m.userId === fUserId)?.displayName || '');
+
+  /** True when we can offer a real person picker rather than a text field. */
+  let canPickMember = $derived(membersLoaded && members.length > 0);
 
   function closeForm() { view = 'list'; editIdx = null; }
 
   function saveForm() {
     let ok = true;
-    if (!fCardholderName.trim()) { nameError = true; ok = false; }
+    const picked = canPickMember ? members.find(m => m.userId === fUserId) : null;
+    // The name comes from the picked person, never typed — a typed name can
+    // drift from the person it refers to, which is what let this card end up
+    // reading "Kyle" while the folder needed "Kyle Henke".
+    //
+    // It is still *stored* on the card rather than resolved on demand: the
+    // name is what built this card's Dropbox folder, and receipts already
+    // filed there would be orphaned if a later profile rename silently
+    // repointed the card at a different folder. So it is a snapshot taken at
+    // assignment time, refreshed only when the card is reassigned here.
+    const name = picked ? picked.displayName : fCardholderName.trim();
+
+    if (canPickMember && !fUserId) { assigneeError = true; ok = false; }
+    if (!name) { nameError = true; ok = false; }
     if (!/^\d{4}$/.test(fLast4.trim())) { last4Error = true; ok = false; }
     if (!ok) return;
-    const data = { cardholderName: fCardholderName.trim(), cardType: fCardType, last4: fLast4.trim() };
+
+    // cardholderName is stored alongside userId rather than derived from it.
+    // It is what names the card's Dropbox folder (dropbox.js fileCCLogReceipts),
+    // and that folder must keep its name even if the person later leaves the
+    // project or changes their display name — otherwise filed receipts would
+    // be orphaned from the folder they live in.
+    const data = {
+      cardholderName: name,
+      userId: picked ? picked.userId : (fUserId || null),
+      cardType: fCardType,
+      last4: fLast4.trim(),
+    };
     if (editIdx === null) cards = [...cards, data];
     else cards = cards.map((c, i) => i === editIdx ? data : c);
     save();
@@ -193,13 +252,37 @@
     </div>
 
     <div class="cc-form">
-      <div class="cc-field">
-        <label for="cc-name">Cardholder Name</label>
-        <input id="cc-name" class="cc-input" class:cc-input--error={nameError} type="text"
-          bind:value={fCardholderName} placeholder="Name printed on card"
-          oninput={() => nameError = false} />
-        {#if nameError}<span class="cc-field-error">Cardholder name is required</span>{/if}
-      </div>
+      {#if canPickMember}
+        <div class="cc-field">
+          <label for="cc-user">Cardholder</label>
+          <select id="cc-user" class="cc-input" class:cc-input--error={assigneeError}
+            bind:value={fUserId} onchange={onAssigneeChange}>
+            <option value="">Select a person…</option>
+            {#each members as m (m.userId)}
+              <option value={m.userId}>{m.displayName} — {m.role}</option>
+            {/each}
+          </select>
+          {#if assigneeError}<span class="cc-field-error">Choose who this card belongs to</span>{/if}
+          <span class="cc-field-hint">
+            Names this card's Dropbox folder as
+            <strong>{fCardType} {fLast4 || '####'}_{assigneeName || '…'}</strong>.
+            To change the spelling, edit that person's name in their profile.
+          </span>
+        </div>
+      {:else}
+        <div class="cc-field">
+          <label for="cc-name">Cardholder Name</label>
+          <input id="cc-name" class="cc-input" class:cc-input--error={nameError} type="text"
+            bind:value={fCardholderName} placeholder="Name printed on card"
+            oninput={() => nameError = false} />
+          {#if nameError}<span class="cc-field-error">Cardholder name is required</span>{/if}
+          {#if membersLoaded}
+            <span class="cc-field-hint">
+              No project members loaded, so this falls back to a typed name.
+            </span>
+          {/if}
+        </div>
+      {/if}
       <div class="cc-field">
         <label for="cc-type">Card Type</label>
         <select id="cc-type" class="cc-input" bind:value={fCardType}>
@@ -374,6 +457,7 @@
   .cc-input:focus   { outline: none; border-color: var(--gold, #6a8a6a); }
   .cc-input--error  { border-color: var(--earth-red, #b84f4f); }
   .cc-field-error   { font-size: 0.75rem; color: var(--earth-red, #b84f4f); }
+  .cc-field-hint    { font-size: 0.75rem; color: var(--text-muted); }
 
   .cc-form-actions {
     display: flex;
