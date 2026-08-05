@@ -1,22 +1,8 @@
--- Baseline: the schema as it existed in production before any migration was
--- tracked in this repo. Captured with pg_dump --schema-only on 2026-08-04 and
--- adapted to run as a migration.
---
--- This file is a record of where the database already was, not a change to it.
--- The remote is marked as having this applied (supabase migration repair), so
--- pushing it never re-runs against production. Its purpose is to let the local
--- and shadow databases reproduce production from scratch, which is what makes
--- `supabase start` and `db diff` work at all.
---
--- Adapted from raw pg_dump output in three ways: the \restrict / \unrestrict
--- psql meta-commands were stripped (they are not SQL and the migration runner
--- does not read them), CREATE SCHEMA public was made idempotent, and the
--- trailing dump footer was dropped.
-
 --
 -- PostgreSQL database dump
 --
 
+\restrict jQJ1Op9xW6p4hmfxQ3VfDdS0oAKNh0jrFyqVZtVSZN4BiqBIrp0NZDHWQFhcg9n
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 18.4
@@ -37,7 +23,7 @@ SET row_security = off;
 -- Name: public; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE SCHEMA IF NOT EXISTS public;
+CREATE SCHEMA public;
 
 
 --
@@ -151,6 +137,17 @@ CREATE TABLE public.creative (
 
 
 --
+-- Name: credit_cards; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.credit_cards (
+    project_id uuid NOT NULL,
+    data jsonb DEFAULT '{}'::jsonb NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
 -- Name: dropbox_tokens; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -192,6 +189,17 @@ CREATE TABLE public.messages (
 --
 
 CREATE TABLE public.personnel (
+    project_id uuid NOT NULL,
+    data jsonb DEFAULT '{}'::jsonb NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: petty_cash; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.petty_cash (
     project_id uuid NOT NULL,
     data jsonb DEFAULT '{}'::jsonb NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL
@@ -286,6 +294,14 @@ ALTER TABLE ONLY public.creative
 
 
 --
+-- Name: credit_cards credit_cards_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.credit_cards
+    ADD CONSTRAINT credit_cards_pkey PRIMARY KEY (project_id);
+
+
+--
 -- Name: dropbox_tokens dropbox_tokens_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -315,6 +331,14 @@ ALTER TABLE ONLY public.messages
 
 ALTER TABLE ONLY public.personnel
     ADD CONSTRAINT personnel_pkey PRIMARY KEY (project_id);
+
+
+--
+-- Name: petty_cash petty_cash_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.petty_cash
+    ADD CONSTRAINT petty_cash_pkey PRIMARY KEY (project_id);
 
 
 --
@@ -385,6 +409,13 @@ CREATE TRIGGER touch_creative BEFORE UPDATE ON public.creative FOR EACH ROW EXEC
 
 
 --
+-- Name: credit_cards touch_credit_cards; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER touch_credit_cards BEFORE UPDATE ON public.credit_cards FOR EACH ROW EXECUTE FUNCTION public.touch_updated_at();
+
+
+--
 -- Name: insurance touch_insurance; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -396,6 +427,13 @@ CREATE TRIGGER touch_insurance BEFORE UPDATE ON public.insurance FOR EACH ROW EX
 --
 
 CREATE TRIGGER touch_personnel BEFORE UPDATE ON public.personnel FOR EACH ROW EXECUTE FUNCTION public.touch_updated_at();
+
+
+--
+-- Name: petty_cash touch_petty_cash; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER touch_petty_cash BEFORE UPDATE ON public.petty_cash FOR EACH ROW EXECUTE FUNCTION public.touch_updated_at();
 
 
 --
@@ -460,6 +498,14 @@ ALTER TABLE ONLY public.creative
 
 
 --
+-- Name: credit_cards credit_cards_project_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.credit_cards
+    ADD CONSTRAINT credit_cards_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(id) ON DELETE CASCADE;
+
+
+--
 -- Name: dropbox_tokens dropbox_tokens_owner_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -497,6 +543,14 @@ ALTER TABLE ONLY public.messages
 
 ALTER TABLE ONLY public.personnel
     ADD CONSTRAINT personnel_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(id) ON DELETE CASCADE;
+
+
+--
+-- Name: petty_cash petty_cash_project_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.petty_cash
+    ADD CONSTRAINT petty_cash_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(id) ON DELETE CASCADE;
 
 
 --
@@ -569,6 +623,12 @@ ALTER TABLE public.channels ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.creative ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: credit_cards; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.credit_cards ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: dropbox_tokens; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -632,6 +692,15 @@ CREATE POLICY owner_all ON public.creative USING ((EXISTS ( SELECT 1
 
 
 --
+-- Name: credit_cards owner_all; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY owner_all ON public.credit_cards USING ((EXISTS ( SELECT 1
+   FROM public.projects
+  WHERE ((projects.id = credit_cards.project_id) AND (projects.owner_id = auth.uid())))));
+
+
+--
 -- Name: insurance owner_all; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -659,6 +728,15 @@ CREATE POLICY owner_all ON public.personnel USING ((EXISTS ( SELECT 1
 
 
 --
+-- Name: petty_cash owner_all; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY owner_all ON public.petty_cash USING ((EXISTS ( SELECT 1
+   FROM public.projects
+  WHERE ((projects.id = petty_cash.project_id) AND (projects.owner_id = auth.uid())))));
+
+
+--
 -- Name: schedules owner_all; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -681,6 +759,12 @@ CREATE POLICY owner_all ON public.vendors USING ((EXISTS ( SELECT 1
 --
 
 ALTER TABLE public.personnel ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: petty_cash; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.petty_cash ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: projects; Type: ROW SECURITY; Schema: public; Owner: -
@@ -725,82 +809,231 @@ ALTER TABLE public.schedules ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.vendors ENABLE ROW LEVEL SECURITY;
 
 --
--- PostgreSQL database dump complete
---
-
-
-
---
--- Privileges. Captured from production in a second pg_dump run — the first
--- used --no-privileges, which silently stripped every GRANT and made the
--- local database deny all DML before RLS was ever consulted. That made
--- negative RLS tests pass for the wrong reason, so these are not optional
--- decoration: without them, local testing cannot detect a policy leak.
---
--- The ALTER DEFAULT PRIVILEGES lines are why tables created by later
--- migrations receive grants without stating them, matching how production
--- already behaves.
+-- Name: SCHEMA public; Type: ACL; Schema: -; Owner: -
 --
 
 GRANT USAGE ON SCHEMA public TO postgres;
 GRANT USAGE ON SCHEMA public TO anon;
 GRANT USAGE ON SCHEMA public TO authenticated;
 GRANT USAGE ON SCHEMA public TO service_role;
+
+
+--
+-- Name: FUNCTION rls_auto_enable(); Type: ACL; Schema: public; Owner: -
+--
+
 GRANT ALL ON FUNCTION public.rls_auto_enable() TO anon;
 GRANT ALL ON FUNCTION public.rls_auto_enable() TO authenticated;
 GRANT ALL ON FUNCTION public.rls_auto_enable() TO service_role;
+
+
+--
+-- Name: FUNCTION touch_updated_at(); Type: ACL; Schema: public; Owner: -
+--
+
 GRANT ALL ON FUNCTION public.touch_updated_at() TO anon;
 GRANT ALL ON FUNCTION public.touch_updated_at() TO authenticated;
 GRANT ALL ON FUNCTION public.touch_updated_at() TO service_role;
+
+
+--
+-- Name: TABLE budgets; Type: ACL; Schema: public; Owner: -
+--
+
 GRANT ALL ON TABLE public.budgets TO anon;
 GRANT ALL ON TABLE public.budgets TO authenticated;
 GRANT ALL ON TABLE public.budgets TO service_role;
+
+
+--
+-- Name: TABLE calendars; Type: ACL; Schema: public; Owner: -
+--
+
 GRANT ALL ON TABLE public.calendars TO anon;
 GRANT ALL ON TABLE public.calendars TO authenticated;
 GRANT ALL ON TABLE public.calendars TO service_role;
+
+
+--
+-- Name: TABLE call_sheets; Type: ACL; Schema: public; Owner: -
+--
+
 GRANT ALL ON TABLE public.call_sheets TO anon;
 GRANT ALL ON TABLE public.call_sheets TO authenticated;
 GRANT ALL ON TABLE public.call_sheets TO service_role;
+
+
+--
+-- Name: TABLE channels; Type: ACL; Schema: public; Owner: -
+--
+
 GRANT ALL ON TABLE public.channels TO anon;
 GRANT ALL ON TABLE public.channels TO authenticated;
 GRANT ALL ON TABLE public.channels TO service_role;
+
+
+--
+-- Name: TABLE creative; Type: ACL; Schema: public; Owner: -
+--
+
 GRANT ALL ON TABLE public.creative TO anon;
 GRANT ALL ON TABLE public.creative TO authenticated;
 GRANT ALL ON TABLE public.creative TO service_role;
+
+
+--
+-- Name: TABLE credit_cards; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.credit_cards TO anon;
+GRANT ALL ON TABLE public.credit_cards TO authenticated;
+GRANT ALL ON TABLE public.credit_cards TO service_role;
+
+
+--
+-- Name: TABLE dropbox_tokens; Type: ACL; Schema: public; Owner: -
+--
+
 GRANT ALL ON TABLE public.dropbox_tokens TO anon;
 GRANT ALL ON TABLE public.dropbox_tokens TO authenticated;
 GRANT ALL ON TABLE public.dropbox_tokens TO service_role;
+
+
+--
+-- Name: TABLE insurance; Type: ACL; Schema: public; Owner: -
+--
+
 GRANT ALL ON TABLE public.insurance TO anon;
 GRANT ALL ON TABLE public.insurance TO authenticated;
 GRANT ALL ON TABLE public.insurance TO service_role;
+
+
+--
+-- Name: TABLE messages; Type: ACL; Schema: public; Owner: -
+--
+
 GRANT ALL ON TABLE public.messages TO anon;
 GRANT ALL ON TABLE public.messages TO authenticated;
 GRANT ALL ON TABLE public.messages TO service_role;
+
+
+--
+-- Name: TABLE personnel; Type: ACL; Schema: public; Owner: -
+--
+
 GRANT ALL ON TABLE public.personnel TO anon;
 GRANT ALL ON TABLE public.personnel TO authenticated;
 GRANT ALL ON TABLE public.personnel TO service_role;
+
+
+--
+-- Name: TABLE petty_cash; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.petty_cash TO anon;
+GRANT ALL ON TABLE public.petty_cash TO authenticated;
+GRANT ALL ON TABLE public.petty_cash TO service_role;
+
+
+--
+-- Name: TABLE projects; Type: ACL; Schema: public; Owner: -
+--
+
 GRANT ALL ON TABLE public.projects TO anon;
 GRANT ALL ON TABLE public.projects TO authenticated;
 GRANT ALL ON TABLE public.projects TO service_role;
+
+
+--
+-- Name: TABLE purchases; Type: ACL; Schema: public; Owner: -
+--
+
 GRANT ALL ON TABLE public.purchases TO anon;
 GRANT ALL ON TABLE public.purchases TO authenticated;
 GRANT ALL ON TABLE public.purchases TO service_role;
+
+
+--
+-- Name: TABLE schedules; Type: ACL; Schema: public; Owner: -
+--
+
 GRANT ALL ON TABLE public.schedules TO anon;
 GRANT ALL ON TABLE public.schedules TO authenticated;
 GRANT ALL ON TABLE public.schedules TO service_role;
+
+
+--
+-- Name: TABLE vendors; Type: ACL; Schema: public; Owner: -
+--
+
 GRANT ALL ON TABLE public.vendors TO anon;
 GRANT ALL ON TABLE public.vendors TO authenticated;
 GRANT ALL ON TABLE public.vendors TO service_role;
+
+
+--
+-- Name: DEFAULT PRIVILEGES FOR SEQUENCES; Type: DEFAULT ACL; Schema: public; Owner: -
+--
 
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON SEQUENCES TO postgres;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON SEQUENCES TO anon;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON SEQUENCES TO authenticated;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON SEQUENCES TO service_role;
+
+
+--
+-- Name: DEFAULT PRIVILEGES FOR SEQUENCES; Type: DEFAULT ACL; Schema: public; Owner: -
+--
+
+ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT ALL ON SEQUENCES TO postgres;
+ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT ALL ON SEQUENCES TO anon;
+ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT ALL ON SEQUENCES TO authenticated;
+ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT ALL ON SEQUENCES TO service_role;
+
+
+--
+-- Name: DEFAULT PRIVILEGES FOR FUNCTIONS; Type: DEFAULT ACL; Schema: public; Owner: -
+--
+
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON FUNCTIONS TO postgres;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON FUNCTIONS TO anon;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON FUNCTIONS TO authenticated;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON FUNCTIONS TO service_role;
+
+
+--
+-- Name: DEFAULT PRIVILEGES FOR FUNCTIONS; Type: DEFAULT ACL; Schema: public; Owner: -
+--
+
+ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT ALL ON FUNCTIONS TO postgres;
+ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT ALL ON FUNCTIONS TO anon;
+ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT ALL ON FUNCTIONS TO authenticated;
+ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT ALL ON FUNCTIONS TO service_role;
+
+
+--
+-- Name: DEFAULT PRIVILEGES FOR TABLES; Type: DEFAULT ACL; Schema: public; Owner: -
+--
+
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON TABLES TO postgres;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON TABLES TO anon;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON TABLES TO authenticated;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON TABLES TO service_role;
+
+
+--
+-- Name: DEFAULT PRIVILEGES FOR TABLES; Type: DEFAULT ACL; Schema: public; Owner: -
+--
+
+ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT ALL ON TABLES TO postgres;
+ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT ALL ON TABLES TO anon;
+ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT ALL ON TABLES TO authenticated;
+ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT ALL ON TABLES TO service_role;
+
+
+--
+-- PostgreSQL database dump complete
+--
+
+\unrestrict jQJ1Op9xW6p4hmfxQ3VfDdS0oAKNh0jrFyqVZtVSZN4BiqBIrp0NZDHWQFhcg9n
+
