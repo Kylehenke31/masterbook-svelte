@@ -7,3 +7,6 @@ dist-svelte/
 .env.local
 .vercel
 .claude/worktrees/
+
+# Supabase CLI local state — caches a pooler URL with DB credentials in it
+supabase/.temp/
