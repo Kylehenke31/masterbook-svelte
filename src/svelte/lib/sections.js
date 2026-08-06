@@ -10,6 +10,7 @@
  */
 
 import { loadSection, saveSection } from './db.js';
+import { decideKeys, fingerprintBlob, mergeForPush } from './syncReconcile.js';
 
 /* ── Section → localStorage key map ────────────────────────────── */
 //
@@ -150,6 +151,94 @@ export function bumpSectionVersion(sectionName) {
   _sectionVersions[sectionName] = (_sectionVersions[sectionName] || 0) + 1;
 }
 
+/* ── Divergence guard ───────────────────────────────────────────── */
+// The staleness guard above only covers edits made *during* a fetch. It does
+// nothing about the larger hazard: local data that was never pushed at all.
+// restoreSection is a bare localStorage.setItem, so a plain "cloud wins" load
+// silently destroys unpushed local work — which is precisely how a browser
+// holding the only copy of a section can lose it to an emptier cloud.
+//
+// To tell "local is merely stale" apart from "local has changes the cloud has
+// never seen", we remember what the section looked like the last time local
+// and cloud agreed. Comparing local, cloud and that fingerprint gives a
+// definite answer without timestamps or extra columns.
+
+const FINGERPRINTS_KEY = 'movie-ledger-section-sync-fingerprints-v1';
+
+function readFingerprints() {
+  try { return JSON.parse(localStorage.getItem(FINGERPRINTS_KEY)) || {}; }
+  catch { return {}; }
+}
+
+function getSyncedFingerprint(projectId, table) {
+  return readFingerprints()[projectId]?.[table] ?? null;
+}
+
+/**
+ * Record that local and cloud agree, right now, for the keys they agree on.
+ *
+ * Conflicted keys are deliberately excluded: writing a fingerprint for a key
+ * we just refused to resolve would tell the *next* load that this state was
+ * agreed, and the conflict would silently resolve itself in favour of
+ * whichever side happens to be local. The conflict must persist until someone
+ * actually settles it.
+ */
+function setSyncedFingerprint(projectId, table, blob, exclude = []) {
+  if (!projectId) return;
+  const all = readFingerprints();
+  const prev = all[projectId]?.[table] || {};
+  const next = fingerprintBlob(blob);
+  for (const key of exclude) {
+    if (key in prev) next[key] = prev[key];  // keep the old baseline
+    else delete next[key];                   // never had one; do not invent one
+  }
+  all[projectId] = { ...(all[projectId] || {}), [table]: next };
+  try { localStorage.setItem(FINGERPRINTS_KEY, JSON.stringify(all)); } catch {}
+}
+
+/** Every section that persists to this table, merged into one blob. */
+function snapshotTable(table) {
+  const blob = {};
+  for (const [name, cfg] of Object.entries(SECTIONS)) {
+    if (cfg.table === table) Object.assign(blob, snapshotSection(name));
+  }
+  return blob;
+}
+
+/** Bind the pure decision in syncReconcile.js to this table's actual state. */
+function reconcile(projectId, table, cloudBlob) {
+  return decideKeys(snapshotTable(table), cloudBlob, getSyncedFingerprint(projectId, table));
+}
+
+/** Write only the keys the reconciler judged safe to take from the cloud. */
+function restoreKeys(cloudBlob, keys) {
+  for (const key of keys) {
+    if (Object.prototype.hasOwnProperty.call(cloudBlob, key)) {
+      localStorage.setItem(key, cloudBlob[key]);
+    }
+  }
+}
+
+/**
+ * Conflicts are surfaced rather than resolved. Local data is left alone and
+ * the competing cloud values are stashed so they can be recovered or merged
+ * deliberately — losing data to an automatic merge would be the same class of
+ * bug this guard exists to prevent.
+ */
+function reportConflict(projectId, table, cloudBlob, keys) {
+  const stashKey = `movie-ledger-sync-conflict:${projectId}:${table}`;
+  const stash = {};
+  for (const k of keys) stash[k] = cloudBlob[k];
+  try { localStorage.setItem(stashKey, JSON.stringify({ at: new Date().toISOString(), cloud: stash })); }
+  catch {}
+  console.warn(
+    `[sections] ${table}: ${keys.join(', ')} changed both locally and in the cloud ` +
+    `since they last agreed. Kept local; cloud copy stashed at "${stashKey}".`);
+  window.dispatchEvent(new CustomEvent('masterbook-sync-conflict', {
+    detail: { table, projectId, stashKey, keys },
+  }));
+}
+
 /* ── Cloud save / load ──────────────────────────────────────────── */
 
 /**
@@ -163,6 +252,9 @@ export async function saveSectionToCloud(sectionName, projectId) {
   if (!Object.keys(blob).length) return; // nothing to save
   try {
     await saveSection(table, projectId, blob);
+    // Cloud now matches local for this table — that agreement is the baseline
+    // the divergence guard compares against on the next load.
+    setSyncedFingerprint(projectId, table, snapshotTable(table));
   } catch (e) {
     console.warn(`[sections] saveSectionToCloud(${sectionName}) failed:`, e.message);
   }
@@ -182,11 +274,14 @@ export async function loadSectionFromCloud(sectionName, projectId) {
       console.warn(`[sections] loadSectionFromCloud(${sectionName}): local edit happened mid-fetch, skipping stale overwrite`);
       return false;
     }
-    if (blob) {
-      restoreSection(sectionName, blob);
-      return true;
-    }
-    return false;
+    const { restore, push, conflicts } = reconcile(projectId, table, blob);
+    if (restore.length) restoreKeys(blob, restore);
+    if (conflicts.length) reportConflict(projectId, table, blob, conflicts);
+    // Push after restoring, so what goes up already includes anything the
+    // cloud was missing rather than racing it.
+    if (push && !conflicts.length) await saveSection(table, projectId, mergeForPush(blob, snapshotTable(table)));
+    setSyncedFingerprint(projectId, table, snapshotTable(table), conflicts);
+    return restore.length > 0;
   } catch (e) {
     console.warn(`[sections] loadSectionFromCloud(${sectionName}) failed:`, e.message);
     return false;
@@ -218,19 +313,17 @@ export async function syncAllSectionsFromCloud(projectId) {
         console.warn(`[sections] syncAllSectionsFromCloud(${table}): local edit happened mid-fetch, skipping stale overwrite`);
         return;
       }
-      if (blob) {
-        // Restore each section that uses this table
-        for (const n of sameTable) restoreSection(n, blob);
-      } else {
-        // No cloud data — push local data up if any section has content
-        const merged = {};
-        for (const n of sameTable) {
-          if (sectionHasData(n)) Object.assign(merged, snapshotSection(n));
-        }
-        if (Object.keys(merged).length) {
-          await saveSection(table, projectId, merged);
-        }
+      const { restore, push, conflicts } = reconcile(projectId, table, blob);
+      if (restore.length) restoreKeys(blob, restore);
+      if (conflicts.length) reportConflict(projectId, table, blob, conflicts);
+      // Hold off pushing while a key is contested: local is only *one* of two
+      // valid states, and sending it up would overwrite the other one in the
+      // cloud — turning a recoverable conflict into real data loss.
+      if (push && !conflicts.length) {
+        const merged = mergeForPush(blob, snapshotTable(table));
+        if (Object.keys(merged).length) await saveSection(table, projectId, merged);
       }
+      setSyncedFingerprint(projectId, table, snapshotTable(table), conflicts);
     } catch (e) {
       console.warn(`[sections] syncAllSectionsFromCloud(${table}) failed:`, e.message);
     }
@@ -252,7 +345,10 @@ export async function pushAllSectionsToCloud(projectId) {
   await Promise.all(
     Object.entries(byTable).map(async ([table, blob]) => {
       if (!Object.keys(blob).length) return;
-      try { await saveSection(table, projectId, blob); }
+      try {
+        await saveSection(table, projectId, blob);
+        setSyncedFingerprint(projectId, table, blob);
+      }
       catch (e) { console.warn(`[sections] pushAllSectionsToCloud(${table}) failed:`, e.message); }
     })
   );
