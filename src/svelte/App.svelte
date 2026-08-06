@@ -447,6 +447,7 @@
   {#if !sidebarCollapsed}
   <div class="macro-sidebar-items">
 
+    {#if mayAccess('budget')}
     <button class="macro-btn" class:macro-active={routeGroup(route) === 'budget'}
       onclick={() => { window.location.hash = '#budget'; }} title="Budget">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="20" height="20">
@@ -456,7 +457,9 @@
       </svg>
       <span class="macro-label">Budget</span>
     </button>
+    {/if}
 
+    {#if mayAccess('schedules')}
     <button class="macro-btn" class:macro-active={routeGroup(route) === 'schedules'}
       onclick={() => { window.location.hash = '#schedules'; }} title="Schedules">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="20" height="20">
@@ -464,7 +467,9 @@
       </svg>
       <span class="macro-label">Schedules</span>
     </button>
+    {/if}
 
+    {#if mayAccess('call-sheet')}
     <button class="macro-btn" class:macro-active={routeGroup(route) === 'callsheet'}
       onclick={() => { window.location.hash = '#call-sheet'; }} title="Call Sheet">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="20" height="20">
@@ -473,7 +478,9 @@
       </svg>
       <span class="macro-label">Call Sheet</span>
     </button>
+    {/if}
 
+    {#if mayAccess('insurance')}
     <button class="macro-btn" class:macro-active={routeGroup(route) === 'insurance'}
       onclick={() => { window.location.hash = '#insurance'; }} title="Insurance">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="20" height="20">
@@ -481,7 +488,9 @@
       </svg>
       <span class="macro-label">Insurance</span>
     </button>
+    {/if}
 
+    {#if mayAccess('creative')}
     <button class="macro-btn" class:macro-active={routeGroup(route) === 'creative'}
       onclick={() => { window.location.hash = '#creative'; }} title="Creative">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="20" height="20">
@@ -489,7 +498,9 @@
       </svg>
       <span class="macro-label">Creative</span>
     </button>
+    {/if}
 
+    {#if mayAccess('files')}
     <button class="macro-btn" class:macro-active={routeGroup(route) === 'files'}
       onclick={() => { window.location.hash = '#files'; }} title="Files">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="20" height="20">
@@ -497,6 +508,7 @@
       </svg>
       <span class="macro-label">Files</span>
     </button>
+    {/if}
 
     <div class="macro-sidebar-divider"></div>
 

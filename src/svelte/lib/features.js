@@ -49,8 +49,16 @@ export const FEATURE_KEYS = FEATURES.map(f => f.key);
  */
 export const ALWAYS_ALLOWED_ROUTES = ['home', 'my-book', 'submit', 'creative'];
 
-/** Project Settings is admin-only: otherwise a member could grant themselves anything. */
-export const ADMIN_ONLY_ROUTES = ['settings', 'setup'];
+/**
+ * Admin-only screens: otherwise a member could grant themselves anything.
+ *
+ * 'members' belongs here as much as 'settings' does. It was missed at first,
+ * and the Project Access screen's own admin check caught it — a crew member
+ * reached the route and saw a refusal rather than being redirected like every
+ * other section they cannot open. Nothing leaked, but "you may not be here"
+ * should look the same wherever it happens.
+ */
+export const ADMIN_ONLY_ROUTES = ['settings', 'setup', 'members'];
 
 /**
  * The Accounting preset: Budget, Insurance, Files, every Ledger, Calendars,
