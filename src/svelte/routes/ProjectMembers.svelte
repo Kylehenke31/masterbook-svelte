@@ -61,6 +61,10 @@
   const groups = [...new Set(FEATURES.map(f => f.group))];
   const featuresIn = g => FEATURES.filter(f => f.group === g);
 
+  /** [stored value, column header, colour tone] — the order the columns appear in.
+      The stored value stays 'read'; only the label people see is "View". */
+  const LEVELS = [['', 'None', 'none'], ['read', 'View', 'read'], ['edit', 'Edit', 'edit']];
+
   function startInvite() {
     editing = { kind: 'invite', email: '', userId: null, name: '' };
     draftRole = 'crew';
@@ -209,17 +213,27 @@
           {#each groups as g (g)}
             <div class="pm-group">
               <h4 class="pm-group-title">{g}</h4>
+              <!-- The level names are said once per column rather than on every
+                   chip. Twenty rows repeating "None View Edit" is sixty
+                   labels saying nothing the header could not. -->
+              <div class="pm-grant-row pm-legend" aria-hidden="true">
+                <span></span>
+                {#each LEVELS as [, lbl] (lbl)}<span class="pm-legend-cell">{lbl}</span>{/each}
+              </div>
               {#each featuresIn(g) as f (f.key)}
-                <div class="pm-grant-row">
+                <div class="pm-grant-row" role="radiogroup" aria-label={f.label}>
                   <span class="pm-grant-label">{f.label}</span>
-                  <div class="pm-levels">
-                    {#each [['', 'None', 'none'], ['read', 'Read-only', 'read'], ['edit', 'Edit', 'edit']] as [val, lbl, tone] (val)}
-                      <button
-                        class="pm-level pm-level--{tone}"
-                        class:pm-level--on={(draftPerms[f.key] ?? '') === val}
-                        onclick={() => setLevel(f.key, val)}>{lbl}</button>
-                    {/each}
-                  </div>
+                  {#each LEVELS as [val, lbl, tone] (val)}
+                    {@const on = (draftPerms[f.key] ?? '') === val}
+                    <button
+                      class="pm-bubble pm-bubble--{tone}"
+                      class:pm-bubble--on={on}
+                      role="radio"
+                      aria-checked={on}
+                      aria-label="{f.label}: {lbl}"
+                      title="{f.label}: {lbl}"
+                      onclick={() => setLevel(f.key, val)}></button>
+                  {/each}
                 </div>
               {/each}
             </div>
@@ -330,39 +344,72 @@
 
   .pm-admin-note { font-size: 0.78rem; color: var(--gold); margin: 0 0 12px; }
 
-  .pm-grants { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; }
+  .pm-grants {
+    display: grid;
+    /* Columns sized to the content rather than the container, so three groups
+       sit next to each other without each one sprawling. */
+    grid-template-columns: repeat(auto-fit, minmax(220px, 260px));
+    justify-content: start;
+    gap: 14px 26px;
+  }
   .pm-grants--dimmed { opacity: 0.4; }
+  .pm-group { max-width: 260px; }
   .pm-group-title { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
     color: var(--text-muted); margin: 0 0 6px; padding-bottom: 4px; border-bottom: 1px solid var(--border-subtle); }
-  .pm-grant-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 3px 0; }
+  /* One grid shared by the legend and every row, so the bubbles line up under
+     their column headers.
+     The group is width-capped rather than letting the label column stretch:
+     in a wide viewport a 1fr label pushes the bubbles far from the name they
+     belong to, and the eye loses which row it is on somewhere in the gap. */
+  .pm-grant-row {
+    display: grid;
+    /* 36px is set by the widest header word, not the bubble — narrower and
+       "NONE VIEW EDIT" run into each other. */
+    grid-template-columns: minmax(0, 1fr) repeat(3, 36px);
+    align-items: center;
+    gap: 1px;
+    padding: 3px 0;
+  }
   .pm-grant-label { font-size: 0.8rem; color: var(--text-primary); }
-  .pm-levels { display: flex; gap: 2px; }
+
+  .pm-legend { padding-bottom: 5px; margin-bottom: 3px; border-bottom: 1px solid var(--border-subtle); }
+  .pm-legend-cell {
+    font-size: 0.62rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.04em; color: var(--text-muted); text-align: center;
+  }
   /* Access levels read as a traffic light — no access, look but don't touch,
      full control. Muted earth tones rather than signal colours: this grid is
      twenty rows of three chips, and saturated red/amber/green at that density
      reads as an alarm going off rather than a set of choices. Unselected chips
      carry only a hint of their colour so the row scans at a glance; the
      selected one fills in. */
-  .pm-level {
+  /* A bubble per level, filled when chosen. The colour carries the meaning —
+     no access, look but don't touch, full control — so the words only need
+     saying once, in the column header. */
+  .pm-bubble {
     --tone: var(--text-muted);
-    padding: 2px 7px; font-size: 0.68rem; font-family: inherit; cursor: pointer;
-    color: var(--tone); background: var(--bg-base);
-    border: 1px solid var(--border); border-radius: 0;
-    transition: background var(--transition), border-color var(--transition), color var(--transition);
+    justify-self: center;
+    width: 15px; height: 15px; padding: 0; cursor: pointer;
+    background: transparent;
+    border: 1.5px solid var(--border);
+    border-radius: 50%;
+    transition: background var(--transition), border-color var(--transition), box-shadow var(--transition);
   }
 
-  .pm-level--none { --tone: #9c6058; }  /* muted brick */
-  .pm-level--read { --tone: #a8894f; }  /* muted ochre */
-  .pm-level--edit { --tone: #6f8a5c; }  /* muted sage  */
+  .pm-bubble--none { --tone: #9c6058; }  /* muted brick */
+  .pm-bubble--read { --tone: #a8894f; }  /* muted ochre */
+  .pm-bubble--edit { --tone: #6f8a5c; }  /* muted sage  */
 
-  .pm-level:hover { border-color: var(--tone); }
+  .pm-bubble:hover { border-color: var(--tone); }
 
-  .pm-level--on {
+  .pm-bubble--on {
     background: var(--tone);
     border-color: var(--tone);
-    color: #14140f;
-    font-weight: 700;
+    /* A ring rather than a bigger dot, so the row's height never shifts. */
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--tone) 28%, transparent);
   }
+
+  .pm-bubble:focus-visible { outline: 2px solid var(--tone); outline-offset: 2px; }
 
   .pm-editor-actions { display: flex; align-items: center; gap: 8px; margin-top: 16px;
     padding-top: 12px; border-top: 1px solid var(--border-subtle); }
