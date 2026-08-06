@@ -6,6 +6,7 @@
   import { loadProjectMembers } from '../lib/db.js';
   import { getActiveProjectId } from '../stores/project.js';
   import { authUser } from '../stores/auth.js';
+  import { padReceiptNum } from '../lib/format.js';
 
   const CARDS_KEY  = 'movie-ledger-credit-cards';
   const CARD_TYPES = ['VISA', 'AMEX', 'Mastercard'];
@@ -347,7 +348,8 @@
                 <td><input class="cc-cell-input" type="text" value={p.ccEnvelopeNum || ''}
                   onchange={e => updateField(p.id, 'ccEnvelopeNum', e.target.value.trim())} /></td>
                 <td><input class="cc-cell-input" type="text" value={p.ccReceiptNum || ''}
-                  onchange={e => updateField(p.id, 'ccReceiptNum', e.target.value.trim())} /></td>
+                  placeholder="000" maxlength="3"
+                  onchange={e => updateField(p.id, 'ccReceiptNum', padReceiptNum(e.target.value))} /></td>
                 <td>{p.date || '—'}</td>
                 <td>{p.ccCardType} {p.ccLast4}</td>
                 <td>{p.paid ? 'paid' : '—'}</td>

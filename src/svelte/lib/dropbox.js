@@ -263,6 +263,7 @@ function fmtMoneyForFilename(n) {
 export async function fileCCLogReceipts(card, logNumber, purchases) {
   const { projectFolderName, getProject } = await import('../stores/project.js');
   const { folderPathById } = await import('./folderTree.js');
+  const { padReceiptNum } = await import('./format.js');
   const { downloadDraftReceipt } = await import('./db.js');
 
   const project  = getProject();
@@ -294,7 +295,7 @@ export async function fileCCLogReceipts(card, logNumber, purchases) {
         continue; // unrecognized reference — nothing to file
       }
       const filename = sanitizeFolderSegment(
-        `${p.ccLast4}_${logNumber}_${p.ccReceiptNum || '00'}_${p.vendor}_${p.date}_$${fmtMoneyForFilename(p.amount)}`
+        `${p.ccLast4}_${logNumber}_${padReceiptNum(p.ccReceiptNum) || '000'}_${p.vendor}_${p.date}_$${fmtMoneyForFilename(p.amount)}`
       ) + '.pdf';
       await uploadFileWithRetry(`${receiptsPath}/${filename}`, bytes);
       filedCount++;
