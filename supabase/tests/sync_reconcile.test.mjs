@@ -94,6 +94,24 @@ eq('push lets local win for keys it holds',
 eq('push with no cloud row is just local',
   mergeForPush(null, { a: 'local' }), { a: 'local' });
 
+
+/* ── Retired keys must never be restored ──
+   movie-ledger-v2 used to be carried in the budgets blob. The stale copy left
+   there is seed data. Once the key is no longer owned by the section, it must
+   be ignored — restoring it would write ten demo purchases over a real ledger.
+   sections.js enforces this by filtering the cloud blob to known keys before
+   calling decideKeys, so the retired key never reaches this function. */
+{
+  const known = new Set(['movie-ledger-budget']);
+  const filterToKnown = blob => Object.fromEntries(
+    Object.entries(blob).filter(([k]) => known.has(k)));
+  const cloud = { 'movie-ledger-budget': 'real', 'movie-ledger-v2': 'SEED-DATA' };
+  eq('retired key is filtered out before any restore decision',
+    decideKeys({}, filterToKnown(cloud), null), R(['movie-ledger-budget'], false, []));
+  check('retired key never appears in a restore list',
+    !decideKeys({}, filterToKnown(cloud), null).restore.includes('movie-ledger-v2'));
+}
+
 const failed = results.filter(r => !r.pass);
 console.log('');
 for (const r of results) console.log(`${r.pass ? 'PASS' : 'FAIL'}  ${r.name}${r.detail ? `  [${r.detail}]` : ''}`);

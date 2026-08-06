@@ -23,13 +23,10 @@ export const SECTIONS = {
   budget: {
     table: 'budgets',
     keys: [
-      'movie-ledger-v2',
       'movie-ledger-budget',
       'movie-ledger-budget-lock',
       'movie-ledger-hot-costs',
       'movie-ledger-fringe-actuals',
-      'movie-ledger-counters-v2',
-      'movie-ledger-po-counter-v1',
       'movie-ledger-budget-versions',
       'movie-ledger-budget-commits',
     ],
@@ -94,7 +91,7 @@ export const SECTIONS = {
   },
   creditCards: {
     table: 'credit_cards',
-    keys: ['movie-ledger-credit-cards', 'movie-ledger-cc-log-counters-v1'],
+    keys: ['movie-ledger-credit-cards'],
   },
   pettyCash: {
     table: 'petty_cash',
@@ -205,9 +202,42 @@ function snapshotTable(table) {
   return blob;
 }
 
+/** Every localStorage key this table is responsible for. */
+function knownKeysForTable(table) {
+  const keys = new Set();
+  for (const cfg of Object.values(SECTIONS)) {
+    if (cfg.table === table) for (const k of cfg.keys) keys.add(k);
+  }
+  return keys;
+}
+
+/**
+ * Keys a table's blob may legitimately write back to localStorage.
+ *
+ * A stored blob can contain keys this version no longer owns — either left by
+ * an older version, or written by a newer one. Restoring those blind is
+ * dangerous: the ledger key `movie-ledger-v2` used to be carried in the
+ * budgets blob, and the copy still sitting there is stale seed data. Treating
+ * it as "a key only the cloud has" would restore ten demo purchases over a
+ * real ledger.
+ *
+ * So unknown keys are ignored for restore. They are still preserved on push
+ * (see mergeForPush) rather than deleted, since a key this version does not
+ * recognise may belong to one that does.
+ */
+function filterToKnown(blob, table) {
+  const known = knownKeysForTable(table);
+  const out = {};
+  for (const [k, v] of Object.entries(blob || {})) if (known.has(k)) out[k] = v;
+  return out;
+}
+
 /** Bind the pure decision in syncReconcile.js to this table's actual state. */
 function reconcile(projectId, table, cloudBlob) {
-  return decideKeys(snapshotTable(table), cloudBlob, getSyncedFingerprint(projectId, table));
+  return decideKeys(
+    snapshotTable(table),
+    filterToKnown(cloudBlob, table),
+    getSyncedFingerprint(projectId, table));
 }
 
 /** Write only the keys the reconciler judged safe to take from the cloud. */

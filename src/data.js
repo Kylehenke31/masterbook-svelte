@@ -533,6 +533,9 @@ const STORAGE_KEY        = 'movie-ledger-v2';
 const COUNTERS_KEY       = 'movie-ledger-counters-v2';
 const PO_COUNTER_KEY     = 'movie-ledger-po-counter-v1';
 const CC_LOG_COUNTER_KEY = 'movie-ledger-cc-log-counters-v1';
+// Set to 'on' to populate an empty ledger with SEED_PURCHASES. Off by default:
+// see the comment in hydrate() for why demo data must never appear unbidden.
+const DEMO_SEED_KEY      = 'movie-ledger-demo-seed';
 
 export function persist() {
   localStorage.setItem(STORAGE_KEY,  JSON.stringify(DB.purchases));
@@ -659,10 +662,25 @@ export function hydrate() {
       }
     }
     if (migrated) persist();
-  } else {
+  } else if (localStorage.getItem(DEMO_SEED_KEY) === 'on') {
+    // Demo data is opt-in and must stay that way.
+    //
+    // This used to run for any project whose ledger was empty, and it called
+    // persist() — so ten fictional purchases (Foto-Kem, Keslow Camera, and
+    // friends) were written to localStorage indistinguishable from real ones,
+    // and from there synced to the cloud. A real project's ledger reached
+    // Supabase containing seed-001..seed-010. On a shared production that is
+    // fabricated accounting data appearing in someone else's books.
+    //
+    // An empty project now starts empty.
     DB.purchases = [...SEED_PURCHASES];
     deriveSeedCounters();
     persist();
+  } else {
+    DB.purchases = [];
+    DB.folderCounters = { low: 0, high: 0 };
+    DB.poCounter = { next: 1 };
+    DB.ccLogCounters = {};
   }
 }
 
