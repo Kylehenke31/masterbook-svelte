@@ -16,6 +16,7 @@
   import { onDestroy } from 'svelte';
   import { getPurchases } from '../../data.js';
   import { authUser, getDisplayName } from '../stores/auth.js';
+  import { DRAFT_STATUSES } from '../lib/permissions.js';
 
   const CARDS_KEY = 'movie-ledger-credit-cards';
 
@@ -56,15 +57,25 @@
   let mySubmissions = $derived(
     user ? purchases.filter(p => p.submittedByUserId === user.id) : []);
 
-  // Anything awaiting a decision is what the user actually came here for.
-  const OPEN_STATUSES = ['In Review', 'Pending Approval', 'Submitted'];
+  // Drafts are not "awaiting review" — nobody is looking at them. They are the
+  // author's unfinished work, and lumping them in with submitted items made
+  // them look as though they were already someone else's problem.
+  const OPEN_STATUSES = ['In Review', 'Pending Approval'];
+  let drafts = $derived(mySubmissions.filter(p => DRAFT_STATUSES.includes(p.status)));
   let awaitingReview = $derived(mySubmissions.filter(p => OPEN_STATUSES.includes(p.status)));
   // Needs-work comes first in the page: it is the only category the author can
   // actually do something about, and a rejection that sits unnoticed is a
   // submission nobody is progressing.
   let needsWork = $derived(mySubmissions.filter(p => p.status === 'Rejected'));
   let settled   = $derived(mySubmissions.filter(
-    p => !OPEN_STATUSES.includes(p.status) && p.status !== 'Rejected'));
+    p => !OPEN_STATUSES.includes(p.status) && p.status !== 'Rejected'
+      && !DRAFT_STATUSES.includes(p.status)));
+
+  /** Reopen a draft in the submission form, in place. */
+  function resumeDraft(p) {
+    sessionStorage.setItem('masterbook-resume-draft-id', p.id);
+    goto('#submit');
+  }
 
   /**
    * Charges on my cards that nobody is credited with submitting. These predate
@@ -126,6 +137,31 @@
       </div>
     {/if}
   </div>
+
+  <!-- ══ Drafts ══ -->
+  {#if drafts.length}
+    <div class="mb-section">
+      <h3 class="mb-section-title">Drafts <span class="mb-count">{drafts.length}</span></h3>
+      <p class="mb-note">Saved to your profile and not submitted. Nobody is reviewing these yet.</p>
+      <table class="mb-table">
+        <thead>
+          <tr><th>Folder</th><th>Date</th><th>Vendor</th><th>Amount</th><th>Receipt</th><th></th></tr>
+        </thead>
+        <tbody>
+          {#each drafts as p (p.id)}
+            <tr>
+              <td class="mb-mono">{p.folder || '—'}</td>
+              <td>{p.date || '—'}</td>
+              <td>{p.vendor || '—'}</td>
+              <td class="mb-amount">{fmt(p.amount)}</td>
+              <td>{p.receiptUrl ? 'attached' : '—'}</td>
+              <td><button class="btn btn--primary btn--xs" onclick={() => resumeDraft(p)}>Resume</button></td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    </div>
+  {/if}
 
   <!-- ══ Sent back for correction ══ -->
   {#if needsWork.length}

@@ -76,6 +76,19 @@ const tryEdit = async (client, id, vendor) => {
   check('author CAN delete their own draft', (data || []).length === 1);
 }
 
+/* ── 'Draft' is the current name for work not yet submitted ── */
+{
+  const draft = await mk('Draft');
+  check('author CAN edit a Draft', await tryEdit(author.client, draft, 'Edited Draft'));
+  const { data } = await author.client.from('purchases').delete().eq('id', draft).select();
+  check('author CAN delete a Draft', (data || []).length === 1);
+}
+{
+  const draft = await mk('Draft');
+  check('another crew member CANNOT edit someone else\'s Draft',
+    !(await tryEdit(other.client, draft, 'Not mine')));
+}
+
 /* ── The lock itself ── */
 {
   const inReview = await mk('In Review');

@@ -104,7 +104,7 @@
     const mayEdit    = canEditPurchase(p, myUserId, myRole);
     const mayApprove = canApprovePurchase(p, myUserId, myRole);
 
-    if (!isVoid && mayApprove && ['In Review','Submitted','Pending Approval'].includes(p.status))
+    if (!isVoid && mayApprove && ['In Review','Pending Approval'].includes(p.status))
       btns.push(`<button class="btn btn--warning btn--sm" data-action="return" data-id="${p.id}" title="Send back for correction">↩</button>`);
     if (!isVoid && mayApprove)
       btns.push(`<button class="btn btn--ghost btn--sm" data-action="void" data-id="${p.id}" title="Void">⊘</button>`);
@@ -162,7 +162,11 @@
   }
   function renderQueueRows() {
     const tbody=container.querySelector('#rq-tbody');if(!tbody)return;
-    const records=getPurchases().filter(p=>new Set(['In Review','Pending Approval','Submitted']).has(p.status));
+    // Drafts are deliberately excluded. 'Submitted' is the old name for a
+    // draft, and filtering on it put unfinished work in front of approvers as
+    // though it were awaiting their decision. Only things actually sent for
+    // review belong here.
+    const records=getPurchases().filter(p=>new Set(['In Review','Pending Approval']).has(p.status));
     tbody.innerHTML=records.length===0?`<tr><td colspan="11" class="table-empty">No submissions currently awaiting review.</td></tr>`:records.map(queueRowHTML).join('');
   }
   function updateSortIndicators() {

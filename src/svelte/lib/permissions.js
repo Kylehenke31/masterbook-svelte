@@ -18,11 +18,17 @@ export const REVIEWER_ROLES = ['admin', 'accounting'];
 /**
  * Statuses in which a submission still belongs to its author.
  *
- * 'Submitted' is a draft saved to their profile; 'Rejected' is a submission an
- * approver kicked back. Everything else is either awaiting a decision or
- * already settled, and is out of the author's hands.
+ * 'Draft' is saved to their profile and not yet submitted; 'Rejected' is a
+ * submission an approver kicked back. Everything else is either awaiting a
+ * decision or already settled, and is out of the author's hands.
+ *
+ * 'Submitted' is the old name for a draft, kept so records created before the
+ * rename stay editable by the person who wrote them.
  */
-export const AUTHOR_EDITABLE_STATUSES = ['Submitted', 'Rejected'];
+export const AUTHOR_EDITABLE_STATUSES = ['Draft', 'Submitted', 'Rejected'];
+
+/** Statuses meaning "not finished, not sent to anyone yet". */
+export const DRAFT_STATUSES = ['Draft', 'Submitted'];
 
 /** Statuses that mean "an approver is looking at this". */
 export const AWAITING_REVIEW_STATUSES = ['In Review', 'Pending Approval'];

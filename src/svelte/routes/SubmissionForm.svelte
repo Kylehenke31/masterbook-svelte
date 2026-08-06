@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { get } from 'svelte/store';
   import { PDFDocument } from 'pdf-lib';
-  import { addPurchase, assignFolder, assignPONumber, DB } from '../../data.js';
+  import { addPurchase, updatePurchase, getPurchaseById, assignFolder, assignPONumber, DB } from '../../data.js';
   import { getActiveProjectId } from '../stores/project.js';
   import { uploadDraftReceipt } from '../lib/db.js';
   import { authUser, getDisplayName } from '../stores/auth.js';
@@ -10,6 +10,11 @@
   let { onDone = null } = $props();
 
   let container;
+
+  /* The draft being resumed, if any. Set from sessionStorage on mount — the
+     same hand-off the "+ New PO" shortcut uses — so My Book can send the user
+     here without the route needing to carry state. Null for a fresh entry. */
+  let resumingId = null;
 
   /* ── Constants ── */
   const ANTHROPIC_MODEL   = 'claude-sonnet-4-20250514';
@@ -1101,6 +1106,51 @@ Rules:
     overlay.addEventListener('click', e => { if (e.target === overlay) closeScan(); });
   }
 
+  /**
+   * Load a saved draft back into the form.
+   *
+   * Only the fields the form itself owns are restored. Everything derived at
+   * submission time — folder number, PO number, the author stamp — is left
+   * alone and recomputed, so resuming cannot quietly duplicate a sequence
+   * number or reassign who filed it.
+   *
+   * The receipt is not re-attached to the file input (browsers do not allow
+   * it), but the record keeps its existing receiptUrl unless a new file is
+   * chosen, so a draft saved with a receipt does not lose it on resume.
+   */
+  function prefillFromDraft(c, id) {
+    const rec = getPurchaseById(id);
+    if (!rec) {
+      setOcrStatus(c.querySelector('#ocr-status'), 'That draft could not be found.', 'error');
+      return;
+    }
+    resumingId = id;
+
+    const set = (sel, val) => { const el = c.querySelector(sel); if (el && val != null) el.value = val; };
+    set('#f-date', rec.date);
+    set('#f-amount', rec.amount != null ? Math.abs(Number(rec.amount)) : '');
+    set('#f-description', rec.description);
+    set('#f-charge-type', rec.chargeType);
+    set('#f-line-item', rec.lineItem);
+    set('#f-notes', rec.notes);
+    set('#f-salesperson', rec.salesperson);
+
+    if (rec.type) setType(c, rec.type);
+    else if (rec.method && METHOD_TYPE_MAP[rec.method]) setType(c, METHOD_TYPE_MAP[rec.method]);
+    if (rec.isQuote) { const q = c.querySelector('#f-is-quote'); if (q) q.checked = true; }
+
+    applyVendorFromOcr(rec.vendor, c);
+    if (rec.ccLast4) {
+      const cardSel = c.querySelector('#f-cc-select');
+      const match = [...(cardSel?.options || [])].find(o => o.textContent.includes(rec.ccLast4));
+      if (match && cardSel) cardSel.value = match.value;
+    }
+    updateConditionalFields(c);
+
+    setOcrStatus(c.querySelector('#ocr-status'),
+      `Resuming draft ${rec.folder || ''} — submitting will update it, not create a second record.`, 'success');
+  }
+
   /* ── Validation ── */
   function validateForm(form, c) {
     let ok = true;
@@ -1285,16 +1335,27 @@ Rules:
     }
 
     if (data.type === 'Purchase Order') {
-      data.poNumber    = assignPONumber();
+      // Likewise the PO number: a resumed draft keeps the one it already has.
+      const prior = resumingId ? getPurchaseById(resumingId) : null;
+      data.poNumber    = prior?.poNumber || assignPONumber();
       data.poLineItems = collectPOLineItems(c);
     }
 
-    const { folder, alert } = assignFolder(data.method, data.linkedFolder || null);
-    data.folder = folder;
-
-    const alertEl = c.querySelector('#folder-alert');
-    if (alert) { alertEl.textContent = alert; alertEl.classList.add('visible'); }
-    else        { alertEl.classList.remove('visible'); }
+    // A resumed draft keeps the folder number it was given when first saved.
+    // Reassigning would burn a number for good and change the record's human
+    // handle mid-flight — the one printed on logs and used in the Dropbox
+    // receipt filename. Someone who noted "1007" would find 1008 instead.
+    const existing = resumingId ? getPurchaseById(resumingId) : null;
+    if (existing?.folder) {
+      data.folder = existing.folder;
+      c.querySelector('#folder-alert')?.classList.remove('visible');
+    } else {
+      const { folder, alert } = assignFolder(data.method, data.linkedFolder || null);
+      data.folder = folder;
+      const alertEl = c.querySelector('#folder-alert');
+      if (alert) { alertEl.textContent = alert; alertEl.classList.add('visible'); }
+      else        { alertEl.classList.remove('visible'); }
+    }
 
     // Receipt: normalized to PDF back in handleFile(), then staged in Supabase
     // Storage with only a short reference kept on the record.
@@ -1318,7 +1379,18 @@ Rules:
       data.receiptUrl = await uploadDraftReceipt(projectId, data.id, receiptBytes);
     }
 
-    const created = addPurchase(data);
+    // Resuming a draft updates it in place. Creating a new record instead
+    // would leave the original behind as an orphan the author would have to
+    // notice and delete — and both would carry the same folder number.
+    let created;
+    if (resumingId) {
+      data.id = resumingId;
+      updatePurchase(resumingId, data);
+      created = getPurchaseById(resumingId);
+      resumingId = null;
+    } else {
+      created = addPurchase(data);
+    }
     form.reset();
     c.querySelectorAll('.ocr-filled').forEach(el => el.classList.remove('ocr-filled'));
     clearPreview(c);
@@ -1391,6 +1463,13 @@ Rules:
       setType(c, pendingType);
     }
 
+    // Resuming a draft saved earlier from My Book.
+    const resumeId = sessionStorage.getItem('masterbook-resume-draft-id');
+    if (resumeId) {
+      sessionStorage.removeItem('masterbook-resume-draft-id');
+      prefillFromDraft(c, resumeId);
+    }
+
     updateConditionalFields(c);
 
     c.querySelector('#f-w9').addEventListener('change',      e => handleSupportingDoc(e.target, 'w9',  c));
@@ -1454,7 +1533,7 @@ Rules:
     c.querySelector('#btn-save-profile').addEventListener('click', async () => {
       if (!validateMinimal(form, c)) return;
       await withButtonLoading(c.querySelector('#btn-save-profile'), 'Saving…',
-        () => submitRecord(form, c, 'Submitted', true));
+        () => submitRecord(form, c, 'Draft', true));
     });
 
     c.querySelector('#btn-review-later').addEventListener('click', () => {
