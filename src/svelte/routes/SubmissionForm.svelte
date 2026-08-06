@@ -1296,24 +1296,26 @@ Rules:
     if (alert) { alertEl.textContent = alert; alertEl.classList.add('visible'); }
     else        { alertEl.classList.remove('visible'); }
 
-    // Receipt: normalized to PDF back in handleFile(). A draft save stages
-    // it in Supabase Storage (needs the purchase's id up front, so it's
-    // generated here rather than left to addPurchase's default); a direct
-    // submission just holds it as a data: URL on the record itself until
-    // it's later filed into Dropbox when its CC Log gets generated.
+    // Receipt: normalized to PDF back in handleFile(), then staged in Supabase
+    // Storage with only a short reference kept on the record.
+    //
+    // Direct submissions used to inline the PDF as a base64 data: URL on the
+    // purchase itself. That put a megabyte-scale string into the ledger array,
+    // which persist() rewrites to localStorage in full on *every* save, and
+    // which is then shipped to Supabase inside the purchase row. A handful of
+    // receipts is enough to make every subsequent save rewrite tens of
+    // megabytes, and eventually to exceed the storage quota outright — at
+    // which point setItem throws and the submission is lost.
+    //
+    // Both paths now do what the draft path always did. The id has to be
+    // generated here rather than left to addPurchase's default, because the
+    // storage path is keyed on it.
     const receiptBytes = await c._receiptPdfBytesPromise;
     if (receiptBytes) {
-      if (isDraft) {
-        data.id = data.id || crypto.randomUUID();
-        const projectId = getActiveProjectId();
-        data.receiptUrl = projectId
-          ? await uploadDraftReceipt(projectId, data.id, receiptBytes)
-          : null;
-      } else {
-        let binary = '';
-        for (const byte of receiptBytes) binary += String.fromCharCode(byte);
-        data.receiptUrl = `data:application/pdf;base64,${btoa(binary)}`;
-      }
+      data.id = data.id || crypto.randomUUID();
+      const projectId = getActiveProjectId();
+      if (!projectId) throw new Error('No active project — cannot store the receipt');
+      data.receiptUrl = await uploadDraftReceipt(projectId, data.id, receiptBytes);
     }
 
     const created = addPurchase(data);

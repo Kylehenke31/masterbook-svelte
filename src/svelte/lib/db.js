@@ -230,16 +230,31 @@ export async function disconnectDropbox() {
    Storage paths are prefixed with the owner's user id so the bucket's
    RLS policy (folder[0] = auth.uid()) scopes each user to their own files. */
 
-const RECEIPTS_BUCKET = 'tempdocs';
+// "tempdocs" was the original name and no such bucket ever existed, so nothing
+// is stored under it. Receipts are not temporary — they are the evidence
+// behind an approved expense — so the bucket is named for what it holds.
+const RECEIPTS_BUCKET = 'receipts';
 
+/**
+ * Store a receipt PDF and return the reference kept on the purchase.
+ *
+ * Path is {project_id}/{purchase_id}.pdf, so access follows project
+ * membership — an approver has to be able to open a receipt somebody else
+ * submitted, which a user-scoped path cannot express.
+ *
+ * Throws rather than returning null. This used to swallow the error, which is
+ * how every upload could fail with "Bucket not found" for the entire life of
+ * the feature while each draft was cheerfully saved with no receipt attached.
+ */
 export async function uploadDraftReceipt(projectId, purchaseId, bytes) {
   const user = await getUser();
-  if (!user) return null;
-  const path = `${user.id}/${projectId}/${purchaseId}.pdf`;
+  if (!user) throw new Error('Not signed in — cannot store the receipt');
+  if (!projectId) throw new Error('No active project — cannot store the receipt');
+  const path = `${projectId}/${purchaseId}.pdf`;
   const { error } = await supabase.storage
     .from(RECEIPTS_BUCKET)
     .upload(path, bytes, { contentType: 'application/pdf', upsert: true });
-  if (error) { console.warn('[db] uploadDraftReceipt error:', error.message); return null; }
+  if (error) throw new Error(`Receipt upload failed: ${error.message}`);
   return `supabase://${RECEIPTS_BUCKET}/${path}`;
 }
 

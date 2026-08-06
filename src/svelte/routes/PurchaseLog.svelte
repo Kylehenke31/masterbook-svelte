@@ -10,8 +10,11 @@
   /* ── Receipt resolution — shared by the Review Queue's edit form and the
      read-only detail popup. purchase.receiptUrl is one of:
        null                              — no receipt
-       data:application/pdf;base64,...   — held temporarily in this browser
-       supabase://tempdocs/{path}        — staged in Supabase Storage (draft)
+       data:application/pdf;base64,...   — legacy: inlined on the record by
+                                           older direct submissions. Still read
+                                           here, but no longer written.
+       supabase://tempdocs/{path}        — staged in Supabase Storage (both
+                                           drafts and direct submissions)
      Anything else (e.g. a future dropbox: reference) isn't inline-viewable
      here yet. Returns raw PDF bytes, or null if there's nothing to show. */
   async function resolveReceiptBytes(receiptUrl) {

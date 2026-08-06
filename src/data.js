@@ -564,10 +564,29 @@ const CC_LOG_COUNTER_KEY = 'movie-ledger-cc-log-counters-v1';
 const DEMO_SEED_KEY      = 'movie-ledger-demo-seed';
 
 export function persist() {
-  localStorage.setItem(STORAGE_KEY,  JSON.stringify(DB.purchases));
-  localStorage.setItem(COUNTERS_KEY, JSON.stringify(DB.folderCounters));
-  localStorage.setItem(PO_COUNTER_KEY, JSON.stringify(DB.poCounter));
-  localStorage.setItem(CC_LOG_COUNTER_KEY, JSON.stringify(DB.ccLogCounters));
+  try {
+    localStorage.setItem(STORAGE_KEY,  JSON.stringify(DB.purchases));
+    localStorage.setItem(COUNTERS_KEY, JSON.stringify(DB.folderCounters));
+    localStorage.setItem(PO_COUNTER_KEY, JSON.stringify(DB.poCounter));
+    localStorage.setItem(CC_LOG_COUNTER_KEY, JSON.stringify(DB.ccLogCounters));
+  } catch (e) {
+    // Almost always QuotaExceededError. This is not recoverable here and it
+    // must not pass quietly: the in-memory ledger has the change but storage
+    // does not, so the next reload loses it. Re-thrown so the caller (a submit
+    // handler, say) can tell the user, rather than reporting success over a
+    // write that did not happen.
+    console.error('[data] persist failed:', e);
+    window.dispatchEvent(new CustomEvent('masterbook-sync-error', {
+      detail: {
+        table: 'localStorage', operation: 'persist',
+        message: e?.name === 'QuotaExceededError'
+          ? 'Local storage is full — this change was not saved on this device.'
+          : (e?.message || 'could not write to local storage'),
+        at: new Date().toISOString(),
+      },
+    }));
+    throw e;
+  }
 }
 
 /* ── Cloud helpers (imported lazily to avoid circular deps at boot) ── */
