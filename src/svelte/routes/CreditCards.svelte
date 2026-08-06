@@ -162,7 +162,8 @@
       openLogRow = logs.find(l => l.status === 'open') ?? null;
       // Don't create a log just because someone looked at the page — an empty
       // log per card per visit would burn numbers that end up printed on
-      // nothing. It is opened when the first charge is packaged into it.
+      // nothing. One is opened by the first approval on this card.
+      refreshLogRows();   // membership depends on which log is open
     } catch (e) {
       logsError = e.message;
     }
@@ -170,13 +171,25 @@
 
   function closeLog() { view = 'list'; selectedCard = null; logRows = []; logs = []; openLogRow = null; }
 
-  /** Charges that qualify for a log and have not been packaged into one yet. */
+  /**
+   * Charges sitting in this card's open log, waiting to be packaged.
+   *
+   * A charge joins the open log when it is approved (see lib/approval.js), so
+   * this is normally "everything approved since the last packaging". Approved
+   * charges carrying no log at all are included too — records approved before
+   * logs became real, which packaging will adopt.
+   *
+   * "Paid" is not consulted. A credit card charge has already been made by the
+   * time it is approved; Paid is a reconciliation flag ticked afterwards, and
+   * gating log membership on it left approved receipts stranded.
+   */
   function refreshLogRows() {
     if (!selectedCard) return;
+    const openId = openLogRow?.id ?? null;
     logRows = getPurchases().filter(p =>
-      p.method === 'CC' && p.status === 'Approved' && p.paid === true &&
+      p.method === 'CC' && p.status === 'Approved' &&
       p.ccCardType === selectedCard.cardType && p.ccLast4 === selectedCard.last4 &&
-      !p.ccLogId
+      (!p.ccLogId || p.ccLogId === openId)
     );
   }
 
@@ -205,7 +218,7 @@
     if (!selectedCard || generating) return;
     const included = logRows;
     if (!included.length) {
-      alert('Nothing to package — no approved and paid charges are waiting on this card.');
+      alert('Nothing to package — no approved charges are waiting on this card.');
       return;
     }
     if (!confirm(
@@ -439,7 +452,7 @@
 
     {#if logRows.length === 0}
       <div class="cc-empty">
-        <p>Nothing waiting. Charges appear here once they are Approved and marked Paid.</p>
+        <p>Nothing waiting. Charges appear here as soon as they are approved.</p>
       </div>
     {:else}
       <div class="cc-table-wrap">

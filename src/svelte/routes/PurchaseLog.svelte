@@ -8,6 +8,7 @@
   import { getActiveProjectId } from '../stores/project.js';
   import { authUser } from '../stores/auth.js';
   import { canEditPurchase, canApprovePurchase, explainEditBlock, isReviewer } from '../lib/permissions.js';
+  import { onPurchaseApproved } from '../lib/approval.js';
   import { PDFDocument } from 'pdf-lib';
 
   /* ── Who am I on this project? ──
@@ -257,7 +258,18 @@
   function handleAction(action, id, fromQueue=false) {
     if(action==='delete'){if(confirm('Delete this record permanently?')){deletePurchase(id);refreshView();if(fromQueue)renderQueueRows();}}
     else if(action==='void'){const p=getPurchaseById(id),msg=p&&p.status==='Approved'?`VOID submission "${p.folder} — ${p.vendor}"?\n\nThis will remove all data from the budget and logs. The folder will be renamed with VOID. This action CANNOT be undone.`:p?`VOID submission "${p.folder??''} — ${p.vendor??''}"?\n\nThe folder will be renamed with VOID. This action CANNOT be undone.`:'VOID?';if(confirm(msg)){voidPurchase(id);refreshView();if(fromQueue)renderQueueRows();window.dispatchEvent(new Event('ledger-data-changed'));}}
-    else if(action==='approve'){if(confirm('Approve this record?')){approvePurchase(id);refreshView();if(fromQueue)renderQueueRows();maybeGeneratePOSummary(id);}}
+    else if(action==='approve'){
+      if(confirm('Approve this record?')){
+        approvePurchase(id);
+        refreshView();
+        if(fromQueue)renderQueueRows();
+        maybeGeneratePOSummary(id);
+        // Join the card's open log and file the receipt. Deliberately not
+        // awaited: a Dropbox outage must not hold up an approval, and any
+        // failure reports itself through the sync indicator.
+        onPurchaseApproved(getPurchaseById(id), updatePurchase).then(() => refreshView());
+      }
+    }
     else if(action==='return'){
       // Ask why. A record that comes back with no explanation leaves the
       // author guessing at what to change, which is how a submission ends up
@@ -388,7 +400,7 @@
     // Approve
     host.querySelector('#btn-edit-approve').addEventListener('click',()=>{
       if(!_validateLI(form,host))return;
-      _commitEdits(form,host,record.id);updatePurchase(record.id,{status:'Approved'});isDirty=false;maybeGeneratePOSummary(record.id);onClose?.('approved');
+      _commitEdits(form,host,record.id);updatePurchase(record.id,{status:'Approved'});isDirty=false;maybeGeneratePOSummary(record.id);onPurchaseApproved(getPurchaseById(record.id),updatePurchase);onClose?.('approved');
     });
     // Return
     host.querySelector('#btn-edit-return').addEventListener('click',()=>{
