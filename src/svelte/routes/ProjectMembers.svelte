@@ -350,7 +350,10 @@
        sit next to each other without each one sprawling. */
     grid-template-columns: repeat(auto-fit, minmax(220px, 260px));
     justify-content: start;
-    gap: 14px 26px;
+    /* Generous column gap: the groups are independent lists, and set close
+       together a row's bubbles sit next to the neighbouring group's labels,
+       which invites reading across the boundary. */
+    gap: 20px 56px;
   }
   .pm-grants--dimmed { opacity: 0.4; }
   .pm-group { max-width: 260px; }
