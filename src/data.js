@@ -15,7 +15,10 @@
     ccLast4          : string | null  (only for CC / PO-CC)
     description      : string         (≤6 words)
     lineItem         : string         (budget line item)
-    submittedBy      : string
+    submittedBy      : string         (display-name snapshot taken at submission)
+    submittedByUserId: string | null  (auth user id — the durable identity behind
+                                        submittedBy, and what "My Book" filters on.
+                                        Null on records created before this existed.)
     status           : "Submitted" | "In Review" | "Approved" | "Pending Approval" | "Refunded" | "Void" | "Quote"
     amount           : number         (negative for refunds)
     chargeType       : string         (e.g. "Equipment Rental", "Catering", etc.)

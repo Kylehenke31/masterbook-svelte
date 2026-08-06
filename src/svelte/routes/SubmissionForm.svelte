@@ -1,9 +1,11 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
+  import { get } from 'svelte/store';
   import { PDFDocument } from 'pdf-lib';
   import { addPurchase, assignFolder, assignPONumber, DB } from '../../data.js';
   import { getActiveProjectId } from '../stores/project.js';
   import { uploadDraftReceipt } from '../lib/db.js';
+  import { authUser, getDisplayName } from '../stores/auth.js';
 
   let { onDone = null } = $props();
 
@@ -1254,6 +1256,18 @@ Rules:
     const today  = new Date().toISOString().slice(0, 10);
     if (data.w9Attached)           data.w9Filename    = `W9_${vendorSlug}_${today}.pdf`;
     if (data.payMethodDocAttached) data.payDocFilename = `Payment_Method_${vendorSlug}_${today}.pdf`;
+
+    // Stamp who submitted this. The user id is the durable identity — it is
+    // what "My Book" filters on and what an approver is accountable to. The
+    // name is a display snapshot taken now, for the same reason a card stores
+    // its cardholder name: a submission's paperwork should keep reading the
+    // way it read when it was filed, even if that person is later renamed or
+    // leaves the project. Existing records predate this and have neither.
+    const me = get(authUser);
+    if (me) {
+      data.submittedByUserId = me.id;
+      data.submittedBy = getDisplayName(me);
+    }
 
     data.isReturn = data.method === 'Return';
     data.isQuote  = isQuote(c);

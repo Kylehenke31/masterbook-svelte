@@ -15,6 +15,7 @@
   import { loadMyProfile, updateMyDisplayName } from './lib/db.js';
 
   import Home           from './routes/Home.svelte';
+  import MyBook         from './routes/MyBook.svelte';
   import ElementsReport from './routes/ElementsReport.svelte';
   import Insurance      from './routes/Insurance.svelte';
   import Files          from './routes/Files.svelte';
@@ -118,6 +119,7 @@
   /* ── Ledgers dropdown ── */
   let showLedgersDropdown = $state(false);
   const LEDGERS_ROUTES = [
+    { id: 'my-book',       label: 'My Book' },
     { id: 'log',           label: 'All Expenses' },
     { id: 'po-log',        label: 'Purchase Orders' },
     { id: 'credit-cards',  label: 'Credit Cards' },
@@ -273,7 +275,7 @@
     'creative', 'creative-camera', 'creative-locations',
     'creative-prod-design', 'creative-costume', 'creative-property',
     'creative-hair-makeup', 'creative-stunts', 'creative-continuity',
-    'po-log', 'credit-cards', 'petty-cash',
+    'po-log', 'credit-cards', 'petty-cash', 'my-book',
   ]);
 
   /** Which top-level "group" (macro sidebar section) is the current route in? */
@@ -596,6 +598,8 @@
       <PurchaseLog />
     {:else if route === 'po-log'}
       <PurchaseOrdersLog />
+    {:else if route === 'my-book'}
+      <MyBook />
     {:else if route === 'credit-cards'}
       <CreditCards />
     {:else if route === 'petty-cash'}
