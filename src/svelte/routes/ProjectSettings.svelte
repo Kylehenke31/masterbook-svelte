@@ -120,10 +120,26 @@
             <div id="ps-prod-info-fields"></div>
           </div>
 
+          <!-- ── Project Access ──
+               Distinct from Staff Members below: that is a contact list which
+               feeds the Crew List, this is who holds a login. Most crew never
+               need an account, and everyone who does needs a permission
+               decision, so they are not the same form. -->
+          <div class="setup-card">
+            <h3 class="setup-card__title">Project Access</h3>
+            <p class="setup-hint" style="margin-bottom:12px">
+              Who can sign in to this production, and what each person can reach.
+              Separate from the Crew List — invite only the people who need an account.
+            </p>
+            <button type="button" class="btn btn--ghost btn--sm" id="ps-btn-access">
+              Manage Access →
+            </button>
+          </div>
+
           <!-- ── Staff Members ── -->
           <div class="setup-card">
             <h3 class="setup-card__title">Staff Members</h3>
-            <p class="setup-hint" style="margin-bottom:12px">Staff added here will be auto-imported into the Crew List.</p>
+            <p class="setup-hint" style="margin-bottom:12px">Staff added here will be auto-imported into the Crew List. This does not give them a login.</p>
             <div class="staff-list" id="ps-staff-list">${staffHTML}</div>
             <button type="button" class="btn btn--ghost btn--sm" id="ps-btn-add-staff" style="margin-top:10px">
               + Add Staff Member
@@ -440,6 +456,10 @@
 
     c.querySelector('#ps-btn-staff-cancel')?.addEventListener('click', () => {
       _resetStaffForm(c);
+    });
+
+    c.querySelector('#ps-btn-access')?.addEventListener('click', () => {
+      window.location.hash = '#members';
     });
 
     c.querySelector('#ps-btn-staff-confirm')?.addEventListener('click', () => {

@@ -12,10 +12,12 @@
   import { hydrate, hydrateFromCloud } from '../../src/data.js';
   import { syncAllSectionsFromCloud, pushAllSectionsToCloud, saveSectionToCloud, bumpSectionVersion } from './lib/sections.js';
   import { handleDropboxRedirect } from './lib/dropbox.js';
-  import { loadMyProfile, updateMyDisplayName } from './lib/db.js';
+  import { loadMyProfile, updateMyDisplayName, acceptPendingInvites, getMyProjectRole } from './lib/db.js';
+  import { canAccessRoute } from './lib/features.js';
 
   import Home           from './routes/Home.svelte';
   import MyBook         from './routes/MyBook.svelte';
+  import ProjectMembers from './routes/ProjectMembers.svelte';
   import ElementsReport from './routes/ElementsReport.svelte';
   import Insurance      from './routes/Insurance.svelte';
   import Files          from './routes/Files.svelte';
@@ -64,8 +66,13 @@
     lastSyncedUserId = user.id;
     cloudSyncing = true;
     try {
+      // Claim any invite addressed to this email before loading projects —
+      // otherwise a newly invited user signs in to an empty app and has to
+      // reload before the project they were invited to appears.
+      await acceptPendingInvites().catch(() => 0);
       await loadProjectsFromCloud();
       const activeId = getActiveProjectId();
+      myMembership = activeId ? await loadMyMembership(activeId) : null;
       if (activeId) {
         // Pull purchases and all section blobs in parallel
         await Promise.all([
@@ -148,6 +155,32 @@
     showLedgersDropdown = false;
     refreshProjectStore();
   });
+
+  /* ── My access on this project ──
+     Drives which routes and nav items are reachable. Null until it loads;
+     the guard treats "not yet known" as "allow", because blocking on an
+     unloaded grant would flash an access error at a legitimate admin. */
+  let myMembership = $state(null);
+
+  async function loadMyMembership(projectId) {
+    try {
+      const role = await getMyProjectRole(projectId);
+      if (!role) return null;
+      const { data } = await import('./lib/supabase.js')
+        .then(m => m.supabase.from('project_members')
+          .select('role, permissions')
+          .eq('project_id', projectId)
+          .eq('user_id', authState?.id)
+          .maybeSingle());
+      return data ? { role: data.role, permissions: data.permissions || {} } : { role, permissions: {} };
+    } catch { return null; }
+  }
+
+  /** May the signed-in member open this route? Unknown membership allows. */
+  function mayAccess(r) {
+    if (!myMembership) return true;
+    return canAccessRoute(myMembership, r);
+  }
 
   /* ── Project state (reactive via store) ── */
   let _project = $state(null);
@@ -277,7 +310,7 @@
     'creative', 'creative-camera', 'creative-locations',
     'creative-prod-design', 'creative-costume', 'creative-property',
     'creative-hair-makeup', 'creative-stunts', 'creative-continuity',
-    'po-log', 'credit-cards', 'petty-cash', 'my-book',
+    'po-log', 'credit-cards', 'petty-cash', 'my-book', 'members',
   ]);
 
   /** Which top-level "group" (macro sidebar section) is the current route in? */
@@ -315,6 +348,13 @@
     // Smart default: empty hash → log (project exists) or home (no project)
     if (!hash) {
       currentRoute.set(hasProject ? 'log' : 'home');
+      return;
+    }
+
+    // A member without the grant for this section is sent to their own book
+    // rather than shown an empty screen they cannot act on.
+    if (!mayAccess(hash)) {
+      window.location.hash = '#my-book';
       return;
     }
 
@@ -464,7 +504,7 @@
     <div class="ledgers-wrap">
       {#if showLedgersDropdown}
         <div class="ledgers-dropdown" role="menu">
-          {#each LEDGERS_ROUTES as r (r.id)}
+          {#each LEDGERS_ROUTES.filter(r => mayAccess(r.id)) as r (r.id)}
             <button class="pd-action-btn" class:pd-action-btn--active={route === r.id}
               role="menuitem" onclick={() => { window.location.hash = '#' + r.id; }}>
               {r.label}
@@ -608,6 +648,8 @@
       <PurchaseOrdersLog />
     {:else if route === 'my-book'}
       <MyBook />
+    {:else if route === 'members'}
+      <ProjectMembers />
     {:else if route === 'credit-cards'}
       <CreditCards />
     {:else if route === 'petty-cash'}

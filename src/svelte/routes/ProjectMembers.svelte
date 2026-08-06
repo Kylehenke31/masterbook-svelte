@@ -1,0 +1,363 @@
+<script>
+  /**
+   * ProjectMembers.svelte — who has a login on this project, and what they reach.
+   *
+   * Deliberately separate from Project Settings' "Staff Members", which is a
+   * contact list that auto-imports into the Crew List. Most crew never need an
+   * account; the ones who do need a permission decision, and conflating the
+   * two would force an email and a grant on every contact.
+   *
+   * Presets fill the checklist rather than being stored. What is saved is the
+   * resolved set of grants, so a preset's meaning changing later cannot
+   * silently change what someone already had.
+   */
+  import { onDestroy } from 'svelte';
+  import { getActiveProjectId } from '../stores/project.js';
+  import { authUser } from '../stores/auth.js';
+  import {
+    listMembersWithPermissions, listPendingInvites, inviteMember, cancelInvite,
+    updateMemberAccess, removeMember, getMyProjectRole,
+  } from '../lib/db.js';
+  import { FEATURES, ACCOUNTING_PRESET, levelFor } from '../lib/features.js';
+
+  let members = $state([]);
+  let invites = $state([]);
+  let myRole  = $state(null);
+  let me      = $state(null);
+  let loading = $state(true);
+  let error   = $state('');
+  let notice  = $state('');
+
+  // The editor works on one target at a time: either a new invite, or an
+  // existing member whose access is being revised.
+  let editing = $state(null);   // { kind: 'invite' | 'member', email, userId, name }
+  let draftRole = $state('crew');
+  let draftPerms = $state({});
+
+  const unsubAuth = authUser.subscribe(async (u) => {
+    me = u;
+    if (!u) return;
+    await load();
+  });
+  onDestroy(() => unsubAuth());
+
+  async function load() {
+    loading = true;
+    error = '';
+    try {
+      const pid = getActiveProjectId();
+      myRole = await getMyProjectRole(pid);
+      members = await listMembersWithPermissions(pid);
+      invites = myRole === 'admin' ? await listPendingInvites(pid) : [];
+    } catch (e) {
+      error = e.message;
+    } finally {
+      loading = false;
+    }
+  }
+
+  let isAdmin = $derived(myRole === 'admin');
+
+  const groups = [...new Set(FEATURES.map(f => f.group))];
+  const featuresIn = g => FEATURES.filter(f => f.group === g);
+
+  function startInvite() {
+    editing = { kind: 'invite', email: '', userId: null, name: '' };
+    draftRole = 'crew';
+    draftPerms = {};
+    notice = '';
+  }
+
+  function startEdit(m) {
+    // Show what they actually hold, including anything a preset role implies,
+    // so the checklist reflects reality rather than an empty map.
+    const resolved = {};
+    for (const f of FEATURES) {
+      const lvl = levelFor(m, f.key);
+      if (lvl) resolved[f.key] = lvl;
+    }
+    editing = { kind: 'member', email: m.email, userId: m.userId, name: m.displayName };
+    draftRole = m.role;
+    draftPerms = resolved;
+    notice = '';
+  }
+
+  function cancelEdit() { editing = null; notice = ''; }
+
+  function applyPreset(which) {
+    if (which === 'admin') { draftRole = 'admin'; draftPerms = {}; return; }
+    draftRole = 'crew';
+    draftPerms = which === 'accounting' ? { ...ACCOUNTING_PRESET } : {};
+  }
+
+  function setLevel(key, level) {
+    // Choosing a feature-level grant means this is no longer a blanket admin.
+    if (draftRole === 'admin') draftRole = 'crew';
+    const next = { ...draftPerms };
+    if (level) next[key] = level; else delete next[key];
+    draftPerms = next;
+  }
+
+  let grantCount = $derived(Object.keys(draftPerms).length);
+
+  async function save() {
+    error = '';
+    try {
+      const pid = getActiveProjectId();
+      if (editing.kind === 'invite') {
+        await inviteMember(pid, editing.email, draftRole, draftPerms);
+        notice = `Invited ${editing.email}. They get access when they sign up with that address — no email is sent yet.`;
+      } else {
+        await updateMemberAccess(pid, editing.userId, draftRole, draftPerms);
+        notice = `Updated ${editing.name}'s access.`;
+      }
+      editing = null;
+      await load();
+    } catch (e) {
+      error = e.message;
+    }
+  }
+
+  async function drop(m) {
+    if (!confirm(
+      `Remove ${m.displayName} from this project?\n\n` +
+      `They lose all access immediately. Expenses they submitted stay on the books.`)) return;
+    error = '';
+    try {
+      await removeMember(getActiveProjectId(), m.userId);
+      notice = `${m.displayName} was removed.`;
+      await load();
+    } catch (e) { error = e.message; }
+  }
+
+  async function dropInvite(inv) {
+    if (!confirm(`Cancel the invite for ${inv.email}?`)) return;
+    try { await cancelInvite(inv.id); await load(); }
+    catch (e) { error = e.message; }
+  }
+
+  /** A one-line summary of what someone reaches, for the list. */
+  function summarise(m) {
+    if (m.role === 'admin') return 'Everything (Project Admin)';
+    const granted = FEATURES.filter(f => levelFor(m, f.key));
+    if (!granted.length) return 'No sections yet — can still file their own expenses';
+    const edits = granted.filter(f => levelFor(m, f.key) === 'edit').length;
+    return `${granted.length} section${granted.length === 1 ? '' : 's'} · ${edits} editable`;
+  }
+</script>
+
+<section class="pm-page">
+  <header class="pm-header">
+    <div>
+      <h2 class="pm-title">Project Access</h2>
+      <p class="pm-subtitle">
+        Who has a login on this production. Separate from the Crew List — most crew
+        never need an account.
+      </p>
+    </div>
+    {#if isAdmin}
+      <button class="btn btn--primary btn--sm" onclick={startInvite}>+ Invite Someone</button>
+    {/if}
+  </header>
+
+  {#if error}<div class="pm-error">{error}</div>{/if}
+  {#if notice}<div class="pm-notice">{notice}</div>{/if}
+
+  {#if loading}
+    <p class="pm-empty">Loading…</p>
+  {:else if !isAdmin}
+    <p class="pm-empty">Only a Project Admin can manage access.</p>
+  {:else}
+
+    <!-- ══ Editor ══ -->
+    {#if editing}
+      <div class="pm-editor">
+        <h3 class="pm-editor-title">
+          {editing.kind === 'invite' ? 'Invite someone' : `Access for ${editing.name}`}
+        </h3>
+
+        {#if editing.kind === 'invite'}
+          <div class="pm-field">
+            <label for="pm-email">Email address</label>
+            <input id="pm-email" class="pm-input" type="email" bind:value={editing.email}
+              placeholder="them@example.com" />
+            <span class="pm-hint">
+              They get access when they sign up with this address. No email is sent yet —
+              tell them to create an account.
+            </span>
+          </div>
+        {:else}
+          <p class="pm-hint" style="margin-bottom:14px">{editing.email}</p>
+        {/if}
+
+        <div class="pm-presets">
+          <span class="pm-presets-label">Start from</span>
+          <button class="btn btn--ghost btn--xs" onclick={() => applyPreset('admin')}
+            class:pm-preset--on={draftRole === 'admin'}>Project Admin</button>
+          <button class="btn btn--ghost btn--xs" onclick={() => applyPreset('accounting')}>Accounting</button>
+          <button class="btn btn--ghost btn--xs" onclick={() => applyPreset('none')}>Nothing</button>
+        </div>
+
+        {#if draftRole === 'admin'}
+          <p class="pm-admin-note">
+            Project Admins reach everything, including sections added later, and can
+            manage access. Choosing any individual permission below switches this off.
+          </p>
+        {/if}
+
+        <div class="pm-grants" class:pm-grants--dimmed={draftRole === 'admin'}>
+          {#each groups as g (g)}
+            <div class="pm-group">
+              <h4 class="pm-group-title">{g}</h4>
+              {#each featuresIn(g) as f (f.key)}
+                <div class="pm-grant-row">
+                  <span class="pm-grant-label">{f.label}</span>
+                  <div class="pm-levels">
+                    {#each [['', 'None'], ['read', 'Read-only'], ['edit', 'Edit']] as [val, lbl] (val)}
+                      <button
+                        class="pm-level"
+                        class:pm-level--on={(draftPerms[f.key] ?? '') === val}
+                        onclick={() => setLevel(f.key, val)}>{lbl}</button>
+                    {/each}
+                  </div>
+                </div>
+              {/each}
+            </div>
+          {/each}
+        </div>
+
+        <div class="pm-editor-actions">
+          <button class="btn btn--primary btn--sm" onclick={save}
+            disabled={editing.kind === 'invite' && !editing.email.trim()}>
+            {editing.kind === 'invite' ? 'Send Invite' : 'Save Access'}
+          </button>
+          <button class="btn btn--ghost btn--sm" onclick={cancelEdit}>Cancel</button>
+          <span class="pm-hint" style="margin-left:auto">
+            {draftRole === 'admin' ? 'Everything' : `${grantCount} section${grantCount === 1 ? '' : 's'} granted`}
+          </span>
+        </div>
+      </div>
+    {/if}
+
+    <!-- ══ Members ══ -->
+    <div class="pm-section">
+      <h3 class="pm-section-title">Members <span class="pm-count">{members.length}</span></h3>
+      <table class="pm-table">
+        <thead><tr><th>Name</th><th>Email</th><th>Access</th><th></th></tr></thead>
+        <tbody>
+          {#each members as m (m.userId)}
+            <tr>
+              <td>{m.displayName}{#if m.userId === me?.id}<span class="pm-you">you</span>{/if}</td>
+              <td class="pm-dim">{m.email}</td>
+              <td class="pm-dim">{summarise(m)}</td>
+              <td class="pm-row-actions">
+                <button class="btn btn--ghost btn--xs" onclick={() => startEdit(m)}>Edit</button>
+                {#if m.userId !== me?.id}
+                  <button class="btn btn--ghost btn--xs btn--danger-text" onclick={() => drop(m)}>Remove</button>
+                {/if}
+              </td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+      {#if members.some(m => m.userId === me?.id && m.role === 'admin')}
+        <p class="pm-hint">
+          You cannot remove yourself — a project with no admin could never grant access again.
+        </p>
+      {/if}
+    </div>
+
+    <!-- ══ Pending invites ══ -->
+    {#if invites.length}
+      <div class="pm-section">
+        <h3 class="pm-section-title">Invited <span class="pm-count">{invites.length}</span></h3>
+        <p class="pm-hint">
+          Waiting for these people to sign up with the address below. Nothing has been
+          emailed — that is still to come.
+        </p>
+        <table class="pm-table">
+          <thead><tr><th>Email</th><th>Access</th><th></th></tr></thead>
+          <tbody>
+            {#each invites as inv (inv.id)}
+              <tr>
+                <td>{inv.email}</td>
+                <td class="pm-dim">
+                  {inv.role === 'admin' ? 'Everything (Project Admin)'
+                    : `${Object.keys(inv.permissions || {}).length} sections`}
+                </td>
+                <td class="pm-row-actions">
+                  <button class="btn btn--ghost btn--xs btn--danger-text"
+                    onclick={() => dropInvite(inv)}>Cancel</button>
+                </td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
+    {/if}
+  {/if}
+</section>
+
+<style>
+  .pm-page { padding: 4px 0 40px; }
+  .pm-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+  .pm-title { font-size: 1.35rem; font-weight: 700; color: var(--text-primary); margin: 0; }
+  .pm-subtitle { font-size: 0.8rem; color: var(--text-secondary); margin: 4px 0 0; max-width: 62ch; }
+
+  .pm-error, .pm-notice {
+    padding: 9px 12px; margin-bottom: 14px; font-size: 0.8rem; border: 1px solid;
+  }
+  .pm-error  { color: var(--red); background: rgba(224,82,82,0.10); border-color: var(--red); }
+  .pm-notice { color: var(--green); background: rgba(34,197,94,0.10); border-color: var(--green); }
+
+  .pm-empty, .pm-hint { font-size: 0.78rem; color: var(--text-secondary); }
+  .pm-hint { display: block; margin-top: 5px; }
+  .pm-dim { color: var(--text-secondary); }
+
+  .pm-editor { border: 1px solid var(--gold); padding: 16px; margin-bottom: 26px; background: var(--bg-elevated); }
+  .pm-editor-title { font-size: 0.95rem; font-weight: 700; color: var(--text-primary); margin: 0 0 12px; }
+
+  .pm-field { margin-bottom: 14px; max-width: 420px; }
+  .pm-field label { display: block; font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 4px; }
+  .pm-input { width: 100%; padding: 7px 9px; font: inherit; font-size: 0.85rem;
+    color: var(--text-primary); background: var(--input-bg); border: 1px solid var(--input-border); }
+  .pm-input:focus { outline: none; border-color: var(--gold); }
+
+  .pm-presets { display: flex; align-items: center; gap: 7px; margin-bottom: 12px; flex-wrap: wrap; }
+  .pm-presets-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
+  .pm-preset--on { border-color: var(--gold); color: var(--gold); }
+
+  .pm-admin-note { font-size: 0.78rem; color: var(--gold); margin: 0 0 12px; }
+
+  .pm-grants { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; }
+  .pm-grants--dimmed { opacity: 0.4; }
+  .pm-group-title { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--text-muted); margin: 0 0 6px; padding-bottom: 4px; border-bottom: 1px solid var(--border-subtle); }
+  .pm-grant-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 3px 0; }
+  .pm-grant-label { font-size: 0.8rem; color: var(--text-primary); }
+  .pm-levels { display: flex; gap: 2px; }
+  .pm-level {
+    padding: 2px 7px; font-size: 0.68rem; font-family: inherit; cursor: pointer;
+    color: var(--text-muted); background: var(--bg-base);
+    border: 1px solid var(--border); border-radius: 0;
+  }
+  .pm-level:hover { color: var(--text-primary); }
+  .pm-level--on { background: var(--gold); border-color: var(--gold); color: var(--bg-base); font-weight: 700; }
+
+  .pm-editor-actions { display: flex; align-items: center; gap: 8px; margin-top: 16px;
+    padding-top: 12px; border-top: 1px solid var(--border-subtle); }
+
+  .pm-section { margin-bottom: 26px; }
+  .pm-section-title { display: flex; align-items: center; gap: 8px; font-size: 0.72rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted);
+    padding-bottom: 7px; margin: 0 0 10px; border-bottom: 1px solid var(--border-subtle); }
+  .pm-count { font-size: 0.68rem; padding: 1px 6px; color: var(--bg-base); background: var(--gold); letter-spacing: 0; }
+
+  .pm-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+  .pm-table th { text-align: left; font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.05em; color: var(--text-muted); padding: 6px 9px; border-bottom: 1px solid var(--border); }
+  .pm-table td { padding: 8px 9px; border-bottom: 1px solid var(--border-subtle); color: var(--text-primary); }
+  .pm-row-actions { text-align: right; white-space: nowrap; }
+  .pm-you { margin-left: 6px; font-size: 0.65rem; padding: 1px 5px; color: var(--bg-base); background: var(--text-muted); }
+</style>
