@@ -59,7 +59,12 @@
   // Anything awaiting a decision is what the user actually came here for.
   const OPEN_STATUSES = ['In Review', 'Pending Approval', 'Submitted'];
   let awaitingReview = $derived(mySubmissions.filter(p => OPEN_STATUSES.includes(p.status)));
-  let settled        = $derived(mySubmissions.filter(p => !OPEN_STATUSES.includes(p.status)));
+  // Needs-work comes first in the page: it is the only category the author can
+  // actually do something about, and a rejection that sits unnoticed is a
+  // submission nobody is progressing.
+  let needsWork = $derived(mySubmissions.filter(p => p.status === 'Rejected'));
+  let settled   = $derived(mySubmissions.filter(
+    p => !OPEN_STATUSES.includes(p.status) && p.status !== 'Rejected'));
 
   /**
    * Charges on my cards that nobody is credited with submitting. These predate
@@ -121,6 +126,34 @@
       </div>
     {/if}
   </div>
+
+  <!-- ══ Sent back for correction ══ -->
+  {#if needsWork.length}
+    <div class="mb-section">
+      <h3 class="mb-section-title mb-section-title--attention">
+        Needs Your Attention <span class="mb-count mb-count--attention">{needsWork.length}</span>
+      </h3>
+      <p class="mb-note">
+        An approver sent these back. They are editable again — correct them and resubmit.
+      </p>
+      <table class="mb-table">
+        <thead>
+          <tr><th>Folder</th><th>Date</th><th>Vendor</th><th>Amount</th><th>What needs changing</th></tr>
+        </thead>
+        <tbody>
+          {#each needsWork as p (p.id)}
+            <tr>
+              <td class="mb-mono">{p.folder || '—'}</td>
+              <td>{p.date || '—'}</td>
+              <td>{p.vendor || '—'}</td>
+              <td class="mb-amount">{fmt(p.amount)}</td>
+              <td class="mb-reason">{p.rejectionReason || 'No reason given'}</td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    </div>
+  {/if}
 
   <!-- ══ Awaiting review ══ -->
   <div class="mb-section">
@@ -227,6 +260,10 @@
   }
 
   .mb-empty, .mb-note { font-size: 0.82rem; color: var(--text-secondary); margin: 0 0 10px; }
+
+  .mb-section-title--attention { color: var(--amber); border-bottom-color: var(--amber-border); }
+  .mb-count--attention { background: var(--amber); }
+  .mb-reason { color: var(--text-secondary); font-style: italic; }
 
   .mb-link {
     background: none; border: none; padding: 0; font: inherit;

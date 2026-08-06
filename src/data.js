@@ -19,7 +19,14 @@
     submittedByUserId: string | null  (auth user id — the durable identity behind
                                         submittedBy, and what "My Book" filters on.
                                         Null on records created before this existed.)
-    status           : "Submitted" | "In Review" | "Approved" | "Pending Approval" | "Refunded" | "Void" | "Quote"
+    status           : "Submitted" | "In Review" | "Approved" | "Pending Approval"
+                       | "Rejected" | "Refunded" | "Void" | "Quote"
+                       ("Submitted" is a draft saved to the author's profile;
+                        "Rejected" is kicked back for correction. Those two are
+                        the only states in which the author may edit or delete
+                        their own record — enforced by RLS, not just the UI.)
+    rejectionReason  : string         (why an approver sent it back; shown to the author)
+    rejectedAt       : string | null  (ISO 8601, set alongside rejectionReason)
     amount           : number         (negative for refunds)
     chargeType       : string         (e.g. "Equipment Rental", "Catering", etc.)
     w9Attached       : boolean
@@ -550,8 +557,22 @@ export function approvePurchase(id) {
   return updatePurchase(id, { status: 'Approved' });
 }
 
-export function sendBackPurchase(id) {
-  return updatePurchase(id, { status: 'In Review' });
+/**
+ * Send a submission back to its author for correction.
+ *
+ * This used to set 'In Review', which is indistinguishable from a submission
+ * nobody has looked at yet — the author had no way to tell "still queued"
+ * from "kicked back, needs work", and the review queue showed both the same.
+ * 'Rejected' is also the state that unlocks the record for its author again
+ * (see the purchases RLS policies): without a distinct status there is no way
+ * back out of a lock.
+ */
+export function sendBackPurchase(id, reason = '') {
+  return updatePurchase(id, {
+    status: 'Rejected',
+    rejectionReason: String(reason || '').trim(),
+    rejectedAt: new Date().toISOString(),
+  });
 }
 
 /* ── LocalStorage Persistence ── */

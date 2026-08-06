@@ -4,8 +4,23 @@
            calcSummary, getPurchaseById, togglePaid, updatePurchase } from '../../data.js';
   import { getBudgetLineMap } from '../../budget.js';
   import { generateAndDownloadPOSummary } from '../lib/poSummary.js';
-  import { downloadDraftReceipt } from '../lib/db.js';
+  import { downloadDraftReceipt, getMyProjectRole } from '../lib/db.js';
+  import { getActiveProjectId } from '../stores/project.js';
+  import { authUser } from '../stores/auth.js';
+  import { canEditPurchase, canApprovePurchase, explainEditBlock, isReviewer } from '../lib/permissions.js';
   import { PDFDocument } from 'pdf-lib';
+
+  /* ── Who am I on this project? ──
+     Loaded after auth settles, not on mount: a role query issued before the
+     Supabase session restores comes back empty, which is indistinguishable
+     from "no role" and would silently hide every action. */
+  let myUserId = null;
+  let myRole   = null;
+  const _unsubRole = authUser.subscribe(async (u) => {
+    myUserId = u?.id ?? null;
+    myRole = u ? await getMyProjectRole(getActiveProjectId()) : null;
+    refreshView?.();
+  });
 
   /* ── Receipt resolution — shared by the Review Queue's edit form and the
      read-only detail popup. purchase.receiptUrl is one of:
@@ -79,11 +94,26 @@
     const isPaid=!!p.paid,cls=isPaid?'paid-toggle--paid':'paid-toggle--unpaid',label=isPaid?'Paid':'Unpaid';
     return `<button class="paid-toggle ${cls}" data-action="toggle-paid" data-id="${p.id}" title="${label}">${label}</button>`;
   }
+  // Actions are shown only when the server would actually allow them. Offering
+  // a button that fails on click is worse than not offering it: the user has
+  // no way to tell a permission boundary from a bug. Where the reason matters
+  // to the person looking (their own locked submission), it is stated instead.
   function actionButtons(p) {
-    const isVoid=p.status==='Void',btns=[];
-    if(!isVoid&&['In Review','Submitted','Pending Approval'].includes(p.status)) btns.push(`<button class="btn btn--warning btn--sm" data-action="return" data-id="${p.id}" title="Return">↩</button>`);
-    if(!isVoid) btns.push(`<button class="btn btn--ghost btn--sm" data-action="void" data-id="${p.id}" title="Void">⊘</button>`);
-    if(!isVoid) btns.push(`<button class="btn btn--danger btn--sm" data-action="delete" data-id="${p.id}" title="Delete">✕</button>`);
+    const isVoid = p.status === 'Void', btns = [];
+    const mayEdit    = canEditPurchase(p, myUserId, myRole);
+    const mayApprove = canApprovePurchase(p, myUserId, myRole);
+
+    if (!isVoid && mayApprove && ['In Review','Submitted','Pending Approval'].includes(p.status))
+      btns.push(`<button class="btn btn--warning btn--sm" data-action="return" data-id="${p.id}" title="Send back for correction">↩</button>`);
+    if (!isVoid && mayApprove)
+      btns.push(`<button class="btn btn--ghost btn--sm" data-action="void" data-id="${p.id}" title="Void">⊘</button>`);
+    if (!isVoid && mayEdit)
+      btns.push(`<button class="btn btn--danger btn--sm" data-action="delete" data-id="${p.id}" title="Delete">✕</button>`);
+
+    if (!btns.length && !isVoid) {
+      const why = explainEditBlock(p, myUserId, myRole);
+      if (why) return `<span class="locked-note" title="${esc(why)}">🔒</span>`;
+    }
     return btns.join('');
   }
   function rowHTML(p) {
@@ -97,7 +127,9 @@
     const map={'In Review':'row--review','Submitted':'row--review','Pending Approval':'row--pending'};
     let ac='';if(p.status==='Pending Approval')ac='amount--pending';
     const ad=p.amount!=null?fmt(Number(p.amount)||0):'—';
-    return `<tr data-id="${p.id}" class="${map[p.status]??''}"><td><span class="folder-num">${esc(p.folder??'—')}</span></td><td>${esc(p.date??'—')}</td><td class="vendor-cell"><span class="vendor-name">${esc(p.vendor??'—')}</span>${vendorTooltip(p)}</td><td>${methodBadge(p)}</td><td>${esc(p.description??'—')}</td><td>${padLineItem(p.lineItem??'—')}</td><td>${esc(p.submittedBy??'—')}</td><td>${statusBadge(p.status)}</td><td class="amount-cell"><span class="${ac}">${ad}</span></td><td class="paid-cell">${paidToggle(p)}</td><td class="actions-cell"><button class="btn btn--primary btn--sm" data-action="review" data-id="${p.id}">Review</button><button class="btn btn--success btn--sm" data-action="approve" data-id="${p.id}">✔</button><button class="btn btn--warning btn--sm" data-action="return" data-id="${p.id}">↩</button><button class="btn btn--danger btn--sm" data-action="delete" data-id="${p.id}">✕</button></td></tr>`;
+    return `<tr data-id="${p.id}" class="${map[p.status]??''}"><td><span class="folder-num">${esc(p.folder??'—')}</span></td><td>${esc(p.date??'—')}</td><td class="vendor-cell"><span class="vendor-name">${esc(p.vendor??'—')}</span>${vendorTooltip(p)}</td><td>${methodBadge(p)}</td><td>${esc(p.description??'—')}</td><td>${padLineItem(p.lineItem??'—')}</td><td>${esc(p.submittedBy??'—')}</td><td>${statusBadge(p.status)}</td><td class="amount-cell"><span class="${ac}">${ad}</span></td><td class="paid-cell">${paidToggle(p)}</td><td class="actions-cell">${isReviewer(myRole)
+      ? `<button class="btn btn--primary btn--sm" data-action="review" data-id="${p.id}">Review</button><button class="btn btn--success btn--sm" data-action="approve" data-id="${p.id}">✔</button><button class="btn btn--warning btn--sm" data-action="return" data-id="${p.id}">↩</button><button class="btn btn--danger btn--sm" data-action="delete" data-id="${p.id}">✕</button>`
+      : `<span class="locked-note" title="Only an approver can act on the review queue">🔒</span>`}</td></tr>`;
   }
 
   /* ── Filter + Sort ── */
@@ -226,7 +258,13 @@
     if(action==='delete'){if(confirm('Delete this record permanently?')){deletePurchase(id);refreshView();if(fromQueue)renderQueueRows();}}
     else if(action==='void'){const p=getPurchaseById(id),msg=p&&p.status==='Approved'?`VOID submission "${p.folder} — ${p.vendor}"?\n\nThis will remove all data from the budget and logs. The folder will be renamed with VOID. This action CANNOT be undone.`:p?`VOID submission "${p.folder??''} — ${p.vendor??''}"?\n\nThe folder will be renamed with VOID. This action CANNOT be undone.`:'VOID?';if(confirm(msg)){voidPurchase(id);refreshView();if(fromQueue)renderQueueRows();window.dispatchEvent(new Event('ledger-data-changed'));}}
     else if(action==='approve'){if(confirm('Approve this record?')){approvePurchase(id);refreshView();if(fromQueue)renderQueueRows();maybeGeneratePOSummary(id);}}
-    else if(action==='return'){if(confirm('Send this record back for correction?')){sendBackPurchase(id);refreshView();if(fromQueue)renderQueueRows();}}
+    else if(action==='return'){
+      // Ask why. A record that comes back with no explanation leaves the
+      // author guessing at what to change, which is how a submission ends up
+      // bouncing several times over one missing field.
+      const reason=prompt('Send back for correction.\n\nWhat needs to change? (shown to the submitter)');
+      if(reason!==null){sendBackPurchase(id,reason);refreshView();if(fromQueue)renderQueueRows();}
+    }
     else if(action==='toggle-paid'){togglePaid(id);refreshView();if(fromQueue)renderQueueRows();maybeGeneratePOSummary(id);}
     else if(action==='detail'){openDetailPopup(id);}
   }
@@ -354,7 +392,8 @@
     });
     // Return
     host.querySelector('#btn-edit-return').addEventListener('click',()=>{
-      if(confirm('Send back for correction?')){_commitEdits(form,host,record.id);updatePurchase(record.id,{status:'In Review'});isDirty=false;onClose?.('returned');}
+      const reason=prompt('Send back for correction.\n\nWhat needs to change? (shown to the submitter)');
+      if(reason!==null){_commitEdits(form,host,record.id);updatePurchase(record.id,{status:'Rejected',rejectionReason:String(reason||'').trim(),rejectedAt:new Date().toISOString()});isDirty=false;onClose?.('returned');}
     });
     // Cancel
     host.querySelector('#btn-edit-cancel').addEventListener('click',()=>host._requestClose());

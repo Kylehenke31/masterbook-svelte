@@ -1037,6 +1037,15 @@ a:hover {
 .scan-actions { display: flex; gap: 8px; justify-content: center; }
 .scan-actions.hidden { display: none; }
 
+/* Shown where action buttons would be, when the viewer may not act on a row.
+   The title attribute carries the reason. */
+.locked-note {
+  font-size: 0.85em;
+  opacity: 0.45;
+  cursor: help;
+  user-select: none;
+}
+
 /* Conditional fields (hidden by default) */
 .field--conditional {
   display: none;
