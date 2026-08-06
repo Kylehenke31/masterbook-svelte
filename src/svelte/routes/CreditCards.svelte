@@ -1,9 +1,9 @@
 <script>
-  import { getPurchases, updatePurchase, assignCCLogNumber } from '../../data.js';
+  import { getPurchases, updatePurchase } from '../../data.js';
   import { generateAndDownloadCCLog } from '../lib/ccLogSummary.js';
   import { fileCCLogReceipts, isDropboxConnected } from '../lib/dropbox.js';
   import { onDestroy } from 'svelte';
-  import { loadProjectMembers } from '../lib/db.js';
+  import { loadProjectMembers, listCCLogs, getOrOpenCCLog, packageCCLog, reopenCCLog } from '../lib/db.js';
   import { getActiveProjectId } from '../stores/project.js';
   import { authUser } from '../stores/auth.js';
   import { padReceiptNum } from '../lib/format.js';
@@ -135,22 +135,54 @@
   }
 
   // ── Log view ───────────────────────────────────────────────
-  function openLog(card) {
+  //
+  // A card has exactly one open log at a time. Qualifying charges accumulate
+  // into it until it is packaged, which locks it — freezing its charges — and
+  // opens the next, numbered sequentially. A charge belongs to one log, for
+  // good; past logs are reprintable but never re-packaged.
+  let logs        = $state([]);   // every log for this card, oldest first
+  let openLogRow  = $state(null); // the one currently accepting charges
+  let logsError   = $state('');
+
+  async function openLog(card) {
     selectedCard = card;
     dateFrom = '';
     dateTo   = '';
+    logsError = '';
     refreshLogRows();
     view = 'log';
+    await loadLogs();
   }
 
-  function closeLog() { view = 'list'; selectedCard = null; logRows = []; }
+  async function loadLogs() {
+    if (!selectedCard) return;
+    const projectId = getActiveProjectId();
+    try {
+      logs = await listCCLogs(projectId, cardKey(selectedCard));
+      openLogRow = logs.find(l => l.status === 'open') ?? null;
+      // Don't create a log just because someone looked at the page — an empty
+      // log per card per visit would burn numbers that end up printed on
+      // nothing. It is opened when the first charge is packaged into it.
+    } catch (e) {
+      logsError = e.message;
+    }
+  }
 
+  function closeLog() { view = 'list'; selectedCard = null; logRows = []; logs = []; openLogRow = null; }
+
+  /** Charges that qualify for a log and have not been packaged into one yet. */
   function refreshLogRows() {
     if (!selectedCard) return;
     logRows = getPurchases().filter(p =>
       p.method === 'CC' && p.status === 'Approved' && p.paid === true &&
-      p.ccCardType === selectedCard.cardType && p.ccLast4 === selectedCard.last4
+      p.ccCardType === selectedCard.cardType && p.ccLast4 === selectedCard.last4 &&
+      !p.ccLogId
     );
+  }
+
+  /** Charges already packaged into a given log. */
+  function chargesInLog(logId) {
+    return getPurchases().filter(p => p.ccLogId === logId);
   }
 
   let subtotal = $derived(logRows.reduce((s, p) => s + (Number(p.amount) || 0), 0));
@@ -160,40 +192,82 @@
     refreshLogRows();
   }
 
-  async function generateLog(mode) {
+  /**
+   * Package the open log: stamp every pending charge with it, lock it, print
+   * it, file its receipts, and leave the next log to be opened by the next
+   * packaging run.
+   *
+   * Order matters. Charges are stamped *before* the log is locked, because
+   * locking freezes them — stamp afterwards and the writes are refused by the
+   * very rule packaging just switched on.
+   */
+  async function packageLog() {
     if (!selectedCard || generating) return;
-    let included = logRows;
-    if (mode === 'period') {
-      if (!dateFrom || !dateTo) { alert('Pick a date range first.'); return; }
-      included = logRows.filter(p => p.date >= dateFrom && p.date <= dateTo);
-      if (!included.length) { alert('No charges in that date range.'); return; }
-    } else if (!included.length) {
-      alert('No Approved + Paid charges on this card yet.');
+    const included = logRows;
+    if (!included.length) {
+      alert('Nothing to package — no approved and paid charges are waiting on this card.');
       return;
     }
-    generating = true;
-    try {
-      const logNumber = assignCCLogNumber(cardKey(selectedCard));
-      included.forEach(p => {
-        updatePurchase(p.id, { ccLogNumbers: [...(p.ccLogNumbers || []), logNumber] });
-      });
-      refreshLogRows();
-      await generateAndDownloadCCLog(selectedCard, logNumber, included);
+    if (!confirm(
+      `Package ${included.length} charge${included.length === 1 ? '' : 's'} into a log?\n\n` +
+      `This locks them: once packaged they cannot be edited or voided without an admin reopening the log.`
+    )) return;
 
-      // File each included charge's receipt into this card's Dropbox folder.
+    generating = true;
+    logsError = '';
+    try {
+      const projectId = getActiveProjectId();
+      const log = await getOrOpenCCLog(projectId, cardKey(selectedCard));
+
+      for (const p of included) {
+        updatePurchase(p.id, { ccLogId: log.id, ccLogNumber: log.log_number,
+                               ccLogNumbers: [...(p.ccLogNumbers || []), log.log_number] });
+      }
+      await packageCCLog(log.id);
+
+      refreshLogRows();
+      await loadLogs();
+      await generateAndDownloadCCLog(selectedCard, log.log_number, included);
+
       const withReceipts = included.filter(p => p.receiptUrl);
       if (withReceipts.length) {
         if (await isDropboxConnected()) {
-          const result = await fileCCLogReceipts(selectedCard, logNumber, withReceipts);
+          const result = await fileCCLogReceipts(selectedCard, log.log_number, withReceipts);
           if (result.failedCount) {
-            alert(`Log ${logNumber} generated. ${result.filedCount}/${withReceipts.length} receipts filed to Dropbox — ${result.failedCount} failed (see console for details).`);
+            alert(`Log ${log.log_number} packaged. ${result.filedCount}/${withReceipts.length} receipts filed to Dropbox — ${result.failedCount} failed (see console).`);
           }
         } else {
-          alert(`Log ${logNumber} generated, but Dropbox isn't connected — receipts weren't filed. Connect it from Project Settings, then use "Recreate Project Folders" if needed.`);
+          alert(`Log ${log.log_number} packaged, but Dropbox isn't connected — receipts weren't filed. Connect it from Project Settings.`);
         }
       }
+    } catch (e) {
+      logsError = e.message;
     } finally {
       generating = false;
+    }
+  }
+
+  /** Reprint a past log. Reprinting never re-packages or renumbers anything. */
+  async function reprintLog(log) {
+    const charges = chargesInLog(log.id);
+    if (!charges.length) { alert(`Log ${log.log_number} has no charges on it.`); return; }
+    await generateAndDownloadCCLog(selectedCard, log.log_number, charges);
+  }
+
+  /** Admin-only: unfreeze a packaged log's charges to correct a mistake. */
+  async function reopenLog(log) {
+    if (!confirm(
+      `Reopen log ${log.log_number}?\n\n` +
+      `Its charges become editable again. The log has already been printed and its ` +
+      `receipts filed, so anything you change now will disagree with that copy until it is reprinted.`
+    )) return;
+    logsError = '';
+    try {
+      await reopenCCLog(log.id);
+      await loadLogs();
+      refreshLogRows();
+    } catch (e) {
+      logsError = e.message;
     }
   }
 </script>
@@ -315,21 +389,57 @@
     <div class="cc-header">
       <div>
         <h2 class="cc-title">Credit Card Log — {selectedCard.cardholderName} · {selectedCard.cardType} {selectedCard.last4}</h2>
-        <p class="cc-subtitle">{logRows.length} Approved + Paid charge{logRows.length !== 1 ? 's' : ''} on this card</p>
+        <p class="cc-subtitle">
+          {#if openLogRow}
+            Log {openLogRow.log_number} is open · {logRows.length} charge{logRows.length !== 1 ? 's' : ''} waiting
+          {:else}
+            {logRows.length} charge{logRows.length !== 1 ? 's' : ''} waiting to be packaged
+          {/if}
+        </p>
       </div>
       <button class="btn btn--ghost btn--sm" onclick={closeLog}>← Back</button>
     </div>
 
+    {#if logsError}
+      <div class="cc-log-error">{logsError}</div>
+    {/if}
+
     <div class="cc-log-toolbar">
-      <label class="cc-log-date">From <input type="date" bind:value={dateFrom} /></label>
-      <label class="cc-log-date">To <input type="date" bind:value={dateTo} /></label>
-      <button class="btn btn--primary btn--sm" disabled={generating} onclick={() => generateLog('period')}>Generate Period Log</button>
-      <button class="btn btn--ghost btn--sm" disabled={generating} onclick={() => generateLog('full')}>Generate Full Log</button>
+      <button class="btn btn--primary btn--sm" disabled={generating || logRows.length === 0}
+        onclick={packageLog}>
+        {generating ? 'Packaging…' : `Package Log${openLogRow ? ' ' + openLogRow.log_number : ''}`}
+      </button>
+      <span class="cc-log-hint">
+        Packages every charge below, locks them, and opens the next log.
+      </span>
     </div>
+
+    <!-- Packaged logs. A locked log is a closed accounting period: reprintable,
+         but its charges cannot change without an admin reopening it. -->
+    {#if logs.length}
+      <div class="cc-log-history">
+        <h3 class="cc-log-history-title">Logs</h3>
+        {#each logs as l (l.id)}
+          {@const count = chargesInLog(l.id).length}
+          <div class="cc-log-row">
+            <span class="cc-log-num">{l.log_number}</span>
+            <span class="cc-log-status cc-log-status--{l.status}">
+              {l.status === 'locked' ? '🔒 Packaged' : 'Open'}
+            </span>
+            <span class="cc-log-count">{count} charge{count === 1 ? '' : 's'}</span>
+            {#if l.status === 'locked'}
+              <button class="btn btn--ghost btn--xs" onclick={() => reprintLog(l)}>Reprint</button>
+              <button class="btn btn--ghost btn--xs" onclick={() => reopenLog(l)}
+                title="Admins only — unfreezes this log's charges">Reopen</button>
+            {/if}
+          </div>
+        {/each}
+      </div>
+    {/if}
 
     {#if logRows.length === 0}
       <div class="cc-empty">
-        <p>No Approved + Paid charges on this card yet.</p>
+        <p>Nothing waiting. Charges appear here once they are Approved and marked Paid.</p>
       </div>
     {:else}
       <div class="cc-table-wrap">
@@ -459,6 +569,29 @@
   .cc-input:focus   { outline: none; border-color: var(--gold, #6a8a6a); }
   .cc-input--error  { border-color: var(--earth-red, #b84f4f); }
   .cc-field-error   { font-size: 0.75rem; color: var(--earth-red, #b84f4f); }
+
+  .cc-log-error {
+    padding: 8px 11px; margin-bottom: 12px; font-size: 0.8rem;
+    color: var(--red); background: rgba(224,82,82,0.10); border: 1px solid var(--red);
+  }
+  .cc-log-hint { font-size: 0.75rem; color: var(--text-muted); }
+
+  .cc-log-history { margin: 16px 0 22px; }
+  .cc-log-history-title {
+    font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.06em; color: var(--text-muted);
+    padding-bottom: 6px; margin: 0 0 8px; border-bottom: 1px solid var(--border-subtle);
+  }
+  .cc-log-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 7px 2px; font-size: 0.82rem;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  .cc-log-num { font-weight: 700; font-variant-numeric: tabular-nums; min-width: 3ch; }
+  .cc-log-status { font-size: 0.72rem; }
+  .cc-log-status--locked { color: var(--text-muted); }
+  .cc-log-status--open   { color: var(--gold); font-weight: 700; }
+  .cc-log-count { color: var(--text-secondary); font-size: 0.76rem; margin-right: auto; }
   .cc-field-hint    { font-size: 0.75rem; color: var(--text-muted); }
 
   .cc-form-actions {

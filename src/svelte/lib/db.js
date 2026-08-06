@@ -192,6 +192,80 @@ export async function getMyProjectRole(projectId) {
   return data?.role ?? null;
 }
 
+/* ── Credit Card Logs ────────────────────────────────────────────
+ *
+ * Each card has exactly one open log at a time. Charges accumulate into it;
+ * packaging locks it and opens the next. A locked log freezes the charges on
+ * it — enforced by RLS (see migration 20260806030000), not here.
+ */
+
+/** Every log for a card, oldest first. */
+export async function listCCLogs(projectId, cardKey) {
+  if (!projectId || !cardKey) return [];
+  const { data, error } = await supabase
+    .from('cc_logs')
+    .select('*')
+    .eq('project_id', projectId)
+    .eq('card_key', cardKey)
+    .order('log_number');
+  if (error) { console.warn('[db] listCCLogs error:', error.message); return []; }
+  return data ?? [];
+}
+
+/**
+ * The card's open log, opening one if there isn't a current one.
+ *
+ * Numbering continues from the highest log this card has ever had, rather than
+ * counting existing rows — a deleted or reopened log must not cause a number
+ * to be reused, since the number is printed on filed receipts.
+ */
+export async function getOrOpenCCLog(projectId, cardKey) {
+  if (!projectId || !cardKey) throw new Error('Project and card are required');
+  const logs = await listCCLogs(projectId, cardKey);
+  const open = logs.find(l => l.status === 'open');
+  if (open) return open;
+
+  const highest = logs.reduce((m, l) => Math.max(m, parseInt(l.log_number, 10) || 0), 0);
+  const next = String(highest + 1).padStart(3, '0');
+  const { data, error } = await supabase
+    .from('cc_logs')
+    .insert({ project_id: projectId, card_key: cardKey, log_number: next })
+    .select()
+    .maybeSingle();
+  // A unique index enforces one open log per card, so a race here surfaces as
+  // a conflict rather than a forked sequence. Re-read and take the winner.
+  if (error) {
+    const retry = await listCCLogs(projectId, cardKey);
+    const found = retry.find(l => l.status === 'open');
+    if (found) return found;
+    throw new Error(`Could not open a log: ${error.message}`);
+  }
+  return data;
+}
+
+/** Lock a log. Its charges become frozen from this point. */
+export async function packageCCLog(logId) {
+  const user = await getUser();
+  const { error } = await supabase
+    .from('cc_logs')
+    .update({ status: 'locked', locked_at: new Date().toISOString(), locked_by: user?.id ?? null })
+    .eq('id', logId);
+  if (error) throw new Error(`Could not package the log: ${error.message}`);
+}
+
+/** Reopen a locked log, thawing its charges. Admin only, enforced by RLS. */
+export async function reopenCCLog(logId) {
+  const user = await getUser();
+  const { data, error } = await supabase
+    .from('cc_logs')
+    .update({ status: 'open', reopened_at: new Date().toISOString(), reopened_by: user?.id ?? null })
+    .eq('id', logId)
+    .select();
+  if (error) throw new Error(`Could not reopen the log: ${error.message}`);
+  // RLS returns zero rows rather than an error when the caller is not an admin.
+  if (!data?.length) throw new Error('Only an admin can reopen a packaged log.');
+}
+
 /* ── Dropbox connection (per-user, not per-project) ─────────────── */
 
 export async function saveDropboxToken(refreshToken) {

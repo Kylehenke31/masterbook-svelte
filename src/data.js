@@ -53,9 +53,15 @@
     ccCardType       : string         ("VISA" | "AMEX" | "Mastercard", denormalized)
     ccEnvelopeNum    : string         (manually assigned when preparing a CC Log)
     ccReceiptNum     : string         (manually assigned when preparing a CC Log)
-    ccLogNumbers     : Array<string>  (every CC Log number this charge has appeared on —
-                                        append-only; a charge can legitimately appear on
-                                        both a period log and a later full-history log)
+    ccLogId          : string | null  (the cc_logs row this charge was packaged into.
+                                        A charge belongs to exactly one log, for good.
+                                        While the log is locked this charge is frozen —
+                                        enforced by RLS via is_cc_log_locked().)
+    ccLogNumber      : string | null  (that log's number, denormalized for display and
+                                        for the Dropbox receipt filename)
+    ccLogNumbers     : Array<string>  (legacy: logs this charge appeared on back when a
+                                        charge could be swept into several. Still read
+                                        for old records; new ones get ccLogId instead.)
 
     -- Vendor contact (denormalized copy at submission time; vendor records have no stable id) --
     vendorPhone          : string
