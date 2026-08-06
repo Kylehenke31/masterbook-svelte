@@ -213,9 +213,9 @@
                 <div class="pm-grant-row">
                   <span class="pm-grant-label">{f.label}</span>
                   <div class="pm-levels">
-                    {#each [['', 'None'], ['read', 'Read-only'], ['edit', 'Edit']] as [val, lbl] (val)}
+                    {#each [['', 'None', 'none'], ['read', 'Read-only', 'read'], ['edit', 'Edit', 'edit']] as [val, lbl, tone] (val)}
                       <button
-                        class="pm-level"
+                        class="pm-level pm-level--{tone}"
                         class:pm-level--on={(draftPerms[f.key] ?? '') === val}
                         onclick={() => setLevel(f.key, val)}>{lbl}</button>
                     {/each}
@@ -337,13 +337,32 @@
   .pm-grant-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 3px 0; }
   .pm-grant-label { font-size: 0.8rem; color: var(--text-primary); }
   .pm-levels { display: flex; gap: 2px; }
+  /* Access levels read as a traffic light — no access, look but don't touch,
+     full control. Muted earth tones rather than signal colours: this grid is
+     twenty rows of three chips, and saturated red/amber/green at that density
+     reads as an alarm going off rather than a set of choices. Unselected chips
+     carry only a hint of their colour so the row scans at a glance; the
+     selected one fills in. */
   .pm-level {
+    --tone: var(--text-muted);
     padding: 2px 7px; font-size: 0.68rem; font-family: inherit; cursor: pointer;
-    color: var(--text-muted); background: var(--bg-base);
+    color: var(--tone); background: var(--bg-base);
     border: 1px solid var(--border); border-radius: 0;
+    transition: background var(--transition), border-color var(--transition), color var(--transition);
   }
-  .pm-level:hover { color: var(--text-primary); }
-  .pm-level--on { background: var(--gold); border-color: var(--gold); color: var(--bg-base); font-weight: 700; }
+
+  .pm-level--none { --tone: #9c6058; }  /* muted brick */
+  .pm-level--read { --tone: #a8894f; }  /* muted ochre */
+  .pm-level--edit { --tone: #6f8a5c; }  /* muted sage  */
+
+  .pm-level:hover { border-color: var(--tone); }
+
+  .pm-level--on {
+    background: var(--tone);
+    border-color: var(--tone);
+    color: #14140f;
+    font-weight: 700;
+  }
 
   .pm-editor-actions { display: flex; align-items: center; gap: 8px; margin-top: 16px;
     padding-top: 12px; border-top: 1px solid var(--border-subtle); }
