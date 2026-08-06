@@ -202,6 +202,24 @@ function snapshotTable(table) {
   return blob;
 }
 
+/**
+ * Report a sync failure loudly enough to be noticed.
+ *
+ * Every failure path here used to end at console.warn and nothing else. That
+ * is how the credit_cards and petty_cash tables could simply not exist for
+ * months: the app was told "relation does not exist" on every save and every
+ * load, shrugged each time, and kept presenting localStorage as though it were
+ * synced. Silence about a persistence failure is the worst possible default
+ * for an accounting tool — the user believes their data is safe precisely
+ * because nothing said otherwise.
+ */
+function reportSyncFailure(table, operation, message) {
+  console.warn(`[sections] ${operation}(${table}) failed:`, message);
+  window.dispatchEvent(new CustomEvent('masterbook-sync-error', {
+    detail: { table, operation, message, at: new Date().toISOString() },
+  }));
+}
+
 /** Every localStorage key this table is responsible for. */
 function knownKeysForTable(table) {
   const keys = new Set();
@@ -286,7 +304,7 @@ export async function saveSectionToCloud(sectionName, projectId) {
     // the divergence guard compares against on the next load.
     setSyncedFingerprint(projectId, table, snapshotTable(table));
   } catch (e) {
-    console.warn(`[sections] saveSectionToCloud(${sectionName}) failed:`, e.message);
+    reportSyncFailure(table, 'saveSectionToCloud', e.message);
   }
 }
 
@@ -313,7 +331,7 @@ export async function loadSectionFromCloud(sectionName, projectId) {
     setSyncedFingerprint(projectId, table, snapshotTable(table), conflicts);
     return restore.length > 0;
   } catch (e) {
-    console.warn(`[sections] loadSectionFromCloud(${sectionName}) failed:`, e.message);
+    reportSyncFailure(table, 'loadSectionFromCloud', e.message);
     return false;
   }
 }
@@ -355,7 +373,7 @@ export async function syncAllSectionsFromCloud(projectId) {
       }
       setSyncedFingerprint(projectId, table, snapshotTable(table), conflicts);
     } catch (e) {
-      console.warn(`[sections] syncAllSectionsFromCloud(${table}) failed:`, e.message);
+      reportSyncFailure(table, 'syncAllSectionsFromCloud', e.message);
     }
   }));
 }
@@ -379,7 +397,7 @@ export async function pushAllSectionsToCloud(projectId) {
         await saveSection(table, projectId, blob);
         setSyncedFingerprint(projectId, table, blob);
       }
-      catch (e) { console.warn(`[sections] pushAllSectionsToCloud(${table}) failed:`, e.message); }
+      catch (e) { reportSyncFailure(table, 'pushAllSectionsToCloud', e.message); }
     })
   );
 }

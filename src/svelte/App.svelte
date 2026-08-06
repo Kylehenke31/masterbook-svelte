@@ -149,6 +149,19 @@
   let _project = $state(null);
   projectStore.subscribe(p => { _project = p; });
 
+  /* ── Sync problems ── */
+  // Deduplicated by table+kind: a section failing on every retry should read
+  // as one ongoing problem, not a growing pile of identical warnings.
+  let syncProblems = $state([]);
+  let syncProblemDetail = $derived(
+    syncProblems.map(p => `${p.table}: ${p.message}`).join('\n') || '');
+
+  function noteSyncProblem(detail) {
+    const id = `${detail.table}:${detail.kind}`;
+    if (syncProblems.some(p => p.id === id)) return;
+    syncProblems = [...syncProblems, { id, ...detail }];
+  }
+
   /* ── Profile name ── */
   let profileName       = $state('');
   let profileNameSaving = $state(false);
@@ -320,12 +333,25 @@
       .then(connected => { if (connected) window.location.hash = '#settings'; })
       .catch(err => console.error('[Dropbox] connect failed:', err));
 
+    const onSyncError = e => noteSyncProblem({
+      table: e.detail.table, kind: 'error',
+      message: `${e.detail.operation} failed — ${e.detail.message}`,
+    });
+    const onSyncConflict = e => noteSyncProblem({
+      table: e.detail.table, kind: 'conflict',
+      message: `${e.detail.keys.join(', ')} changed here and elsewhere; your copy was kept`,
+    });
+
     window.addEventListener('hashchange', resolveRoute);
     window.addEventListener('masterbook-section-changed', handleSectionChanged);
+    window.addEventListener('masterbook-sync-error', onSyncError);
+    window.addEventListener('masterbook-sync-conflict', onSyncConflict);
     resolveRoute();
     return () => {
       window.removeEventListener('hashchange', resolveRoute);
       window.removeEventListener('masterbook-section-changed', handleSectionChanged);
+      window.removeEventListener('masterbook-sync-error', onSyncError);
+      window.removeEventListener('masterbook-sync-conflict', onSyncConflict);
     };
   });
 </script>
@@ -471,6 +497,16 @@
         </svg>
         Syncing…
       </span>
+    {/if}
+
+    <!-- A section that failed to reach the cloud, or one whose local and cloud
+         copies disagree, must say so. Failing quietly is what let the credit
+         card and petty cash tables stay missing for months while the app went
+         on presenting localStorage as if it were saved. -->
+    {#if syncProblems.length}
+      <button class="sync-problem" title={syncProblemDetail} onclick={() => syncProblems = []}>
+        ⚠ {syncProblems.length} sync {syncProblems.length === 1 ? 'issue' : 'issues'} — not saved to cloud
+      </button>
     {/if}
 
     <div class="sidebar-bottom-row">
@@ -1026,6 +1062,24 @@
     color: var(--gold, #c9a84c);
     white-space: nowrap;
   }
+
+  .sync-problem {
+    display: block;
+    width: 100%;
+    text-align: left;
+    margin-bottom: 6px;
+    padding: 6px 8px;
+    font-size: 0.65rem;
+    font-family: inherit;
+    line-height: 1.35;
+    color: var(--red, #e05252);
+    background: rgba(224, 82, 82, 0.10);
+    border: 1px solid var(--red, #e05252);
+    border-radius: 0;
+    cursor: pointer;
+  }
+
+  .sync-problem:hover { background: rgba(224, 82, 82, 0.18); }
 
   @keyframes spin {
     to { transform: rotate(360deg); }
