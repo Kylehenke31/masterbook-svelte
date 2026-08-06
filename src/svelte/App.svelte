@@ -140,6 +140,8 @@
 
   /* ── Routing ── */
   let route = $state(null);
+  // Where to send the user back to when they finish (or abandon) a submission.
+  let submitReturnRoute = 'log';
   currentRoute.subscribe(r => {
     route = r;
     showDropdown = false; // close dropdown on every navigation
@@ -315,6 +317,12 @@
       currentRoute.set(hasProject ? 'log' : 'home');
       return;
     }
+
+    // Remember where the user opened the submission form from, so finishing it
+    // returns them there rather than dumping everyone on the expense log. The
+    // form is reachable from My Book, the Purchase Log and the PO log, and
+    // being returned somewhere you did not come from reads as "did that work?"
+    if (hash === 'submit' && route && route !== 'submit') submitReturnRoute = route;
 
     currentRoute.set(hash);
   }
@@ -605,7 +613,7 @@
     {:else if route === 'petty-cash'}
       <PettyCash />
     {:else if route === 'submit'}
-      <SubmissionForm onDone={() => { window.location.hash = '#log'; }} />
+      <SubmissionForm onDone={() => { window.location.hash = '#' + (submitReturnRoute || 'log'); }} />
     {:else if route === 'call-sheet'}
       <CallSheet />
     {:else if route === 'home' || !route}

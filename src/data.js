@@ -454,11 +454,23 @@ export function addPurchase(record) {
   DB.purchases.unshift(purchase);
   _mutationVersion++;
   persist();
-  // Cloud sync — fire and forget
+  // Cloud sync — fire and forget, but not silent. A purchase that saves
+  // locally and never reaches Supabase looks completely successful to the
+  // person who filed it, and only surfaces when an approver cannot find it.
   getCloudHelpers().then(h => {
     if (!h) return;
     const pid = h.getActiveProjectId();
-    if (pid) h.cloudSavePurchase(pid, purchase).catch(() => {});
+    if (!pid) return;
+    h.cloudSavePurchase(pid, purchase).catch(e => {
+      console.error('[data] cloudSavePurchase failed:', e);
+      window.dispatchEvent(new CustomEvent('masterbook-sync-error', {
+        detail: {
+          table: 'purchases', operation: 'cloudSavePurchase',
+          message: `folder ${purchase.folder || purchase.id} saved on this device only — ${e?.message || 'unknown error'}`,
+          at: new Date().toISOString(),
+        },
+      }));
+    });
   });
   return purchase;
 }
@@ -487,11 +499,22 @@ export function updatePurchase(id, changes) {
   DB.purchases[idx] = merged;
   _mutationVersion++;
   persist();
-  // Cloud sync — fire and forget
+  // Cloud sync — fire and forget, but surfaced on failure for the same reason
+  // as addPurchase: an edit that only lands locally looks entirely successful.
   getCloudHelpers().then(h => {
     if (!h) return;
     const pid = h.getActiveProjectId();
-    if (pid) h.cloudSavePurchase(pid, merged).catch(() => {});
+    if (!pid) return;
+    h.cloudSavePurchase(pid, merged).catch(e => {
+      console.error('[data] cloudSavePurchase (update) failed:', e);
+      window.dispatchEvent(new CustomEvent('masterbook-sync-error', {
+        detail: {
+          table: 'purchases', operation: 'updatePurchase',
+          message: `folder ${merged.folder || merged.id} updated on this device only — ${e?.message || 'unknown error'}`,
+          at: new Date().toISOString(),
+        },
+      }));
+    });
   });
   return DB.purchases[idx];
 }

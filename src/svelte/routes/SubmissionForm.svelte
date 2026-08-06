@@ -1316,7 +1316,7 @@ Rules:
       }
     }
 
-    addPurchase(data);
+    const created = addPurchase(data);
     form.reset();
     c.querySelectorAll('.ocr-filled').forEach(el => el.classList.remove('ocr-filled'));
     clearPreview(c);
@@ -1329,9 +1329,18 @@ Rules:
     updateConditionalFields(c);
 
     if (!isDraft) {
+      // Confirm before leaving. Navigating instantly gave no evidence the
+      // submission had happened at all — the page just changed — so hold the
+      // confirmation on screen briefly, then return the user where they came
+      // from. `created` is reported by folder number, which is the handle
+      // they will see it under in the log.
+      setOcrStatus(c.querySelector('#ocr-status'),
+        `Submitted for review — folder ${created.folder}. Returning…`, 'success');
+      await new Promise(r => setTimeout(r, 1200));
       onDone?.('submitted');
     } else {
-      setOcrStatus(c.querySelector('#ocr-status'), 'Draft saved to profile.', 'success');
+      setOcrStatus(c.querySelector('#ocr-status'),
+        `Draft saved to your profile — folder ${created.folder}. Find it under My Book.`, 'success');
     }
   }
 
@@ -1398,17 +1407,38 @@ Rules:
     // Normalizing/uploading a receipt can take a moment (real network time
     // for the Supabase Storage call) — without this, the button visibly
     // does nothing until it resolves, which reads as broken.
+    /**
+     * Run a submit action with the buttons disabled, and — crucially — say
+     * something either way.
+     *
+     * This used to be try/finally with no catch. A throw anywhere in
+     * submitRecord became an unhandled rejection: the button label reset and
+     * the form sat there looking untouched, with nothing saved. Users read
+     * that as "the click didn't register" and clicked again, which is how a
+     * failed submission turns into a duplicate one.
+     *
+     * On success the caller navigates away, so the buttons are deliberately
+     * left disabled — re-enabling them just offers a second click during the
+     * moment before the route changes.
+     */
     async function withButtonLoading(activeBtn, loadingLabel, fn) {
       const submitBtn = c.querySelector('#btn-submit');
       const saveBtn   = c.querySelector('#btn-save-profile');
       const originalLabel = activeBtn.textContent;
+      const statusEl = c.querySelector('#ocr-status');
       [submitBtn, saveBtn].forEach(b => { if (b) b.disabled = true; });
       activeBtn.textContent = loadingLabel;
       try {
         await fn();
-      } finally {
+        return true;
+      } catch (e) {
+        console.error('[SubmissionForm] submit failed:', e);
+        setOcrStatus(statusEl,
+          `Not submitted — ${e?.message || 'something went wrong'}. Nothing was saved; your entries are still here.`,
+          'error');
         [submitBtn, saveBtn].forEach(b => { if (b) b.disabled = false; });
         activeBtn.textContent = originalLabel;
+        return false;
       }
     }
 

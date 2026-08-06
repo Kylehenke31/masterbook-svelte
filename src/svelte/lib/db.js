@@ -64,7 +64,9 @@ export async function cloudSavePurchase(projectId, purchase) {
   const { error } = await supabase
     .from('purchases')
     .upsert({ id: purchase.id, project_id: projectId, data: purchase });
-  if (error) console.warn('[db] cloudSavePurchase error:', error.message);
+  // Throws rather than warning: callers decide how loudly to fail, and a
+  // purchase that never reached the cloud is not something to whisper about.
+  if (error) throw new Error(error.message);
 }
 
 /**
