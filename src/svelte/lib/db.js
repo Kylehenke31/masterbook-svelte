@@ -435,11 +435,14 @@ const RECEIPTS_BUCKET = 'receipts';
  * how every upload could fail with "Bucket not found" for the entire life of
  * the feature while each draft was cheerfully saved with no receipt attached.
  */
-export async function uploadDraftReceipt(projectId, purchaseId, bytes) {
+export async function uploadDraftReceipt(projectId, purchaseId, bytes, kind = '') {
   const user = await getUser();
-  if (!user) throw new Error('Not signed in — cannot store the receipt');
-  if (!projectId) throw new Error('No active project — cannot store the receipt');
-  const path = `${projectId}/${purchaseId}.pdf`;
+  if (!user) throw new Error('Not signed in — cannot store the document');
+  if (!projectId) throw new Error('No active project — cannot store the document');
+  // `kind` distinguishes the several PDFs one purchase can carry — the receipt
+  // itself, a W9, payment instructions — which otherwise collide on one path.
+  const suffix = kind ? `_${kind}` : '';
+  const path = `${projectId}/${purchaseId}${suffix}.pdf`;
   const { error } = await supabase.storage
     .from(RECEIPTS_BUCKET)
     .upload(path, bytes, { contentType: 'application/pdf', upsert: true });

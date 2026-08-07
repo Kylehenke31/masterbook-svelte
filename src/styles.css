@@ -6776,3 +6776,7 @@ tr:hover .cse-row-del { opacity: 0.6; }
   padding-bottom: 3px;
   border-bottom: 1px dashed var(--border);
 }
+
+/* PO number clash warning — advisory, not an error: the person typing usually
+   knows something the app does not, so it is amber rather than red. */
+.po-hint--warn { color: var(--amber); }

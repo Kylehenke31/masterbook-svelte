@@ -284,7 +284,7 @@ function fmtMoneyForFilename(n) {
 /**
  * File an approved Purchase Order into Dropbox —
  * "{project root}/01. ACCOUNTING/{n}. Purchase Orders/"
- * — named "PO{poNumber}_{vendor}_{date}_${amount}.pdf".
+ * — named "PO-{poNumber}_{vendor}_{date}_${amount}.pdf".
  *
  * Unlike credit card receipts, POs are not grouped into periodic logs: a PO is
  * a document in its own right, approved once and filed once. The PO number is
@@ -304,7 +304,7 @@ export async function filePurchaseOrder(purchase, bytes) {
 
   const vendorSlug = sanitizeFolderSegment(purchase.vendor || 'Unknown');
   const filename = sanitizeFolderSegment(
-    `PO${purchase.poNumber || '0000'}_${vendorSlug}_${purchase.date || ''}_$${fmtMoneyForFilename(purchase.amount)}`
+    `PO-${purchase.poNumber || '0000'}_${vendorSlug}_${purchase.date || ''}_$${fmtMoneyForFilename(purchase.amount)}`
   ) + '.pdf';
 
   await uploadFileWithRetry(`${poFolder}/${filename}`, bytes);
@@ -319,15 +319,15 @@ async function purchaseOrdersPath() {
   return `/${rootName}/${folderPathById('01-accounting/purchase-orders')}`;
 }
 
-/** "PO0007_Keslow Camera" — the folder a PO's paperwork lives in. */
+/** "PO-0007_Keslow Camera" — the folder a PO's paperwork lives in. */
 function poFolderName(purchase) {
   return sanitizeFolderSegment(
-    `PO${purchase.poNumber || '0000'}_${sanitizeFolderSegment(purchase.vendor || 'Unknown')}`);
+    `PO-${purchase.poNumber || '0000'}_${sanitizeFolderSegment(purchase.vendor || 'Unknown')}`);
 }
 
 /**
- * Mark a voided PO's folder as void — "PO0007_Keslow Camera" becomes
- * "PO0007_Keslow Camera_VOID".
+ * Mark a voided PO's folder as void — "PO-0007_Keslow Camera" becomes
+ * "PO-0007_Keslow Camera_VOID".
  *
  * The folder is renamed rather than deleted. A voided PO is still part of the
  * paper trail: an auditor asking what happened to PO 0007 should find the

@@ -97,32 +97,44 @@ async function onPurchaseOrderApproved(purchase, applyChanges) {
     return { problem: e.message };
   }
 
-  // Hand the approver their copy regardless of whether Dropbox is reachable.
-  try {
-    const blob = new Blob([bytes], { type: 'application/pdf' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `PO_Summary_${purchase.poNumber || 'unknown'}_${(purchase.vendor || 'Vendor').replace(/\s+/g, '_')}.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
-  } catch { /* a failed download must not stop the filing */ }
+  /**
+   * Download only as a fallback.
+   *
+   * When the PO files successfully there is nothing to hand over — the PDF is
+   * already in Dropbox where it belongs, and pushing a copy into the
+   * approver's Downloads folder as well just creates a second, divergent
+   * copy for them to tidy up. The download exists for the case where filing
+   * failed, so the only copy is not lost.
+   */
+  const handOver = () => {
+    try {
+      const blob = new Blob([bytes], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `PO-${purchase.poNumber || 'unknown'}_${(purchase.vendor || 'Vendor').replace(/\s+/g, '_')}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch { /* nothing more we can do */ }
+  };
 
   try {
     if (!(await isDropboxConnected())) {
-      reportApprovalProblem('approved, but Dropbox is not connected so the PO was not filed', purchase.folder);
-      return { filed: false, problem: 'dropbox not connected' };
+      handOver();
+      reportApprovalProblem('approved, but Dropbox is not connected — the PO Summary was downloaded instead of filed', purchase.folder);
+      return { filed: false, downloaded: true, problem: 'dropbox not connected' };
     }
     const { filePurchaseOrder } = await import('./dropbox.js');
     const { filename } = await filePurchaseOrder(purchase, bytes);
     applyChanges(purchase.id, { poSummaryGenerated: true, poSummaryFiled: true, poFilename: filename });
     return { filed: true, filename };
   } catch (e) {
-    reportApprovalProblem(`the PO could not be filed to Dropbox — ${e.message}`, purchase.folder);
+    handOver();
+    reportApprovalProblem(`the PO could not be filed to Dropbox — ${e.message}. It was downloaded instead.`, purchase.folder);
     applyChanges(purchase.id, { poSummaryGenerated: true });
-    return { filed: false, problem: e.message };
+    return { filed: false, downloaded: true, problem: e.message };
   }
 }
 

@@ -2,10 +2,12 @@
   import { onMount, onDestroy } from 'svelte';
   import { get } from 'svelte/store';
   import { PDFDocument } from 'pdf-lib';
-  import { addPurchase, updatePurchase, getPurchaseById, assignFolder, assignPONumber, DB } from '../../data.js';
+  import { addPurchase, updatePurchase, getPurchaseById, assignFolder, assignPONumber, persist, DB } from '../../data.js';
   import { getActiveProjectId } from '../stores/project.js';
   import { uploadDraftReceipt } from '../lib/db.js';
   import { authUser, getDisplayName } from '../stores/auth.js';
+  import { DRAFT_STATUSES } from '../lib/permissions.js';
+  import { sanitiseCurrencyInput, roundToCents, formatCurrency, normalisePONumber } from '../lib/format.js';
 
   let { onDone = null } = $props();
 
@@ -187,8 +189,13 @@
                 <!-- Amount -->
                 <div class="field">
                   <label for="f-amount">Amount ($) <span class="req">*</span></label>
-                  <input type="number" id="f-amount" name="amount"
-                         min="0" step="0.01" placeholder="0.00" required />
+                  <!-- Deliberately type="text" with inputmode="decimal": a
+                       number input rejects a typed comma outright, and people
+                       type "1,250.00" out of habit. Digits, commas and a
+                       decimal point are accepted and normalised on blur. -->
+                  <input type="text" id="f-amount" name="amount"
+                         inputmode="decimal" autocomplete="off"
+                         placeholder="0.00" required />
                   <span class="field-error" id="err-amount"></span>
                 </div>
 
@@ -267,7 +274,14 @@
                   <div class="form-grid">
                     <div class="field">
                       <label for="f-po-number-display">PO Number</label>
-                      <input type="text" id="f-po-number-display" disabled placeholder="Assigned on submit" />
+                      <!-- Prefilled with the next in sequence but editable:
+                           numbers get reserved on paper, issued out of order,
+                           or need matching to a vendor's own reference, and a
+                           locked field forces people to work around the app. -->
+                      <input type="text" id="f-po-number-display" name="poNumberOverride"
+                             inputmode="numeric" maxlength="6" autocomplete="off" />
+                      <span class="field-error" id="err-po-number"></span>
+                      <small class="field-hint" id="po-number-hint"></small>
                     </div>
                     <div class="field">
                       <label for="f-po-salesperson">Salesperson</label>
@@ -420,7 +434,15 @@
     c.querySelector('#field-po-section').classList.toggle('visible', isPO);
     if (isPO) {
       const poDisplay = c.querySelector('#f-po-number-display');
-      if (poDisplay) poDisplay.placeholder = `Next: ${String(DB.poCounter.next).padStart(4, '0')}`;
+      if (poDisplay) {
+        poDisplay.placeholder = String(DB.poCounter.next).padStart(4, '0');
+        // Prefill once. Re-filling on every conditional-field refresh would
+        // overwrite a number the user had deliberately changed.
+        if (!poDisplay.value && !resumingId) {
+          poDisplay.value = String(DB.poCounter.next).padStart(4, '0');
+        }
+        checkPONumber(c);
+      }
       // Start with one blank row the first time the PO section is shown.
       const tbody = c.querySelector('#po-line-tbody');
       if (tbody && tbody.children.length === 0) addPOLineRow(c);
@@ -1020,6 +1042,11 @@ Rules:
     if (file.type !== 'application/pdf') { if (errEl) errEl.textContent = 'Only PDF files are accepted.'; input.value = ''; if (nameEl) nameEl.textContent = ''; return; }
     if (file.size > MAX_SUPPORT_BYTES) { if (errEl) errEl.textContent = 'File exceeds 10 MB limit.'; input.value = ''; if (nameEl) nameEl.textContent = ''; return; }
     if (errEl) errEl.textContent = '';
+    // Hold the bytes for submit. Reading them here rather than at submit time
+    // matters: a file input can be cleared or the form re-rendered in between,
+    // and the record used to claim "W9 attached" for a file nobody had kept.
+    c._supportingDocs = c._supportingDocs || {};
+    c._supportingDocs[key] = file.arrayBuffer().then(b => new Uint8Array(b));
     showGeneratedFilename(key, c);
   }
 
@@ -1149,6 +1176,79 @@ Rules:
 
     setOcrStatus(c.querySelector('#ocr-status'),
       `Resuming draft ${rec.folder || ''} — submitting will update it, not create a second record.`, 'success');
+  }
+
+  /* ── PO numbers ──────────────────────────────────────────────────
+   *
+   * The number is prefilled with the next in sequence but stays editable. A
+   * production reserves numbers on paper, issues them out of order, or has to
+   * match a vendor's own reference — a locked field just moves that work
+   * outside the app, where nothing checks it.
+   *
+   * Collisions are warned about rather than blocked, for the same reason: the
+   * person typing usually knows something the app does not. What matters is
+   * that they are told, including when the clash is with a draft nobody has
+   * submitted, which is invisible on any log they could check themselves.
+   */
+
+  /** Any existing purchase already carrying this PO number, excluding the one being resumed. */
+  function findPOConflict(poNumber) {
+    if (!poNumber) return null;
+    return DB.purchases.find(p =>
+      p.method === 'PO' &&
+      p.id !== resumingId &&
+      normalisePONumber(p.poNumber) === poNumber) || null;
+  }
+
+  function checkPONumber(c) {
+    const el = c.querySelector('#f-po-number-display');
+    const errEl = c.querySelector('#err-po-number');
+    const hintEl = c.querySelector('#po-number-hint');
+    if (!el) return true;
+    const value = normalisePONumber(el.value);
+    if (errEl) errEl.textContent = '';
+    if (hintEl) hintEl.textContent = '';
+    el.classList.remove('invalid');
+
+    if (!value) {
+      if (hintEl) hintEl.textContent = `Leave blank to use ${String(DB.poCounter.next).padStart(4, '0')}.`;
+      return true;
+    }
+    const clash = findPOConflict(value);
+    if (clash) {
+      const where = DRAFT_STATUSES.includes(clash.status)
+        ? `an unsubmitted draft (${clash.vendor || 'no vendor yet'})`
+        : `${clash.vendor || 'another submission'} — ${clash.status}`;
+      // A warning, not an error: the field stays usable and submit is allowed.
+      if (hintEl) hintEl.textContent = `⚠ PO ${value} is already used by ${where}.`;
+      hintEl?.classList.add('po-hint--warn');
+      return true;
+    }
+    hintEl?.classList.remove('po-hint--warn');
+    return true;
+  }
+
+  /* ── Currency input ──────────────────────────────────────────────
+   *
+   * Accepts digits, commas and one decimal point while typing, then settles to
+   * two decimals on blur: 95 becomes 95.00, 1,250 becomes 1250.00.
+   */
+
+  function formatCurrencyField(el) { el.value = formatCurrency(el.value); }
+
+  function attachCurrencyBehaviour(el) {
+    if (!el) return;
+    el.addEventListener('input', () => {
+      const before = el.value;
+      const cleaned = sanitiseCurrencyInput(before);
+      if (cleaned !== before) {
+        // Keep the caret sensible after removing a rejected character.
+        const pos = el.selectionStart - (before.length - cleaned.length);
+        el.value = cleaned;
+        try { el.setSelectionRange(pos, pos); } catch {}
+      }
+    });
+    el.addEventListener('blur', () => formatCurrencyField(el));
   }
 
   /* ── Validation ── */
@@ -1307,6 +1407,23 @@ Rules:
     if (data.w9Attached)           data.w9Filename    = `W9_${vendorSlug}_${today}.pdf`;
     if (data.payMethodDocAttached) data.payDocFilename = `Payment_Method_${vendorSlug}_${today}.pdf`;
 
+    // Store the supporting PDFs themselves, not just the claim that they
+    // exist. These used to be validated, named, and then dropped — the record
+    // asserted "W9 attached" while the file had gone nowhere, which is the
+    // worst of both: a reviewer trusts the flag and finds nothing behind it.
+    if (data.w9Attached || data.payMethodDocAttached) {
+      data.id = data.id || crypto.randomUUID();
+      const projectId = getActiveProjectId();
+      if (!projectId) throw new Error('No active project — cannot store the supporting documents');
+      const docs = c._supportingDocs || {};
+      if (data.w9Attached && docs.w9) {
+        data.w9Url = await uploadDraftReceipt(projectId, data.id, await docs.w9, 'w9');
+      }
+      if (data.payMethodDocAttached && docs.pay) {
+        data.payDocUrl = await uploadDraftReceipt(projectId, data.id, await docs.pay, 'paydoc');
+      }
+    }
+
     // Stamp who submitted this. The user id is the durable identity — it is
     // what "My Book" filters on and what an approver is accountable to. The
     // name is a display snapshot taken now, for the same reason a card stores
@@ -1321,7 +1438,7 @@ Rules:
 
     data.isReturn = data.method === 'Return';
     data.isQuote  = isQuote(c);
-    data.amount   = parseFloat(data.amount) || 0;
+    data.amount   = roundToCents(sanitiseCurrencyInput(data.amount));
     // Status is no longer picked by hand — it's derived. A Return is always a
     // refund, a quote sits outside the approval queue, and everything else
     // takes the status of whichever button was pressed.
@@ -1335,9 +1452,20 @@ Rules:
     }
 
     if (data.type === 'Purchase Order') {
-      // Likewise the PO number: a resumed draft keeps the one it already has.
+      // A number the user typed wins. Otherwise a resumed draft keeps the one
+      // it already has, and a fresh PO takes the next in sequence.
+      const typed = normalisePONumber(c.querySelector('#f-po-number-display')?.value);
       const prior = resumingId ? getPurchaseById(resumingId) : null;
-      data.poNumber    = prior?.poNumber || assignPONumber();
+      data.poNumber = typed || prior?.poNumber || assignPONumber();
+
+      // Keep the sequence ahead of whatever was just used, so the next PO does
+      // not offer a number that is now taken. assignPONumber only advances the
+      // counter when it issues one itself.
+      const used = parseInt(data.poNumber, 10);
+      if (!isNaN(used) && used >= DB.poCounter.next) {
+        DB.poCounter.next = used + 1;
+        persist();
+      }
       data.poLineItems = collectPOLineItems(c);
     }
 
@@ -1471,6 +1599,14 @@ Rules:
     }
 
     updateConditionalFields(c);
+
+    attachCurrencyBehaviour(c.querySelector('#f-amount'));
+    c.querySelector('#f-po-number-display')?.addEventListener('input', () => checkPONumber(c));
+    c.querySelector('#f-po-number-display')?.addEventListener('blur', e => {
+      const v = normalisePONumber(e.target.value);
+      if (v) e.target.value = v;   // settle "7" to "0007"
+      checkPONumber(c);
+    });
 
     c.querySelector('#f-w9').addEventListener('change',      e => handleSupportingDoc(e.target, 'w9',  c));
     c.querySelector('#f-pay-doc').addEventListener('change', e => handleSupportingDoc(e.target, 'pay', c));
