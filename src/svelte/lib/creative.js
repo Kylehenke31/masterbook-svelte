@@ -3,6 +3,8 @@
  * All creative data lives under a single localStorage key, keyed by dept slug.
  */
 
+import { CREATIVE_DEPT_FEATURE, canEdit } from './features.js';
+
 export const CREATIVE_KEY = 'movie-ledger-creative';
 
 /** Department definitions */
@@ -43,10 +45,41 @@ export function saveCreative(data) {
 export function loadDept(deptId) {
   return loadCreative()[deptId] || _blankDept(deptId);
 }
+/* ── Per-department write permission ──────────────────────────────
+ *
+ * Creative is granted a department at a time, but the whole tab is one
+ * localStorage blob — so sections.js cannot tell which department a change
+ * belongs to and deliberately leaves `creative` out of its guard. Here it can:
+ * saveDept is handed the department it is being asked to change.
+ *
+ * Same limit as everywhere outside the database — this stops the change being
+ * kept, not the typing. It reverts on reload.
+ */
+let _member = null;
+
+/** Called by App.svelte once the signed-in member's grants are known. */
+export function setCreativeMember(member) { _member = member; }
+
+function mayEditDept(deptId) {
+  if (!_member) return true;                 // grants not loaded yet: do not block
+  const feature = CREATIVE_DEPT_FEATURE[deptId];
+  if (!feature) return true;                 // unknown department: ungoverned
+  return canEdit(_member, feature);
+}
+
 export function saveDept(deptId, deptData) {
+  if (!mayEditDept(deptId)) {
+    const label = DEPARTMENTS.find(d => d.id === deptId)?.label || deptId;
+    console.warn(`[creative] ${deptId}: view-only for this member — change not saved`);
+    window.dispatchEvent(new CustomEvent('masterbook-readonly-blocked', {
+      detail: { section: 'creative', feature: label },
+    }));
+    return false;
+  }
   const all = loadCreative();
   all[deptId] = deptData;
   saveCreative(all);
+  return true;
 }
 
 function _blankDept(deptId) {

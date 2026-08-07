@@ -12,6 +12,7 @@
   import { hydrate, hydrateFromCloud } from '../../src/data.js';
   import { syncAllSectionsFromCloud, pushAllSectionsToCloud, saveSectionToCloud, bumpSectionVersion, setSyncMember } from './lib/sections.js';
   import { handleDropboxRedirect } from './lib/dropbox.js';
+  import { setCreativeMember } from './lib/creative.js';
   import { loadMyProfile, updateMyDisplayName, acceptPendingInvites, loadMyMembership } from './lib/db.js';
   import { canAccessRoute } from './lib/features.js';
 
@@ -74,6 +75,7 @@
       const activeId = getActiveProjectId();
       myMembership = activeId ? await loadMyMembership(activeId, user.id) : null;
       setSyncMember(myMembership);
+      setCreativeMember(myMembership);
       if (activeId) {
         // Pull purchases and all section blobs in parallel
         await Promise.all([

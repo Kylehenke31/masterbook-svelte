@@ -127,6 +127,25 @@ export const SECTION_FEATURE = {
   // Enforcing it needs the per-department split the data does not have yet.
 };
 
+/**
+ * Creative department slug (as used in the data and routes) -> feature key.
+ *
+ * The creative blob is already keyed by department, so per-department grants
+ * are enforced at the write rather than by splitting storage — every
+ * department write goes through creative.js saveDept(), which knows which
+ * department it is being asked to change.
+ */
+export const CREATIVE_DEPT_FEATURE = {
+  'camera':       'creative_camera',
+  'locations':    'creative_locations',
+  'prod-design':  'creative_prod_design',
+  'costume':      'creative_costume',
+  'property':     'creative_property',
+  'hair-makeup':  'creative_hair_makeup',
+  'stunts':       'creative_stunts',
+  'continuity':   'creative_continuity',
+};
+
 /** May this member open this route at all? */
 export function canAccessRoute(member, route) {
   if (!member) return false;
