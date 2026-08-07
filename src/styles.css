@@ -6780,3 +6780,7 @@ tr:hover .cse-row-del { opacity: 0.6; }
 /* PO number clash warning — advisory, not an error: the person typing usually
    knows something the app does not, so it is amber rather than red. */
 .po-hint--warn { color: var(--amber); }
+
+/* A record asserting an attachment with no file behind it. Amber, not red:
+   it is a statement of fact about older records, not an error to act on. */
+.doc-missing { display: block; font-size: 0.7rem; color: var(--amber); margin-top: 3px; }

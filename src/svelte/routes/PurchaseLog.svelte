@@ -375,7 +375,7 @@
                 </div>
                 <div class="field field--full"><label for="f-notes">Notes</label><textarea id="f-notes" name="notes" rows="3"></textarea></div>
                 <div class="field field--full"><span class="form-section-label">Supporting Documents</span></div>
-                <div class="field field--full"><div class="doc-upload-group"><div class="doc-upload-item" id="doc-item-w9"><label for="f-w9">W9 / Tax Form<span class="req doc-req-marker" id="w9-req-marker" style="display:none"> *</span><span class="doc-note" id="w9-doc-note">PDF, max 10 MB</span></label><input type="file" id="f-w9" name="w9File" accept=".pdf" /><span class="field-error" id="err-w9"></span><span class="doc-filename" id="w9-filename"></span></div><div class="doc-upload-item" id="doc-item-pay"><label for="f-pay-doc">ACH / Wire Info<span class="req doc-req-marker" id="pay-doc-req-marker" style="display:none"> *</span><span class="doc-note" id="pay-doc-note">PDF, max 10 MB</span></label><input type="file" id="f-pay-doc" name="payDocFile" accept=".pdf" /><span class="field-error" id="err-pay-doc"></span><span class="doc-filename" id="pay-doc-filename"></span></div></div></div>
+                <div class="field field--full"><div class="doc-upload-group"><div class="doc-upload-item" id="doc-item-w9"><label for="f-w9">W9 / Tax Form<span class="req doc-req-marker" id="w9-req-marker" style="display:none"> *</span><span class="doc-note" id="w9-doc-note">PDF, max 10 MB</span></label><input type="file" id="f-w9" name="w9File" accept=".pdf" /><span class="field-error" id="err-w9"></span><span class="doc-filename" id="w9-filename"></span>${record.w9Url?`<button type="button" class="btn btn--ghost btn--xs" id="edit-view-w9-btn">📄 View current W9</button>`:(record.w9Attached?`<span class="doc-missing">⚠ Marked attached, no file stored</span>`:'')}</div><div class="doc-upload-item" id="doc-item-pay"><label for="f-pay-doc">ACH / Wire Info<span class="req doc-req-marker" id="pay-doc-req-marker" style="display:none"> *</span><span class="doc-note" id="pay-doc-note">PDF, max 10 MB</span></label><input type="file" id="f-pay-doc" name="payDocFile" accept=".pdf" /><span class="field-error" id="err-pay-doc"></span><span class="doc-filename" id="pay-doc-filename"></span>${record.payDocUrl?`<button type="button" class="btn btn--ghost btn--xs" id="edit-view-paydoc-btn">📄 View current info</button>`:(record.payMethodDocAttached?`<span class="doc-missing">⚠ Marked attached, no file stored</span>`:'')}</div></div></div>
                 <div class="field field--full"><div id="folder-alert" class="folder-alert"></div></div>
               </div>
               <div class="form-actions">
@@ -431,6 +431,22 @@
     host.querySelector('#f-w9').addEventListener('change',e=>_handleSupportDoc(e.target,'w9',host));
     host.querySelector('#f-pay-doc').addEventListener('change',e=>_handleSupportDoc(e.target,'pay',host));
     host.querySelector('#f-vendor').addEventListener('input',()=>_refreshDocNames(host));
+    // Let the approver open what is already on file — the point of requiring a
+    // W9 is being able to look at it, not seeing that a box was ticked.
+    const _openDoc=(sel,url,label)=>{
+      host.querySelector(sel)?.addEventListener('click',async e=>{
+        const b=e.currentTarget,orig=b.textContent;b.disabled=true;b.textContent='Loading…';
+        try{
+          const bytes=await resolveReceiptBytes(url);
+          if(!bytes)throw new Error(`${label} could not be loaded.`);
+          const u=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'}));
+          window.open(u,'_blank');setTimeout(()=>URL.revokeObjectURL(u),60000);
+        }catch(err){alert(err.message||`Could not load the ${label}.`);}
+        finally{b.disabled=false;b.textContent=orig;}
+      });
+    };
+    _openDoc('#edit-view-w9-btn',record.w9Url,'W9');
+    _openDoc('#edit-view-paydoc-btn',record.payDocUrl,'payment info');
     // Approve
     host.querySelector('#btn-edit-approve').addEventListener('click',async()=>{
       if(!_validateLI(form,host))return;
