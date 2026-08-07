@@ -871,9 +871,15 @@ function _buildActualsMap() {
   };
 
   purchases
-    // Actualize only once a charge is both Approved and Paid — an approval
-    // alone isn't a completed transaction yet.
-    .filter(p => p.status === 'Approved' && p.paid === true)
+    // Actualize on approval, not on payment.
+    //
+    // Approval is the point the cost is committed and the paperwork is filed;
+    // whether the money has physically left yet is a separate question, and
+    // answering it is what the Paid flag and the Purchase Orders log are for.
+    // Waiting for Paid meant an approved PO was invisible in the budget until
+    // somebody remembered to tick a box, which is exactly when a production
+    // overspends without seeing it.
+    .filter(p => p.status === 'Approved')
     .forEach(p => {
       if (Array.isArray(p.lineItems) && p.lineItems.length > 0) {
         // Detailed per-item breakdown, assigned via the Review Queue's
@@ -3495,8 +3501,10 @@ function _openHotCostSummary(filters = { approved: true, inReview: true, quotes:
     return bucket && filters[bucket];
   });
 
+  // Approved, regardless of payment — see the note in the budget actuals
+  // filter above. Kept under the old name to avoid churn at its call sites.
   const approvedPaid = purchases.filter(p =>
-    p.status === 'Approved' && p.paid && p.status !== 'Void'
+    p.status === 'Approved' && p.status !== 'Void'
   );
   const inReview = purchases.filter(p =>
     p.status === 'Pending' || p.status === 'In Review'

@@ -41,6 +41,62 @@ function findCard(purchase) {
 }
 
 /**
+ * Approving a Purchase Order.
+ *
+ * A PO is a document in its own right rather than a line on a periodic log, so
+ * there is no log to join — approval renders its Summary PDF once and files it
+ * under Purchase Orders.
+ *
+ * The PDF is rendered a single time and used for both the Dropbox copy and the
+ * download. Rendering twice risked the filed copy and the one in the approver's
+ * hands differing if the record changed in between.
+ *
+ * Approval is also what makes the PO an actual in the budget — see the filter
+ * in budget.js. Payment is tracked separately by the Paid flag, which is what
+ * the Purchase Orders log uses as its outstanding-payments checklist.
+ */
+async function onPurchaseOrderApproved(purchase, applyChanges) {
+  if (purchase.poSummaryFiled) return { alreadyFiled: true };
+
+  let bytes;
+  try {
+    const { buildPOSummaryPDF } = await import('./poSummary.js');
+    bytes = await buildPOSummaryPDF(purchase);
+  } catch (e) {
+    reportApprovalProblem(`the PO Summary could not be generated — ${e.message}`, purchase.folder);
+    return { problem: e.message };
+  }
+
+  // Hand the approver their copy regardless of whether Dropbox is reachable.
+  try {
+    const blob = new Blob([bytes], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `PO_Summary_${purchase.poNumber || 'unknown'}_${(purchase.vendor || 'Vendor').replace(/\s+/g, '_')}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  } catch { /* a failed download must not stop the filing */ }
+
+  try {
+    if (!(await isDropboxConnected())) {
+      reportApprovalProblem('approved, but Dropbox is not connected so the PO was not filed', purchase.folder);
+      return { filed: false, problem: 'dropbox not connected' };
+    }
+    const { filePurchaseOrder } = await import('./dropbox.js');
+    const { filename } = await filePurchaseOrder(purchase, bytes);
+    applyChanges(purchase.id, { poSummaryGenerated: true, poSummaryFiled: true, poFilename: filename });
+    return { filed: true, filename };
+  } catch (e) {
+    reportApprovalProblem(`the PO could not be filed to Dropbox — ${e.message}`, purchase.folder);
+    applyChanges(purchase.id, { poSummaryGenerated: true });
+    return { filed: false, problem: e.message };
+  }
+}
+
+/**
  * Run the side effects of approving a purchase.
  *
  * @param purchase        the freshly-approved record
@@ -48,7 +104,9 @@ function findCard(purchase) {
  * @returns {Promise<{ logNumber?: string, filed?: boolean, problem?: string }>}
  */
 export async function onPurchaseApproved(purchase, applyChanges) {
-  if (!purchase || purchase.method !== 'CC') return {};   // only CC charges belong to a CC Log
+  if (!purchase) return {};
+  if (purchase.method === 'PO') return onPurchaseOrderApproved(purchase, applyChanges);
+  if (purchase.method !== 'CC') return {};   // only CC charges belong to a CC Log
 
   const projectId = getActiveProjectId();
   if (!projectId) return {};

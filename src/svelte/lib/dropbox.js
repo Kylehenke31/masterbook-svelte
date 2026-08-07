@@ -248,6 +248,36 @@ function fmtMoneyForFilename(n) {
 }
 
 /**
+ * File an approved Purchase Order into Dropbox —
+ * "{project root}/01. ACCOUNTING/{n}. Purchase Orders/"
+ * — named "PO{poNumber}_{vendor}_{date}_${amount}.pdf".
+ *
+ * Unlike credit card receipts, POs are not grouped into periodic logs: a PO is
+ * a document in its own right, approved once and filed once. The PO number is
+ * its identity, so it leads the filename and the folder needs no further
+ * structure.
+ *
+ * @param purchase  the approved PO record
+ * @param bytes     the rendered PO Summary PDF
+ */
+export async function filePurchaseOrder(purchase, bytes) {
+  const { projectFolderName, getProject } = await import('../stores/project.js');
+  const { folderPathById } = await import('./folderTree.js');
+
+  const rootName = sanitizeFolderSegment(projectFolderName(getProject()));
+  const poPath = `/${rootName}/${folderPathById('01-accounting/purchase-orders')}`;
+  await createFolderWithRetry(poPath);
+
+  const vendorSlug = sanitizeFolderSegment(purchase.vendor || 'Unknown');
+  const filename = sanitizeFolderSegment(
+    `PO${purchase.poNumber || '0000'}_${vendorSlug}_${purchase.date || ''}_$${fmtMoneyForFilename(purchase.amount)}`
+  ) + '.pdf';
+
+  await uploadFileWithRetry(`${poPath}/${filename}`, bytes);
+  return { path: `${poPath}/${filename}`, filename };
+}
+
+/**
  * File each purchase's receipt into this card's Dropbox folder —
  * "{project root}/01. ACCOUNTING/{n}. Credit Cards/{cardType} {last4}_{cardholderName}/Receipts/"
  * — named "{last4}_{logNumber}_{receiptNum}_{vendor}_{date}_${amount}.pdf",

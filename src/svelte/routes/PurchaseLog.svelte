@@ -3,7 +3,6 @@
   import { getPurchases, deletePurchase, voidPurchase, approvePurchase, sendBackPurchase,
            calcSummary, getPurchaseById, togglePaid, updatePurchase } from '../../data.js';
   import { getBudgetLineMap } from '../../budget.js';
-  import { generateAndDownloadPOSummary } from '../lib/poSummary.js';
   import { downloadDraftReceipt, loadMyMembership } from '../lib/db.js';
   import { getActiveProjectId } from '../stores/project.js';
   import { authUser } from '../stores/auth.js';
@@ -52,13 +51,17 @@
   /* Once a PO is both Approved and Paid, silently generate its PO Summary
      PDF — guarded by poSummaryGenerated so re-toggling Paid doesn't
      re-trigger the download. */
-  function maybeGeneratePOSummary(id) {
-    const p = getPurchaseById(id);
-    if (p && p.method === 'PO' && p.status === 'Approved' && p.paid === true && !p.poSummaryGenerated) {
-      generateAndDownloadPOSummary(p).catch(err => console.error('[PO Summary] generation failed:', err));
-      updatePurchase(id, { poSummaryGenerated: true });
-    }
-  }
+  /**
+   * Superseded by lib/approval.js, which renders the PO Summary once on
+   * approval and files it to Dropbox.
+   *
+   * This used to fire only when a PO was Approved *and* Paid, so the summary
+   * appeared whenever someone eventually ticked Paid — long after the approval
+   * it documents, and never at all for a PO that was approved but not yet
+   * paid out. Kept as a no-op so the Paid toggle's call site does not need to
+   * know it moved.
+   */
+  function maybeGeneratePOSummary(_id) { /* handled at approval */ }
 
   let container;
   let sortKey  = 'createdAt';
