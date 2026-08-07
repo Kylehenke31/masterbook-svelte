@@ -48,9 +48,10 @@ function findCard(purchase) {
  * folder then disagrees with the books until it is renamed, so a failure is
  * reported rather than swallowed.
  *
- * Reads the PO number and vendor from the record as it was *before* voiding:
- * voidPurchase rewrites the folder field to add "VOID", and the Dropbox folder
- * is named from poNumber and vendor, which it leaves alone.
+ * The Dropbox folder is named from poNumber and vendor, and voidPurchase
+ * changes neither — it only rewrites status and the ledger folder number. So
+ * the record can be read either side of the void; the caller passes the
+ * pre-void copy simply because it has it to hand.
  */
 export async function onPurchaseOrderVoided(purchase) {
   if (!purchase || purchase.method !== 'PO') return {};

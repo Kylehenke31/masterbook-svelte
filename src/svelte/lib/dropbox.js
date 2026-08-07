@@ -327,26 +327,27 @@ function poFolderName(purchase) {
 
 /**
  * Mark a voided PO's folder as void — "PO0007_Keslow Camera" becomes
- * "PO0007_VOID".
+ * "PO0007_Keslow Camera_VOID".
  *
  * The folder is renamed rather than deleted. A voided PO is still part of the
  * paper trail: an auditor asking what happened to PO 0007 should find the
- * answer, not a gap where it used to be. Dropping the vendor from the name is
- * deliberate too — the point of the rename is that the folder reads as void at
- * a glance in a directory listing.
+ * answer, not a gap where it used to be. Renaming in place also keeps it
+ * beside its neighbours, so the gap in the numbering explains itself.
  *
- * Renaming rather than moving also means the number stays in sequence, so the
- * gap in the numbering is explained by the folder sitting right next to its
- * neighbours.
+ * VOID is appended rather than replacing the vendor, so the folder still says
+ * who the order was for — and so this matches voidPurchase in data.js, which
+ * appends to the ledger folder the same way. Two conventions pointing in
+ * opposite directions would be worse than either.
  *
  * Returns null when there was nothing to rename, which is the normal case for
  * a PO voided before it was ever approved and filed.
  */
 export async function voidPurchaseOrderFolder(purchase) {
   const poPath = await purchaseOrdersPath();
-  const from = `${poPath}/${poFolderName(purchase)}`;
-  const to   = `${poPath}/${sanitizeFolderSegment(`PO${purchase.poNumber || '0000'}_VOID`)}`;
-  if (from === to) return null;                     // already marked void
+  const base = poFolderName(purchase);
+  if (base.endsWith('_VOID')) return null;          // already marked
+  const from = `${poPath}/${base}`;
+  const to   = `${poPath}/${sanitizeFolderSegment(`${base}_VOID`)}`;
   const result = await dropboxMove(from, to);
   return result ? { from, to } : null;
 }
