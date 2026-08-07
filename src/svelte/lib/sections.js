@@ -11,6 +11,38 @@
 
 import { loadSection, saveSection } from './db.js';
 import { decideKeys, fingerprintBlob, mergeForPush } from './syncReconcile.js';
+import { SECTION_FEATURE, canEdit } from './features.js';
+
+/* ── Read-only enforcement ──────────────────────────────────────
+ *
+ * A member with a read grant may open a section but must not change it. That
+ * is checked here rather than in each of a dozen components: this is the one
+ * place every section's data leaves the browser, so a mutation reaching the
+ * cloud has to pass through it whichever button caused it.
+ *
+ * It stops changes *persisting*, not the typing itself — a read-only user can
+ * still alter what is on their screen, and it reverts on reload. That is the
+ * honest limit of enforcing this outside the database, and is why the
+ * financial tables are enforced in RLS as well.
+ */
+let _member = null;
+
+/** Called by App.svelte whenever the signed-in member's grants are known. */
+export function setSyncMember(member) { _member = member; }
+
+function mayWriteSection(sectionName) {
+  if (!_member) return true;                       // unknown grants: do not block
+  const feature = SECTION_FEATURE[sectionName];
+  if (!feature) return true;                       // ungoverned section
+  return canEdit(_member, feature);
+}
+
+function refuseWrite(sectionName) {
+  console.warn(`[sections] ${sectionName}: read-only for this member — change not saved`);
+  window.dispatchEvent(new CustomEvent('masterbook-readonly-blocked', {
+    detail: { section: sectionName, feature: SECTION_FEATURE[sectionName] },
+  }));
+}
 
 /* ── Section → localStorage key map ────────────────────────────── */
 //
@@ -295,6 +327,7 @@ function reportConflict(projectId, table, cloudBlob, keys) {
  */
 export async function saveSectionToCloud(sectionName, projectId) {
   if (!projectId) return;
+  if (!mayWriteSection(sectionName)) { refuseWrite(sectionName); return; }
   const { table } = SECTIONS[sectionName];
   const blob = snapshotSection(sectionName);
   if (!Object.keys(blob).length) return; // nothing to save
@@ -387,6 +420,10 @@ export async function pushAllSectionsToCloud(projectId) {
   // Merge all sections that share a table into one blob
   const byTable = {};
   for (const [name, cfg] of Object.entries(SECTIONS)) {
+    // A section this member may only read is left out of the push entirely,
+    // rather than sent and rejected — the cloud copy stays whatever the people
+    // who may edit it last agreed on.
+    if (!mayWriteSection(name)) continue;
     if (!byTable[cfg.table]) byTable[cfg.table] = {};
     Object.assign(byTable[cfg.table], snapshotSection(name));
   }

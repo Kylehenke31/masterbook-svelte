@@ -178,6 +178,26 @@ export async function updateMyDisplayName(displayName) {
   return name;
 }
 
+/**
+ * The signed-in user's own membership — { role, permissions } — or null.
+ *
+ * This is what every permission check wants, rather than the role alone:
+ * "may they approve" is edit on Expenses however it was granted, and asking
+ * only for the role hides a plain crew member who holds it.
+ */
+export async function loadMyMembership(projectId, userId = null) {
+  const uid = userId ?? (await getUser())?.id;
+  if (!uid || !projectId) return null;
+  const { data, error } = await supabase
+    .from('project_members')
+    .select('role, permissions')
+    .eq('project_id', projectId)
+    .eq('user_id', uid)
+    .maybeSingle();
+  if (error) { console.warn('[db] loadMyMembership error:', error.message); return null; }
+  return data ? { role: data.role, permissions: data.permissions || {} } : null;
+}
+
 /** The signed-in user's role on a project, or null if they are not a member. */
 export async function getMyProjectRole(projectId) {
   const user = await getUser();

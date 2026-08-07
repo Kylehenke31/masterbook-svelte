@@ -101,6 +101,32 @@ export function canEdit(member, featureKey) {
   return levelFor(member, featureKey) === 'edit';
 }
 
+/**
+ * Which feature owns a sync section, for enforcing read-only on writes.
+ *
+ * Sections are the unit the sync layer deals in; features are the unit people
+ * are granted. Where a section has no entry here it is ungoverned and writes
+ * pass — better than inventing a mapping and silently blocking something.
+ *
+ * `files` and `creative` share the creative table but are different features,
+ * which is why this is keyed by section name rather than table.
+ */
+export const SECTION_FEATURE = {
+  budget:      'budget',
+  personnel:   'personnel',
+  calendars:   'calendar',
+  schedules:   'schedules',
+  call_sheets: 'call_sheet',
+  vendors:     'vendors',
+  insurance:   'insurance',
+  files:       'files',
+  creditCards: 'credit_cards',
+  pettyCash:   'petty_cash',
+  // 'creative' is deliberately absent: it is granted per department, and the
+  // whole-section blob cannot tell which department a change belongs to.
+  // Enforcing it needs the per-department split the data does not have yet.
+};
+
 /** May this member open this route at all? */
 export function canAccessRoute(member, route) {
   if (!member) return false;

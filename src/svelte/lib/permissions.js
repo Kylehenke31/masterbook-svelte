@@ -12,7 +12,16 @@
  * because the server is what actually decides.
  */
 
-/** Roles that review submissions rather than file them. */
+import { canEdit as hasEditGrant } from './features.js';
+
+/**
+ * Roles that review submissions rather than file them.
+ *
+ * Kept only as the legacy shorthand. Reviewing is really "holds edit on
+ * Expenses", which is what the RLS policy tests — keying the interface on role
+ * names instead meant a member granted Expenses: Edit could approve through
+ * the API while the app hid the approve buttons from them.
+ */
 export const REVIEWER_ROLES = ['admin', 'accounting'];
 
 /**
@@ -33,8 +42,22 @@ export const DRAFT_STATUSES = ['Draft', 'Submitted'];
 /** Statuses that mean "an approver is looking at this". */
 export const AWAITING_REVIEW_STATUSES = ['In Review', 'Pending Approval'];
 
-export function isReviewer(role) {
-  return REVIEWER_ROLES.includes(role);
+/**
+ * Does this member review expenses?
+ *
+ * Accepts the whole membership — { role, permissions } — rather than a role
+ * string, because that is the question the database asks: edit on Expenses,
+ * however it was granted. A plain crew member holding Expenses: Edit is a
+ * reviewer; an admin is one implicitly.
+ *
+ * Tolerates a bare role string for callers not yet updated, so a stale caller
+ * degrades to the old behaviour instead of silently treating everyone as
+ * having no access.
+ */
+export function isReviewer(member) {
+  if (!member) return false;
+  if (typeof member === 'string') return REVIEWER_ROLES.includes(member);
+  return hasEditGrant(member, 'expenses');
 }
 
 export function isAuthor(purchase, userId) {
@@ -48,9 +71,9 @@ export function isAuthor(purchase, userId) {
  * only while it is still theirs to work on. Nobody else ever may, including
  * other crew on the same project.
  */
-export function canEditPurchase(purchase, userId, role) {
+export function canEditPurchase(purchase, userId, member) {
   if (!purchase) return false;
-  if (isReviewer(role)) return true;
+  if (isReviewer(member)) return true;
   return isAuthor(purchase, userId)
     && AUTHOR_EDITABLE_STATUSES.includes(purchase.status);
 }
@@ -59,17 +82,17 @@ export function canEditPurchase(purchase, userId, role) {
 export const canDeletePurchase = canEditPurchase;
 
 /** Only reviewers decide outcomes. */
-export function canApprovePurchase(purchase, userId, role) {
-  return !!purchase && isReviewer(role);
+export function canApprovePurchase(purchase, userId, member) {
+  return !!purchase && isReviewer(member);
 }
 
 /**
  * Why editing is blocked, phrased for the person who is blocked.
  * Returns null when editing is allowed.
  */
-export function explainEditBlock(purchase, userId, role) {
+export function explainEditBlock(purchase, userId, member) {
   if (!purchase) return null;
-  if (canEditPurchase(purchase, userId, role)) return null;
+  if (canEditPurchase(purchase, userId, member)) return null;
   if (isAuthor(purchase, userId)) {
     if (AWAITING_REVIEW_STATUSES.includes(purchase.status)) {
       return 'Submitted for approval — locked until an approver reviews it or sends it back.';

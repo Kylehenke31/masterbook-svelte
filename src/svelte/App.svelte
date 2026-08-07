@@ -10,9 +10,9 @@
     PROJECT_DATA_KEYS,
   } from './stores/project.js';
   import { hydrate, hydrateFromCloud } from '../../src/data.js';
-  import { syncAllSectionsFromCloud, pushAllSectionsToCloud, saveSectionToCloud, bumpSectionVersion } from './lib/sections.js';
+  import { syncAllSectionsFromCloud, pushAllSectionsToCloud, saveSectionToCloud, bumpSectionVersion, setSyncMember } from './lib/sections.js';
   import { handleDropboxRedirect } from './lib/dropbox.js';
-  import { loadMyProfile, updateMyDisplayName, acceptPendingInvites, getMyProjectRole } from './lib/db.js';
+  import { loadMyProfile, updateMyDisplayName, acceptPendingInvites, loadMyMembership } from './lib/db.js';
   import { canAccessRoute } from './lib/features.js';
 
   import Home           from './routes/Home.svelte';
@@ -72,7 +72,8 @@
       await acceptPendingInvites().catch(() => 0);
       await loadProjectsFromCloud();
       const activeId = getActiveProjectId();
-      myMembership = activeId ? await loadMyMembership(activeId) : null;
+      myMembership = activeId ? await loadMyMembership(activeId, user.id) : null;
+      setSyncMember(myMembership);
       if (activeId) {
         // Pull purchases and all section blobs in parallel
         await Promise.all([
@@ -161,20 +162,6 @@
      the guard treats "not yet known" as "allow", because blocking on an
      unloaded grant would flash an access error at a legitimate admin. */
   let myMembership = $state(null);
-
-  async function loadMyMembership(projectId) {
-    try {
-      const role = await getMyProjectRole(projectId);
-      if (!role) return null;
-      const { data } = await import('./lib/supabase.js')
-        .then(m => m.supabase.from('project_members')
-          .select('role, permissions')
-          .eq('project_id', projectId)
-          .eq('user_id', authState?.id)
-          .maybeSingle());
-      return data ? { role: data.role, permissions: data.permissions || {} } : { role, permissions: {} };
-    } catch { return null; }
-  }
 
   /** May the signed-in member open this route? Unknown membership allows. */
   function mayAccess(r) {
@@ -387,6 +374,10 @@
       table: e.detail.table, kind: 'error',
       message: `${e.detail.operation} failed — ${e.detail.message}`,
     });
+    const onReadOnlyBlocked = e => noteSyncProblem({
+      table: e.detail.section, kind: 'readonly',
+      message: `You have view-only access to ${e.detail.feature || e.detail.section} — that change was not saved.`,
+    });
     const onSyncConflict = e => noteSyncProblem({
       table: e.detail.table, kind: 'conflict',
       message: `${e.detail.keys.join(', ')} changed here and elsewhere; your copy was kept`,
@@ -396,12 +387,14 @@
     window.addEventListener('masterbook-section-changed', handleSectionChanged);
     window.addEventListener('masterbook-sync-error', onSyncError);
     window.addEventListener('masterbook-sync-conflict', onSyncConflict);
+    window.addEventListener('masterbook-readonly-blocked', onReadOnlyBlocked);
     resolveRoute();
     return () => {
       window.removeEventListener('hashchange', resolveRoute);
       window.removeEventListener('masterbook-section-changed', handleSectionChanged);
       window.removeEventListener('masterbook-sync-error', onSyncError);
       window.removeEventListener('masterbook-sync-conflict', onSyncConflict);
+      window.removeEventListener('masterbook-readonly-blocked', onReadOnlyBlocked);
     };
   });
 </script>

@@ -4,7 +4,7 @@
            calcSummary, getPurchaseById, togglePaid, updatePurchase } from '../../data.js';
   import { getBudgetLineMap } from '../../budget.js';
   import { generateAndDownloadPOSummary } from '../lib/poSummary.js';
-  import { downloadDraftReceipt, getMyProjectRole } from '../lib/db.js';
+  import { downloadDraftReceipt, loadMyMembership } from '../lib/db.js';
   import { getActiveProjectId } from '../stores/project.js';
   import { authUser } from '../stores/auth.js';
   import { canEditPurchase, canApprovePurchase, explainEditBlock, isReviewer } from '../lib/permissions.js';
@@ -16,10 +16,10 @@
      Supabase session restores comes back empty, which is indistinguishable
      from "no role" and would silently hide every action. */
   let myUserId = null;
-  let myRole   = null;
+  let myMember = null;   // { role, permissions } — what the grant checks need
   const _unsubRole = authUser.subscribe(async (u) => {
     myUserId = u?.id ?? null;
-    myRole = u ? await getMyProjectRole(getActiveProjectId()) : null;
+    myMember = u ? await loadMyMembership(getActiveProjectId(), u.id) : null;
     refreshView?.();
   });
 
@@ -101,8 +101,8 @@
   // to the person looking (their own locked submission), it is stated instead.
   function actionButtons(p) {
     const isVoid = p.status === 'Void', btns = [];
-    const mayEdit    = canEditPurchase(p, myUserId, myRole);
-    const mayApprove = canApprovePurchase(p, myUserId, myRole);
+    const mayEdit    = canEditPurchase(p, myUserId, myMember);
+    const mayApprove = canApprovePurchase(p, myUserId, myMember);
 
     if (!isVoid && mayApprove && ['In Review','Pending Approval'].includes(p.status))
       btns.push(`<button class="btn btn--warning btn--sm" data-action="return" data-id="${p.id}" title="Send back for correction">↩</button>`);
@@ -112,7 +112,7 @@
       btns.push(`<button class="btn btn--danger btn--sm" data-action="delete" data-id="${p.id}" title="Delete">✕</button>`);
 
     if (!btns.length && !isVoid) {
-      const why = explainEditBlock(p, myUserId, myRole);
+      const why = explainEditBlock(p, myUserId, myMember);
       if (why) return `<span class="locked-note" title="${esc(why)}">🔒</span>`;
     }
     return btns.join('');
@@ -128,7 +128,7 @@
     const map={'In Review':'row--review','Submitted':'row--review','Pending Approval':'row--pending'};
     let ac='';if(p.status==='Pending Approval')ac='amount--pending';
     const ad=p.amount!=null?fmt(Number(p.amount)||0):'—';
-    return `<tr data-id="${p.id}" class="${map[p.status]??''}"><td><span class="folder-num">${esc(p.folder??'—')}</span></td><td>${esc(p.date??'—')}</td><td class="vendor-cell"><span class="vendor-name">${esc(p.vendor??'—')}</span>${vendorTooltip(p)}</td><td>${methodBadge(p)}</td><td>${esc(p.description??'—')}</td><td>${padLineItem(p.lineItem??'—')}</td><td>${esc(p.submittedBy??'—')}</td><td>${statusBadge(p.status)}</td><td class="amount-cell"><span class="${ac}">${ad}</span></td><td class="paid-cell">${paidToggle(p)}</td><td class="actions-cell">${isReviewer(myRole)
+    return `<tr data-id="${p.id}" class="${map[p.status]??''}"><td><span class="folder-num">${esc(p.folder??'—')}</span></td><td>${esc(p.date??'—')}</td><td class="vendor-cell"><span class="vendor-name">${esc(p.vendor??'—')}</span>${vendorTooltip(p)}</td><td>${methodBadge(p)}</td><td>${esc(p.description??'—')}</td><td>${padLineItem(p.lineItem??'—')}</td><td>${esc(p.submittedBy??'—')}</td><td>${statusBadge(p.status)}</td><td class="amount-cell"><span class="${ac}">${ad}</span></td><td class="paid-cell">${paidToggle(p)}</td><td class="actions-cell">${isReviewer(myMember)
       ? `<button class="btn btn--primary btn--sm" data-action="review" data-id="${p.id}">Review</button><button class="btn btn--success btn--sm" data-action="approve" data-id="${p.id}">✔</button><button class="btn btn--warning btn--sm" data-action="return" data-id="${p.id}">↩</button><button class="btn btn--danger btn--sm" data-action="delete" data-id="${p.id}">✕</button>`
       : `<span class="locked-note" title="Only an approver can act on the review queue">🔒</span>`}</td></tr>`;
   }
