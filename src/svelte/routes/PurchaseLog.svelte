@@ -7,7 +7,7 @@
   import { getActiveProjectId } from '../stores/project.js';
   import { authUser } from '../stores/auth.js';
   import { canEditPurchase, canApprovePurchase, explainEditBlock, isReviewer } from '../lib/permissions.js';
-  import { onPurchaseApproved } from '../lib/approval.js';
+  import { onPurchaseApproved, onPurchaseOrderVoided } from '../lib/approval.js';
   import { PDFDocument } from 'pdf-lib';
 
   /* ── Who am I on this project? ──
@@ -264,7 +264,7 @@
   /* ── Action handler ── */
   function handleAction(action, id, fromQueue=false) {
     if(action==='delete'){if(confirm('Delete this record permanently?')){deletePurchase(id);refreshView();if(fromQueue)renderQueueRows();}}
-    else if(action==='void'){const p=getPurchaseById(id),msg=p&&p.status==='Approved'?`VOID submission "${p.folder} — ${p.vendor}"?\n\nThis will remove all data from the budget and logs. The folder will be renamed with VOID. This action CANNOT be undone.`:p?`VOID submission "${p.folder??''} — ${p.vendor??''}"?\n\nThe folder will be renamed with VOID. This action CANNOT be undone.`:'VOID?';if(confirm(msg)){voidPurchase(id);refreshView();if(fromQueue)renderQueueRows();window.dispatchEvent(new Event('ledger-data-changed'));}}
+    else if(action==='void'){const p=getPurchaseById(id),msg=p&&p.status==='Approved'?`VOID submission "${p.folder} — ${p.vendor}"?\n\nThis will remove all data from the budget and logs. The folder will be renamed with VOID. This action CANNOT be undone.`:p?`VOID submission "${p.folder??''} — ${p.vendor??''}"?\n\nThe folder will be renamed with VOID. This action CANNOT be undone.`:'VOID?';if(confirm(msg)){const before=getPurchaseById(id);voidPurchase(id);refreshView();if(fromQueue)renderQueueRows();window.dispatchEvent(new Event('ledger-data-changed'));onPurchaseOrderVoided(before);}}
     else if(action==='approve'){
       if(confirm('Approve this record?')){
         approvePurchase(id);

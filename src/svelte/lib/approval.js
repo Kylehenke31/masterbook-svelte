@@ -41,6 +41,35 @@ function findCard(purchase) {
 }
 
 /**
+ * Voiding a Purchase Order: mark its Dropbox folder as void.
+ *
+ * Called after the record is voided, and best-effort like everything else
+ * here — a Dropbox outage must not prevent someone voiding a PO, but the
+ * folder then disagrees with the books until it is renamed, so a failure is
+ * reported rather than swallowed.
+ *
+ * Reads the PO number and vendor from the record as it was *before* voiding:
+ * voidPurchase rewrites the folder field to add "VOID", and the Dropbox folder
+ * is named from poNumber and vendor, which it leaves alone.
+ */
+export async function onPurchaseOrderVoided(purchase) {
+  if (!purchase || purchase.method !== 'PO') return {};
+  if (!purchase.poSummaryFiled) return { nothingFiled: true };
+  try {
+    if (!(await isDropboxConnected())) {
+      reportApprovalProblem('voided, but Dropbox is not connected so its folder was not marked VOID', purchase.folder);
+      return { renamed: false, problem: 'dropbox not connected' };
+    }
+    const { voidPurchaseOrderFolder } = await import('./dropbox.js');
+    const result = await voidPurchaseOrderFolder(purchase);
+    return result ? { renamed: true, ...result } : { renamed: false, nothingToRename: true };
+  } catch (e) {
+    reportApprovalProblem(`its Dropbox folder could not be marked VOID — ${e.message}`, purchase.folder);
+    return { renamed: false, problem: e.message };
+  }
+}
+
+/**
  * Approving a Purchase Order.
  *
  * A PO is a document in its own right rather than a line on a periodic log, so

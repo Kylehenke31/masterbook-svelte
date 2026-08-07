@@ -169,6 +169,40 @@ export async function dropboxCreateFolder(path) {
   throw new Error(`Dropbox create_folder_v2 failed (${resp.status}): ${err?.error_summary || ''}`);
 }
 
+/**
+ * Move or rename a Dropbox path.
+ *
+ * `not_found` on the source resolves to null rather than throwing: renaming a
+ * folder that was never created is the ordinary case when something is voided
+ * before it was ever filed, and it is not a failure worth reporting.
+ */
+export async function dropboxMove(fromPath, toPath) {
+  const token = await getAccessToken();
+  const resp = await fetch('https://api.dropboxapi.com/2/files/move_v2', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    // autorename guards the case where the destination already exists — a PO
+    // voided twice should not fail, it should just not collide.
+    body: JSON.stringify({ from_path: fromPath, to_path: toPath, autorename: true }),
+  });
+  if (resp.ok) return await resp.json();
+
+  if (resp.status === 429) {
+    const err = new Error('Dropbox rate limited (429)');
+    err.retryable = true;
+    err.retryAfterMs = (Number(resp.headers.get('Retry-After')) || 1) * 1000;
+    throw err;
+  }
+  if (resp.status >= 500) {
+    const err = new Error(`Dropbox move server error (${resp.status})`);
+    err.retryable = true;
+    throw err;
+  }
+  const err = await resp.json().catch(() => ({}));
+  if (err?.error_summary?.includes('from_lookup/not_found')) return null;
+  throw new Error(`Dropbox move failed (${resp.status}): ${err?.error_summary || ''}`);
+}
+
 /** dropboxCreateFolder with retry/backoff for the transient failures it flags as retryable. */
 async function createFolderWithRetry(path, maxAttempts = 5) {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -261,20 +295,60 @@ function fmtMoneyForFilename(n) {
  * @param bytes     the rendered PO Summary PDF
  */
 export async function filePurchaseOrder(purchase, bytes) {
-  const { projectFolderName, getProject } = await import('../stores/project.js');
-  const { folderPathById } = await import('./folderTree.js');
-
-  const rootName = sanitizeFolderSegment(projectFolderName(getProject()));
-  const poPath = `/${rootName}/${folderPathById('01-accounting/purchase-orders')}`;
+  const poPath = await purchaseOrdersPath();
   await createFolderWithRetry(poPath);
+
+  const folderName = poFolderName(purchase);
+  const poFolder = `${poPath}/${folderName}`;
+  await createFolderWithRetry(poFolder);
 
   const vendorSlug = sanitizeFolderSegment(purchase.vendor || 'Unknown');
   const filename = sanitizeFolderSegment(
     `PO${purchase.poNumber || '0000'}_${vendorSlug}_${purchase.date || ''}_$${fmtMoneyForFilename(purchase.amount)}`
   ) + '.pdf';
 
-  await uploadFileWithRetry(`${poPath}/${filename}`, bytes);
-  return { path: `${poPath}/${filename}`, filename };
+  await uploadFileWithRetry(`${poFolder}/${filename}`, bytes);
+  return { path: `${poFolder}/${filename}`, filename, folderName };
+}
+
+/** "{project root}/01. ACCOUNTING/{n}. Purchase Orders" */
+async function purchaseOrdersPath() {
+  const { projectFolderName, getProject } = await import('../stores/project.js');
+  const { folderPathById } = await import('./folderTree.js');
+  const rootName = sanitizeFolderSegment(projectFolderName(getProject()));
+  return `/${rootName}/${folderPathById('01-accounting/purchase-orders')}`;
+}
+
+/** "PO0007_Keslow Camera" — the folder a PO's paperwork lives in. */
+function poFolderName(purchase) {
+  return sanitizeFolderSegment(
+    `PO${purchase.poNumber || '0000'}_${sanitizeFolderSegment(purchase.vendor || 'Unknown')}`);
+}
+
+/**
+ * Mark a voided PO's folder as void — "PO0007_Keslow Camera" becomes
+ * "PO0007_VOID".
+ *
+ * The folder is renamed rather than deleted. A voided PO is still part of the
+ * paper trail: an auditor asking what happened to PO 0007 should find the
+ * answer, not a gap where it used to be. Dropping the vendor from the name is
+ * deliberate too — the point of the rename is that the folder reads as void at
+ * a glance in a directory listing.
+ *
+ * Renaming rather than moving also means the number stays in sequence, so the
+ * gap in the numbering is explained by the folder sitting right next to its
+ * neighbours.
+ *
+ * Returns null when there was nothing to rename, which is the normal case for
+ * a PO voided before it was ever approved and filed.
+ */
+export async function voidPurchaseOrderFolder(purchase) {
+  const poPath = await purchaseOrdersPath();
+  const from = `${poPath}/${poFolderName(purchase)}`;
+  const to   = `${poPath}/${sanitizeFolderSegment(`PO${purchase.poNumber || '0000'}_VOID`)}`;
+  if (from === to) return null;                     // already marked void
+  const result = await dropboxMove(from, to);
+  return result ? { from, to } : null;
 }
 
 /**
