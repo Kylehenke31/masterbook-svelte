@@ -3,7 +3,7 @@
   import { getPurchases, deletePurchase, voidPurchase, approvePurchase, sendBackPurchase,
            calcSummary, getPurchaseById, togglePaid, updatePurchase } from '../../data.js';
   import { getBudgetLineMap } from '../../budget.js';
-  import { downloadDraftReceipt, loadMyMembership } from '../lib/db.js';
+  import { downloadDraftReceipt, loadMyMembership, uploadDraftReceipt } from '../lib/db.js';
   import { getActiveProjectId } from '../stores/project.js';
   import { authUser } from '../stores/auth.js';
   import { canEditPurchase, canApprovePurchase, explainEditBlock, isReviewer } from '../lib/permissions.js';
@@ -211,8 +211,8 @@
         <div class="detail-field"><label>Submitted By</label><span>${esc(p.submittedBy??'—')}</span></div>
         <div class="detail-field"><label>Amount</label><span class="detail-amount">${ad}</span></div>
         <div class="detail-field"><label>Payment Status</label><span class="${paidCls}">${paidLabel}</span></div>
-        <div class="detail-field"><label>W9 / Tax Form</label><span>${p.w9Attached?'✔ Attached':'✘ Not attached'}</span></div>
-        <div class="detail-field"><label>Pay Method Doc</label><span>${p.payMethodDocAttached?'✔ Attached':'✘ Not attached'}</span></div>
+        <div class="detail-field"><label>W9 / Tax Form</label>${p.w9Url?`<button type="button" class="btn btn--ghost btn--sm" id="detail-view-w9-btn">📄 View W9</button>`:`<span>${p.w9Attached?'⚠ Marked attached, no file stored':'✘ Not attached'}</span>`}</div>
+        <div class="detail-field"><label>Pay Method Doc</label>${p.payDocUrl?`<button type="button" class="btn btn--ghost btn--sm" id="detail-view-paydoc-btn">📄 View Pay Info</button>`:`<span>${p.payMethodDocAttached?'⚠ Marked attached, no file stored':'✘ Not attached'}</span>`}</div>
         <div class="detail-field"><label>Receipt</label>${p.receiptUrl?`<button type="button" class="btn btn--ghost btn--sm" id="detail-view-receipt-btn">📄 View Receipt</button><span class="field-error" id="detail-receipt-error"></span>`:'<span class="detail-muted">None</span>'}</div>
         ${p.linkedFolder?`<div class="detail-field"><label>Linked Folder</label><span>${esc(p.linkedFolder)}</span></div>`:''}
         ${p.isFringe?`<div class="detail-field"><label>Fringe</label><span>Yes</span></div>`:''}
@@ -244,6 +244,33 @@
         btn.textContent = originalLabel;
       }
     });
+    /* The supporting documents open the same way the receipt does. Until now
+       they were only ever reported as a tick — a reviewer could see that a W9
+       was claimed but had no way to look at it, which is most of the value of
+       requiring one. */
+    const openStoredDoc = (btnId, url, label) => {
+      content.querySelector(btnId)?.addEventListener('click', async (e) => {
+        const btn = e.currentTarget;
+        btn.disabled = true;
+        const originalLabel = btn.textContent;
+        btn.textContent = 'Loading…';
+        try {
+          const bytes = await resolveReceiptBytes(url);
+          if (!bytes) throw new Error(`${label} could not be loaded.`);
+          const blobUrl = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+          window.open(blobUrl, '_blank');
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+        } catch (err) {
+          alert(err.message || `Could not load the ${label}.`);
+        } finally {
+          btn.disabled = false;
+          btn.textContent = originalLabel;
+        }
+      });
+    };
+    openStoredDoc('#detail-view-w9-btn', p.w9Url, 'W9');
+    openStoredDoc('#detail-view-paydoc-btn', p.payDocUrl, 'payment info');
+
     if(p.status==='Approved') {
       content.querySelector('#detail-save-btn')?.addEventListener('click',()=>{
         const di=content.querySelector('#detail-edit-desc'),li=content.querySelector('#detail-edit-line');
@@ -388,7 +415,7 @@
     form.addEventListener('change', ()=>{isDirty=true;});
     host.querySelector('#f-amount').addEventListener('input',()=>_updateLiTotals(host));
 
-    host._requestClose = ()=>{ if(isDirty){const sv=confirm('Save changes before closing?');if(sv)_commitEdits(form,host,record.id);} onClose?.(); };
+    host._requestClose = async ()=>{ if(isDirty){const sv=confirm('Save changes before closing?');if(sv)await _commitEdits(form,host,record.id);} onClose?.(); };
 
     // File upload
     const fileInput=host.querySelector('#f-receipt');
@@ -405,24 +432,28 @@
     host.querySelector('#f-pay-doc').addEventListener('change',e=>_handleSupportDoc(e.target,'pay',host));
     host.querySelector('#f-vendor').addEventListener('input',()=>_refreshDocNames(host));
     // Approve
-    host.querySelector('#btn-edit-approve').addEventListener('click',()=>{
+    host.querySelector('#btn-edit-approve').addEventListener('click',async()=>{
       if(!_validateLI(form,host))return;
-      _commitEdits(form,host,record.id);updatePurchase(record.id,{status:'Approved'});isDirty=false;maybeGeneratePOSummary(record.id);onPurchaseApproved(getPurchaseById(record.id),updatePurchase);onClose?.('approved');
+      // Awaited: the edits and any attached document must land before the
+      // approval, which files the paperwork and reads the record back.
+      await _commitEdits(form,host,record.id);
+      updatePurchase(record.id,{status:'Approved'});isDirty=false;maybeGeneratePOSummary(record.id);
+      onPurchaseApproved(getPurchaseById(record.id),updatePurchase);onClose?.('approved');
     });
     // Return
-    host.querySelector('#btn-edit-return').addEventListener('click',()=>{
+    host.querySelector('#btn-edit-return').addEventListener('click',async()=>{
       const reason=prompt('Send back for correction.\n\nWhat needs to change? (shown to the submitter)');
-      if(reason!==null){_commitEdits(form,host,record.id);updatePurchase(record.id,{status:'Rejected',rejectionReason:String(reason||'').trim(),rejectedAt:new Date().toISOString()});isDirty=false;onClose?.('returned');}
+      if(reason!==null){await _commitEdits(form,host,record.id);updatePurchase(record.id,{status:'Rejected',rejectionReason:String(reason||'').trim(),rejectedAt:new Date().toISOString()});isDirty=false;onClose?.('returned');}
     });
     // Cancel
     host.querySelector('#btn-edit-cancel').addEventListener('click',()=>host._requestClose());
     // Save
-    form.addEventListener('submit',e=>{
+    form.addEventListener('submit',async e=>{
       e.preventDefault();
       const sel=form.querySelector('#f-status');if(sel&&!sel.value){const err=host.querySelector('#err-status');if(err)err.textContent='Status is required.';sel.scrollIntoView({behavior:'smooth',block:'center'});return;}
       const err=host.querySelector('#err-status');if(err)err.textContent='';
       if(!_validateLI(form,host))return;
-      _commitEdits(form,host,record.id);isDirty=false;onClose?.('saved');
+      await _commitEdits(form,host,record.id);isDirty=false;onClose?.('saved');
     });
   }
 
@@ -479,7 +510,7 @@
     if(diff>=0.005){const err=host.querySelector('#err-line-items');if(err)err.textContent=`Line item total ${_fmtLi(alloc)} ${alloc>gt?'exceeds':'is less than'} receipt total ${_fmtLi(gt)}. Adjust to match.`;host.querySelector('#field-line-items')?.scrollIntoView({behavior:'smooth',block:'center'});return false;}
     const err=host.querySelector('#err-line-items');if(err)err.textContent='';return true;
   }
-  function _commitEdits(form,host,id){
+  async function _commitEdits(form,host,id){
     const fd=new FormData(form),data={};
     for(const[k,v]of fd.entries()){if(['receipt','w9File','payDocFile'].includes(k))continue;data[k]=v;}
     data.amount=parseFloat(data.amount)||0;data.isReturn=data.method==='Return';
@@ -487,6 +518,22 @@
     const li=_getLI(host);if(li.length>0){data.lineItems=li;data.description=li.length===1?li[0].description:li.map(l=>l.description).filter(Boolean).join('; ');data.lineItem=li[0].lineItem||data.lineItem||'';}
     if((form.querySelector('#f-w9')?.files?.length??0)>0)data.w9Attached=true;
     if((form.querySelector('#f-pay-doc')?.files?.length??0)>0)data.payMethodDocAttached=true;
+
+    // Store any document attached during review, alongside the receipt under
+    // the record's own id. Failures surface rather than leaving the record
+    // asserting an attachment that does not exist.
+    const docs=host._supportingDocs||{},pid=getActiveProjectId();
+    if(pid){
+      try{
+        if(docs.w9)  data.w9Url     = await uploadDraftReceipt(pid,id,await docs.w9,'w9');
+        if(docs.pay) data.payDocUrl = await uploadDraftReceipt(pid,id,await docs.pay,'paydoc');
+      }catch(e){
+        alert(`The supporting document could not be stored: ${e.message}`);
+        if(docs.w9)  data.w9Attached=false;
+        if(docs.pay) data.payMethodDocAttached=false;
+      }
+      host._supportingDocs={};
+    }
     updatePurchase(id,data);
   }
   function _fmtLi(n){return'$'+Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});}
@@ -595,7 +642,12 @@
     const file=input.files?.[0];if(!file){if(nameEl)nameEl.textContent='';return;}
     if(file.type!=='application/pdf'){if(errEl)errEl.textContent='Only PDF files are accepted.';input.value='';if(nameEl)nameEl.textContent='';return;}
     if(file.size>MAX_SUPPORT_BYTES){if(errEl)errEl.textContent='File exceeds 10 MB limit.';input.value='';if(nameEl)nameEl.textContent='';return;}
-    if(errEl)errEl.textContent='';_showDocName(key,host);
+    if(errEl)errEl.textContent='';
+    // Hold the bytes for save. Without this the modal repeats the bug the
+    // submission form had: validate, name, drop, and record it as attached.
+    host._supportingDocs=host._supportingDocs||{};
+    host._supportingDocs[key]=file.arrayBuffer().then(b=>new Uint8Array(b));
+    _showDocName(key,host);
   }
   function _showDocName(key,host){
     const v=(host.querySelector('#f-vendor')?.value.trim()||'Unknown').replace(/[^a-zA-Z0-9_-]/g,'_').replace(/_+/g,'_'),t=new Date().toISOString().slice(0,10);
