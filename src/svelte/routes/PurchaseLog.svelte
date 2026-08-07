@@ -369,7 +369,7 @@
                 <div class="field field--conditional" id="field-linked-folder"><label for="f-linked-folder">Linked Folder # (original)</label><input type="text" id="f-linked-folder" name="linkedFolder" placeholder="e.g. 0002" /><span class="field-error" id="err-linked-folder"></span></div>
                 <div class="field field--full" id="field-line-items">
                   <div class="li-header"><span class="form-section-label">Line Items</span><span class="li-total-display" id="li-total-display"></span></div>
-                  <div class="li-table-wrap"><table class="li-table"><colgroup><col class="li-col-desc"/><col class="li-col-budget"/><col class="li-col-amt"/><col class="li-col-rm"/></colgroup><thead><tr><th>Description</th><th>Budget Line</th><th class="li-th-amt">Amount ($)</th><th></th></tr></thead><tbody id="li-tbody"></tbody></table></div>
+                  <div class="li-table-wrap"><table class="li-table"><colgroup><col class="li-col-budget"/><col class="li-col-desc"/><col class="li-col-amt"/><col class="li-col-rm"/></colgroup><thead><tr><th>Line #</th><th>Description</th><th class="li-th-amt">Amount ($)</th><th></th></tr></thead><tbody id="li-tbody"></tbody></table></div>
                   <button type="button" id="li-add" class="btn btn--ghost btn--sm li-add-btn">+ Add Item</button>
                   <span class="field-error" id="err-line-items"></span>
                 </div>
@@ -489,7 +489,7 @@
   function _addLiRow(host, data={}) {
     const tbody=host.querySelector('#li-tbody'),tr=document.createElement('tr');tr.className='li-row';
     const dv=_esca(data.description??''),lv=_esca(data.lineItem??''),av=data.amount!=null&&data.amount!==''?Number(data.amount):'';
-    tr.innerHTML=`<td><input type="text" class="li-desc" placeholder="Description…" value="${dv}" /></td><td class="li-td-line"><input type="text" class="li-line" placeholder="#" value="${lv}" /><small class="li-lookup-hint"></small></td><td><input type="number" class="li-amount" placeholder="0.00" min="0" step="0.01" value="${av}" /></td><td><button type="button" class="li-remove btn btn--danger btn--sm" title="Remove row">✕</button></td>`;
+    tr.innerHTML=`<td class="li-td-line"><input type="text" class="li-line" placeholder="#" value="${lv}" /><small class="li-lookup-hint"></small></td><td><input type="text" class="li-desc" placeholder="Description…" value="${dv}" /></td><td><input type="number" class="li-amount" placeholder="0.00" min="0" step="0.01" value="${av}" /></td><td><button type="button" class="li-remove btn btn--danger btn--sm" title="Remove row">✕</button></td>`;
     const lineInput=tr.querySelector('.li-line'),hintEl=tr.querySelector('.li-lookup-hint'),descInput=tr.querySelector('.li-desc');
     lineInput.addEventListener('blur',()=>{
       const raw=lineInput.value.trim();if(!raw){_clearHint(lineInput,hintEl);return;}

@@ -88,12 +88,19 @@ export async function onPurchaseOrderVoided(purchase) {
 async function onPurchaseOrderApproved(purchase, applyChanges) {
   if (purchase.poSummaryFiled) return { alreadyFiled: true };
 
-  let bytes;
+  // The filed document is the whole packet: topsheet, invoice, payment
+  // instructions, W9 — in that order. Filing only the topsheet meant the
+  // paperwork behind an approval lived in three places, which is exactly what
+  // makes it unfindable later.
+  let bytes, packet = { included: [], missing: [] };
   try {
     const { buildPOSummaryPDF } = await import('./poSummary.js');
-    bytes = await buildPOSummaryPDF(purchase);
+    const summary = await buildPOSummaryPDF(purchase);
+    const { buildPOPacket } = await import('./poPacket.js');
+    packet = await buildPOPacket(purchase, summary);
+    bytes = packet.bytes;
   } catch (e) {
-    reportApprovalProblem(`the PO Summary could not be generated — ${e.message}`, purchase.folder);
+    reportApprovalProblem(`the PO document could not be generated — ${e.message}`, purchase.folder);
     return { problem: e.message };
   }
 
@@ -128,8 +135,18 @@ async function onPurchaseOrderApproved(purchase, applyChanges) {
     }
     const { filePurchaseOrder } = await import('./dropbox.js');
     const { filename } = await filePurchaseOrder(purchase, bytes);
-    applyChanges(purchase.id, { poSummaryGenerated: true, poSummaryFiled: true, poFilename: filename });
-    return { filed: true, filename };
+    applyChanges(purchase.id, {
+      poSummaryGenerated: true, poSummaryFiled: true, poFilename: filename,
+      poPacketIncluded: packet.included,
+    });
+    // Say what went in. A packet missing its invoice is filed and valid, but
+    // somebody should know it went out that way rather than discover it later.
+    if (packet.missing.length) {
+      reportApprovalProblem(
+        `filed without ${packet.missing.join(' or ')} — nothing was attached for ${packet.missing.length > 1 ? 'those' : 'that'}`,
+        purchase.folder);
+    }
+    return { filed: true, filename, included: packet.included, missing: packet.missing };
   } catch (e) {
     handOver();
     reportApprovalProblem(`the PO could not be filed to Dropbox — ${e.message}. It was downloaded instead.`, purchase.folder);
