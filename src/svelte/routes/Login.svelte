@@ -10,6 +10,30 @@
   let error     = $state('');
   let busy      = $state(false);
 
+  /* An invite link lands here as /?invite=<address>.
+     It is not a token and grants nothing on its own — accept_project_invites()
+     matches on the address you actually authenticate as. It is here because
+     that matching is exactly what goes wrong by hand: sign up with a different
+     address and the invite is simply never found, with nothing on screen to
+     say why. Prefilling the field, and saying plainly which address the invite
+     belongs to, is what stops that. */
+  let invitedEmail = $state('');
+  try {
+    const invited = new URLSearchParams(window.location.search).get('invite');
+    if (invited && invited.includes('@')) {
+      invitedEmail = invited.trim().toLowerCase();
+      email = invitedEmail;
+      view  = 'signup';   // an invited address usually has no account yet
+    }
+  } catch { /* a malformed URL is not worth failing the login screen over */ }
+
+  // Warn only once they have actually diverged, not while they are mid-typing
+  // a fresh address in a field they deliberately cleared.
+  let addressMismatch = $derived(
+    !!invitedEmail && email.trim().length > 0 &&
+    email.trim().toLowerCase() !== invitedEmail
+  );
+
   async function handleSubmit() {
     error = '';
     if (!email.trim() || !password.trim()) { error = 'Email and password are required.'; return; }
@@ -45,6 +69,13 @@
     </div>
 
     <h1 class="login-title">The Masterbook</h1>
+
+    {#if invitedEmail}
+      <p class="login-invite">
+        You have been invited as <strong>{invitedEmail}</strong>.
+        Sign in or create an account with that address to join the project.
+      </p>
+    {/if}
 
     <!-- Tabs -->
     <div class="login-tabs">
@@ -87,6 +118,12 @@
           autocomplete="email"
           disabled={busy}
         />
+        {#if addressMismatch}
+          <span class="login-warn">
+            The invite is for {invitedEmail}. Using a different address here will
+            create an account without that project.
+          </span>
+        {/if}
       </div>
 
       <div class="login-field">
@@ -258,6 +295,26 @@
     border: 1px solid rgba(220, 60, 60, 0.2);
     border-radius: 0;
     line-height: 1.4;
+  }
+
+  .login-invite {
+    font-size: 0.8rem;
+    color: var(--text-secondary, #ccc);
+    margin: 0 0 18px;
+    padding: 10px 12px;
+    background: rgba(200, 164, 77, 0.08);
+    border: 1px solid rgba(200, 164, 77, 0.3);
+    line-height: 1.5;
+    text-align: left;
+  }
+  .login-invite strong { color: var(--text-primary, #eee); }
+
+  .login-warn {
+    display: block;
+    margin-top: 5px;
+    font-size: 0.72rem;
+    line-height: 1.4;
+    color: #d9a441;
   }
 
   .login-submit {

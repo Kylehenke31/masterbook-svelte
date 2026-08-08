@@ -12,7 +12,8 @@
    * silently change what someone already had.
    */
   import { onDestroy } from 'svelte';
-  import { getActiveProjectId } from '../stores/project.js';
+  import { getActiveProjectId, getProject } from '../stores/project.js';
+  import { composeInvite, inviteMailto } from '../lib/inviteMessage.js';
   import { authUser } from '../stores/auth.js';
   import {
     listMembersWithPermissions, listPendingInvites, inviteMember, cancelInvite,
@@ -104,13 +105,48 @@
 
   let grantCount = $derived(Object.keys(draftPerms).length);
 
+  /* ── Sharing an invite ──────────────────────────────────────────
+     Masterbook composes; a person sends. Same shape as the call sheet's
+     email template, and it keeps the invite free of a sending domain, an
+     API key, and a delivery step that can fail after the row is written. */
+  let share     = $state(null);   // { email, text, mailto }
+  let shareCopied = $state(false);
+
+  function openShare({ email, role, permissions }) {
+    // `me` is the auth user, which carries an email but no display name — the
+    // member row is where the name someone chose actually lives. Signing the
+    // invite "khenke31@gmail.com has invited you" when the app knows to say
+    // "Kyle Henke" makes it read like a machine, which is the last thing an
+    // invite should do.
+    const myName = members.find(m => m.userId === me?.id)?.displayName;
+    const args = {
+      email,
+      projectName: getProject()?.title || '',
+      invitedBy: myName || me?.email || '',
+      role, permissions,
+    };
+    share = { email, text: composeInvite(args), mailto: inviteMailto(args) };
+    shareCopied = false;
+  }
+
+  function copyShare() {
+    navigator.clipboard.writeText(share.text).then(() => {
+      shareCopied = true;
+      setTimeout(() => { shareCopied = false; }, 2500);
+    }).catch(() => { error = 'Could not copy — select the text and copy it manually.'; });
+  }
+
   async function save() {
     error = '';
     try {
       const pid = getActiveProjectId();
       if (editing.kind === 'invite') {
         await inviteMember(pid, editing.email, draftRole, draftPerms);
-        notice = `Invited ${editing.email}. They get access when they sign up with that address — no email is sent yet.`;
+        // The invite row is the thing that grants access; the message is just
+        // how the person finds out. Compose it straight away so the admin is
+        // not left wondering what to do next.
+        openShare({ email: editing.email, role: draftRole, permissions: draftPerms });
+        notice = '';
       } else {
         await updateMemberAccess(pid, editing.userId, draftRole, draftPerms);
         notice = `Updated ${editing.name}'s access.`;
@@ -166,6 +202,30 @@
 
   {#if error}<div class="pm-error">{error}</div>{/if}
   {#if notice}<div class="pm-notice">{notice}</div>{/if}
+
+  <!-- ══ Share an invite ══
+       The invite already exists by the time this appears — nothing here grants
+       access, and closing it loses nothing but the composed text, which Copy
+       Invite rebuilds from the pending list. -->
+  {#if share}
+    <div class="pm-share">
+      <div class="pm-share-head">
+        <strong>Invite ready for {share.email}</strong>
+        <button class="btn btn--ghost btn--xs" onclick={() => share = null}>Close</button>
+      </div>
+      <p class="pm-hint">
+        They already have access the moment they sign up with this address — this
+        message is how they find out. Send it any way you like.
+      </p>
+      <textarea class="pm-share-text" readonly rows="10">{share.text}</textarea>
+      <div class="pm-share-actions">
+        <button class="btn btn--primary btn--sm" onclick={copyShare}>
+          {shareCopied ? '✓ Copied' : 'Copy message'}
+        </button>
+        <a class="btn btn--ghost btn--sm" href={share.mailto}>Open in mail app</a>
+      </div>
+    </div>
+  {/if}
 
   {#if loading}
     <p class="pm-empty">Loading…</p>
@@ -243,7 +303,7 @@
         <div class="pm-editor-actions">
           <button class="btn btn--primary btn--sm" onclick={save}
             disabled={editing.kind === 'invite' && !editing.email.trim()}>
-            {editing.kind === 'invite' ? 'Send Invite' : 'Save Access'}
+            {editing.kind === 'invite' ? 'Create Invite' : 'Save Access'}
           </button>
           <button class="btn btn--ghost btn--sm" onclick={cancelEdit}>Cancel</button>
           <span class="pm-hint" style="margin-left:auto">
@@ -286,8 +346,8 @@
       <div class="pm-section">
         <h3 class="pm-section-title">Invited <span class="pm-count">{invites.length}</span></h3>
         <p class="pm-hint">
-          Waiting for these people to sign up with the address below. Nothing has been
-          emailed — that is still to come.
+          Waiting for these people to sign up with the address below. The app does not
+          send mail — use Copy Invite and send it however you normally reach them.
         </p>
         <table class="pm-table">
           <thead><tr><th>Email</th><th>Access</th><th></th></tr></thead>
@@ -300,6 +360,9 @@
                     : `${Object.keys(inv.permissions || {}).length} sections`}
                 </td>
                 <td class="pm-row-actions">
+                  <button class="btn btn--ghost btn--xs"
+                    onclick={() => openShare({ email: inv.email, role: inv.role, permissions: inv.permissions })}
+                  >Copy Invite</button>
                   <button class="btn btn--ghost btn--xs btn--danger-text"
                     onclick={() => dropInvite(inv)}>Cancel</button>
                 </td>
@@ -323,6 +386,39 @@
   }
   .pm-error  { color: var(--red); background: rgba(224,82,82,0.10); border-color: var(--red); }
   .pm-notice { color: var(--green); background: rgba(34,197,94,0.10); border-color: var(--green); }
+
+  .pm-share {
+    margin-bottom: 18px;
+    padding: 14px 16px;
+    border: 1px solid var(--border, #333);
+    background: var(--bg-elevated, #1e1e1e);
+  }
+  .pm-share-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 6px;
+  }
+  .pm-share-text {
+    width: 100%;
+    margin-top: 10px;
+    padding: 10px;
+    background: var(--bg, #141414);
+    border: 1px solid var(--border, #333);
+    color: var(--text-secondary, #ccc);
+    font-family: inherit;
+    font-size: 0.78rem;
+    line-height: 1.5;
+    resize: vertical;
+  }
+  .pm-share-text:focus { outline: none; border-color: var(--gold, #c8a44d); }
+  .pm-share-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-top: 10px;
+  }
 
   .pm-empty, .pm-hint { font-size: 0.78rem; color: var(--text-secondary); }
   .pm-hint { display: block; margin-top: 5px; }
