@@ -420,6 +420,71 @@ export async function fileCCLogReceipts(card, logNumber, purchases) {
 }
 
 /**
+ * File a reconciled petty cash envelope as one packet —
+ * "{project root}/01. ACCOUNTING/{n}. Petty Cash/{custodian}_{closed date}/"
+ * — holding the reconciliation PDF and every receipt logged against it.
+ *
+ * One folder per envelope, for the same reason a PO gets its own: the packet
+ * is the unit an auditor asks for, and splitting it across a shared folder
+ * means reassembling it by filename later.
+ *
+ * Filing happens at review, not at close. A custodian closing an envelope is
+ * saying what they counted; an accountant approving it is what makes that the
+ * production's record, and only then is it worth committing to the file.
+ *
+ * Receipt failures are collected rather than thrown: the reconciliation itself
+ * is the document that matters, and losing the whole filing because one
+ * receipt would not download serves nobody. The count comes back so the caller
+ * can say what happened.
+ */
+export async function filePettyCashEnvelope(envelope, charges, summaryBytes, filename) {
+  const { projectFolderName, getProject } = await import('../stores/project.js');
+  const { folderPathById } = await import('./folderTree.js');
+  const { downloadDraftReceipt } = await import('./db.js');
+
+  const project  = getProject();
+  const rootName = sanitizeFolderSegment(projectFolderName(project));
+  const pcPath   = `/${rootName}/${folderPathById('01-accounting/petty-cash')}`;
+  const envFolder = sanitizeFolderSegment(
+    `${envelope.custodianName || 'Unknown'}_${envelope.closedDate || envelope.openedDate || ''}`);
+  const folderPath = `${pcPath}/${envFolder}`;
+
+  await createFolderWithRetry(pcPath);
+  await createFolderWithRetry(folderPath);
+
+  await uploadFileWithRetry(`${folderPath}/${filename}`, summaryBytes);
+
+  const failed = [];
+  let filedCount = 0;
+  for (const p of charges) {
+    if (!p.receiptUrl) continue;
+    try {
+      let bytes;
+      if (p.receiptUrl.startsWith('data:')) {
+        bytes = base64ToBytes(p.receiptUrl.split(',')[1]);
+      } else if (p.receiptUrl.startsWith('supabase://')) {
+        const buf = await downloadDraftReceipt(p.receiptUrl);
+        if (!buf) throw new Error('could not download staged receipt');
+        bytes = new Uint8Array(buf);
+      } else {
+        continue; // unrecognized reference — nothing to file
+      }
+      const receiptName = sanitizeFolderSegment(
+        `${p.folder || '0000'}_${p.vendor || 'Unknown'}_${p.date || ''}_$${fmtMoneyForFilename(p.amount)}`
+      ) + '.pdf';
+      await uploadFileWithRetry(`${folderPath}/${receiptName}`, bytes);
+      filedCount++;
+    } catch (e) {
+      failed.push({ purchaseId: p.id, message: e.message });
+    }
+  }
+  if (failed.length) {
+    console.warn('[Dropbox] some petty cash receipts failed to file:', failed);
+  }
+  return { folderPath, filedCount, failedCount: failed.length, failed };
+}
+
+/**
  * Create the project's root Dropbox folder (named after the project, same
  * convention as projectFolderName()) plus the full static subfolder tree
  * from folderTree.js — the same structure shown in the app's Files window.

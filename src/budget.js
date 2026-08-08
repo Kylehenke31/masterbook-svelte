@@ -18,22 +18,10 @@
 // keep in step. If it is ever revived, drop the ?v= there too or it will
 // hydrate one instance while this file reads another.
 import { addPurchase, getPurchases } from './data.js';
+import { todayLocal } from './svelte/lib/format.js';
 
 const BUDGET_KEY = 'movie-ledger-budget';
 const LOCK_KEY   = 'movie-ledger-budget-lock';
-
-/**
- * Today as 'YYYY-MM-DD' in the user's own timezone.
- *
- * Not toISOString().slice(0,10) — that is UTC, so anywhere west of Greenwich
- * it rolls over to tomorrow partway through the evening. Date pickers seeded
- * that way opened on the wrong day and showed an empty panel for work the user
- * had just logged. Purchases store their date as a local 'YYYY-MM-DD' string,
- * so the comparison has to be made in the same frame of reference.
- */
-function _todayLocal(d = new Date()) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
 
 const PROD_INFO_KEY        = 'movie-ledger-prod-info';
 const HOT_COST_LOG_KEY     = 'movie-ledger-hot-costs';
@@ -1851,7 +1839,7 @@ function _openFringePopup() {
   _fringeFile = null;
 
   const fmtAmt = n => '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const today  = _todayLocal();
+  const today  = todayLocal();
 
   // Gather ALL fringe submissions from the purchase log
   let purchases = [];
@@ -3174,7 +3162,7 @@ export function renderHotCosts(container) {
   _buildActualsMap();
 
 
-  const today = _todayLocal();
+  const today = todayLocal();
 
   /* Status filter state — all checked by default */
   const _activityFilters = { approved: true, inReview: true, quotes: true };

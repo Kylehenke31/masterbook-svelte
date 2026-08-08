@@ -10,6 +10,19 @@
  */
 
 /**
+ * Today as 'YYYY-MM-DD' in the user's own timezone.
+ *
+ * Not toISOString().slice(0,10) — that is UTC, so anywhere west of Greenwich
+ * it rolls over to tomorrow partway through the evening, and a record stamped
+ * that way claims to have happened on a day that has not started yet. Every
+ * date the app stores is a local calendar date, so every date it stamps has to
+ * be read from the same clock.
+ */
+export function todayLocal(d = new Date()) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/**
  * Receipt numbers are three digits: 4 -> "004".
  *
  * Values are padded rather than validated, so the grid can be typed into
