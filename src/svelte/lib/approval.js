@@ -120,40 +120,32 @@ async function onPurchaseOrderCommitted(purchase, applyChanges) {
     return { problem: e.message };
   }
 
-  /**
-   * Download only as a fallback.
-   *
-   * When the PO files successfully there is nothing to hand over — the PDF is
-   * already in Dropbox where it belongs, and pushing a copy into the
-   * approver's Downloads folder as well just creates a second, divergent
-   * copy for them to tidy up. The download exists for the case where filing
-   * failed, so the only copy is not lost.
-   */
-  const handOver = () => {
-    try {
-      const blob = new Blob([bytes], { type: 'application/pdf' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `PO-${purchase.poNumber || 'unknown'}_${(purchase.vendor || 'Vendor').replace(/\s+/g, '_')}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
-    } catch { /* nothing more we can do */ }
-  };
+  // Where this goes is the project's filing plan's decision, not this
+  // function's — Dropbox, a folder on this computer, or the committer's own
+  // Downloads. What stays here is what the document *is* and what it is
+  // called, which is knowledge that belongs with the document.
+  const { fileDocument } = await import('./fileDocument.js');
+  const localName = `PO-${purchase.poNumber || 'unknown'}_${(purchase.vendor || 'Vendor').replace(/\s+/g, '_')}.pdf`;
+  const poFolder = `PO-${purchase.poNumber || '0000'}_${purchase.vendor || 'Unknown'}`;
 
-  try {
-    if (!(await isDropboxConnected())) {
-      handOver();
-      reportApprovalProblem('committed, but Dropbox is not connected — the PO Summary was downloaded instead of filed', purchase.folder);
-      return { filed: false, downloaded: true, problem: 'dropbox not connected' };
-    }
-    const { filePurchaseOrder } = await import('./dropbox.js');
-    const { filename } = await filePurchaseOrder(purchase, bytes);
+  const result = await fileDocument({
+    bytes,
+    filename: localName,
+    folderId: '01-accounting/purchase-orders',
+    subfolder: poFolder,
+    describe: `PO-${purchase.poNumber || 'unknown'}`,
+    dropboxFile: async (b) => {
+      const { filePurchaseOrder } = await import('./dropbox.js');
+      return await filePurchaseOrder(purchase, b);
+    },
+  });
+
+  if (result.filed) {
     applyChanges(purchase.id, {
-      poSummaryGenerated: true, poSummaryFiled: true, poFilename: filename,
+      poSummaryGenerated: true, poSummaryFiled: true,
+      poFilename: result.filename || localName,
       poPacketIncluded: packet.included,
+      poFiledTo: result.destination,
     });
     // Say what went in. A packet missing its invoice is filed and valid, but
     // somebody should know it went out that way rather than discover it later.
@@ -162,13 +154,26 @@ async function onPurchaseOrderCommitted(purchase, applyChanges) {
         `filed without ${packet.missing.join(' or ')} — nothing was attached for ${packet.missing.length > 1 ? 'those' : 'that'}`,
         purchase.folder);
     }
-    return { filed: true, filename, included: packet.included, missing: packet.missing };
-  } catch (e) {
-    handOver();
-    reportApprovalProblem(`the PO could not be filed to Dropbox — ${e.message}. It was downloaded instead.`, purchase.folder);
-    applyChanges(purchase.id, { poSummaryGenerated: true });
-    return { filed: false, downloaded: true, problem: e.message };
+    return { filed: true, filename: result.filename || localName, destination: result.destination,
+             included: packet.included, missing: packet.missing };
   }
+
+  applyChanges(purchase.id, { poSummaryGenerated: true });
+
+  // A project set to keep its own files is working as configured — reporting
+  // that as a problem would train people to ignore the warning that matters.
+  if (result.destination === 'manual' && !result.degradedFrom) {
+    return { filed: false, downloaded: result.downloaded, manual: true };
+  }
+  if (result.skipped) {
+    return { filed: false, downloaded: result.downloaded, skipped: true };
+  }
+  reportApprovalProblem(
+    result.problem
+      ? `the PO could not be filed — ${result.problem}. It was downloaded instead.`
+      : `${result.reason || 'the PO was not filed'} — it was downloaded instead.`,
+    purchase.folder);
+  return { filed: false, downloaded: result.downloaded, problem: result.problem || result.reason };
 }
 
 /**
@@ -212,9 +217,30 @@ export async function onPurchaseCommitted(purchase, applyChanges) {
 
   // File the receipt now rather than at packaging.
   if (!purchase.receiptUrl) return { logNumber: log.log_number, filed: false };
+
+  // A receipt is a file the submitter already uploaded, not a document this
+  // app generated, so there is nothing meaningful to hand back on a manual
+  // plan — the person filing it by hand already has it. Joining the log still
+  // happened, which is the part that matters to the books.
+  const { resolvePlan } = await import('./fileDocument.js');
+  const { plan } = await resolvePlan();
+  if (plan.destination === 'manual') {
+    return { logNumber: log.log_number, filed: false, manual: true };
+  }
+  if (plan.destination === 'local') {
+    reportApprovalProblem(
+      'the charge joined its log, but receipts are still filed to Dropbox only — this one was not filed locally',
+      purchase.folder);
+    return { logNumber: log.log_number, filed: false, problem: 'local receipt filing not supported yet' };
+  }
+  if (plan.mode === 'prompt' &&
+      !confirm(`File the receipt for ${purchase.folder || 'this charge'} to Dropbox?`)) {
+    return { logNumber: log.log_number, filed: false, skipped: true };
+  }
+
   try {
     if (!(await isDropboxConnected())) {
-      reportApprovalProblem('approved, but Dropbox is not connected so the receipt was not filed', purchase.folder);
+      reportApprovalProblem('committed, but Dropbox is not connected so the receipt was not filed', purchase.folder);
       return { logNumber: log.log_number, filed: false, problem: 'dropbox not connected' };
     }
     const stamped = { ...purchase, ccLogId: log.id, ccLogNumber: log.log_number };

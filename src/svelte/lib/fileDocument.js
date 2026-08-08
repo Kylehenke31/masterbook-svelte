@@ -1,0 +1,110 @@
+/**
+ * fileDocument.js — put a generated document where the project's filing plan
+ * says it goes.
+ *
+ * One place decides this, so the PO packet, the credit card log and anything
+ * generated later all obey the same setting. Callers say what the document is
+ * and which folder it belongs in; where that folder actually lives — Dropbox,
+ * a folder on this computer, or the user's own Downloads — is the plan's
+ * business, not theirs.
+ *
+ * Every outcome is reported rather than thrown. A production whose Dropbox is
+ * down still has to be able to commit an expense; what it must not do is
+ * believe the paperwork was filed when it was not.
+ */
+
+import { folderPathById } from './folderTree.js';
+import { effectivePlan, storedPlan } from './filingPlan.js';
+import { isDropboxConnected } from './dropbox.js';
+import { localFolderReady, writeLocalFile } from './localFiling.js';
+
+/** Resolve what this project can do right now, then what it intends. */
+export async function resolvePlan() {
+  const { getProject } = await import('../stores/project.js');
+  const project = getProject();
+  const [dropboxConnected, localReady] = await Promise.all([
+    isDropboxConnected().catch(() => false),
+    localFolderReady().catch(() => false),
+  ]);
+  return {
+    plan: effectivePlan(project, { dropboxConnected, localFolderReady: localReady }),
+    stored: storedPlan(project),
+    project,
+  };
+}
+
+/** Hand the document to the user, which is what "manual" means. */
+export function downloadDocument(bytes, filename) {
+  try {
+    const blob = new Blob([bytes], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * File one document according to the plan.
+ *
+ * @param opts.bytes       the document
+ * @param opts.filename    its filename
+ * @param opts.folderId    a folderTree id, e.g. '01-accounting/purchase-orders'
+ * @param opts.subfolder   optional folder inside that, e.g. 'PO-0007_Keslow'
+ * @param opts.dropboxFile async (bytes) => ({ filename, path }) — how this
+ *                         document files itself to Dropbox. Passed in because
+ *                         each document type has its own naming rules, which
+ *                         belong with that document, not here.
+ * @param opts.describe    short human name for prompts, e.g. 'PO-0007'
+ *
+ * @returns { destination, filed, downloaded, skipped, path?, filename?, problem? }
+ */
+export async function fileDocument(opts) {
+  const { bytes, filename, folderId, subfolder, dropboxFile, describe } = opts;
+  const { plan } = await resolvePlan();
+
+  // Manual: the document is the user's to keep. Nothing is stored, and that is
+  // the setting working, not a failure — so it is not reported as a problem.
+  if (plan.destination === 'manual') {
+    const ok = downloadDocument(bytes, filename);
+    return { destination: 'manual', filed: false, downloaded: ok,
+             degradedFrom: plan.degradedFrom, reason: plan.reason };
+  }
+
+  // Ask first. A production that wants to see what is being filed before it
+  // lands gets to say no, and saying no still leaves them holding the file.
+  if (plan.mode === 'prompt') {
+    const where = plan.destination === 'dropbox' ? 'Dropbox' : 'the project folder on this computer';
+    if (!confirm(`File ${describe || filename} to ${where}?\n\nChoosing Cancel downloads it instead.`)) {
+      const ok = downloadDocument(bytes, filename);
+      return { destination: plan.destination, filed: false, downloaded: ok, skipped: true };
+    }
+  }
+
+  if (plan.destination === 'local') {
+    try {
+      const segments = folderPathById(folderId).split('/');
+      if (subfolder) segments.push(subfolder);
+      const { path } = await writeLocalFile(segments, filename, bytes);
+      return { destination: 'local', filed: true, path, filename };
+    } catch (e) {
+      const ok = downloadDocument(bytes, filename);
+      return { destination: 'local', filed: false, downloaded: ok, problem: e.message };
+    }
+  }
+
+  try {
+    const result = await dropboxFile(bytes);
+    return { destination: 'dropbox', filed: true, ...result };
+  } catch (e) {
+    const ok = downloadDocument(bytes, filename);
+    return { destination: 'dropbox', filed: false, downloaded: ok, problem: e.message };
+  }
+}
