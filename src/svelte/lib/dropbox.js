@@ -172,9 +172,10 @@ export async function dropboxCreateFolder(path) {
 /**
  * Move or rename a Dropbox path.
  *
- * `not_found` on the source resolves to null rather than throwing: renaming a
- * folder that was never created is the ordinary case when something is voided
- * before it was ever filed, and it is not a failure worth reporting.
+ * `not_found` on the source resolves to null rather than throwing: a missing
+ * source is not always an error — a folder that was never created is nothing
+ * to move — so this reports the absence and leaves callers, which know what
+ * they expected to be there, to judge it.
  */
 export async function dropboxMove(fromPath, toPath) {
   const token = await getAccessToken();
@@ -339,8 +340,12 @@ function poFolderName(purchase) {
  * appends to the ledger folder the same way. Two conventions pointing in
  * opposite directions would be worse than either.
  *
- * Returns null when there was nothing to rename, which is the normal case for
- * a PO voided before it was ever approved and filed.
+ * Returns null when there was no folder to rename. Whether that is benign
+ * depends on context this function does not have — a PO voided before it was
+ * ever filed has nothing to rename and should not, while one the books record
+ * as filed has a folder missing that ought to exist. onPurchaseOrderVoided
+ * holds that context and decides; it screens on poSummaryFiled before calling
+ * here, so a null it receives is a real disagreement worth reporting.
  */
 export async function voidPurchaseOrderFolder(purchase) {
   const poPath = await purchaseOrdersPath();

@@ -182,6 +182,13 @@
   let syncProblemDetail = $derived(
     syncProblems.map(p => `${p.table}: ${p.message}`).join('\n') || '');
 
+  // Dropbox filing problems ride this same channel, but they mean the opposite
+  // of a failed save: the record reached the cloud, its paperwork did not reach
+  // Dropbox. Labelling one of those "not saved to cloud" sends someone hunting
+  // for data that was never lost, so the banner says which kind it is holding.
+  let syncProblemsAllDropbox = $derived(
+    syncProblems.length > 0 && syncProblems.every(p => p.table === 'dropbox'));
+
   function noteSyncProblem(detail) {
     const id = `${detail.table}:${detail.kind}`;
     if (syncProblems.some(p => p.id === id)) return;
@@ -562,7 +569,12 @@
          on presenting localStorage as if it were saved. -->
     {#if syncProblems.length}
       <button class="sync-problem" title={syncProblemDetail} onclick={() => syncProblems = []}>
-        ⚠ {syncProblems.length} sync {syncProblems.length === 1 ? 'issue' : 'issues'} — not saved to cloud
+        ⚠ {syncProblems.length}
+        {#if syncProblemsAllDropbox}
+          filing {syncProblems.length === 1 ? 'issue' : 'issues'} — not filed to Dropbox
+        {:else}
+          sync {syncProblems.length === 1 ? 'issue' : 'issues'} — not saved to cloud
+        {/if}
       </button>
     {/if}
 

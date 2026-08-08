@@ -63,7 +63,17 @@ export async function onPurchaseOrderVoided(purchase) {
     }
     const { voidPurchaseOrderFolder } = await import('./dropbox.js');
     const result = await voidPurchaseOrderFolder(purchase);
-    return result ? { renamed: true, ...result } : { renamed: false, nothingToRename: true };
+    if (!result) {
+      // poSummaryFiled is the books saying this PO's packet was filed, so its
+      // folder should be there to rename. That it is not means the two
+      // disagree — most likely a PO filed before each one got its own folder.
+      // Silence here is the worst answer: it reads as a clean void while the
+      // paperwork still sits under its live name, which is precisely what
+      // someone following the paper trail later would be misled by.
+      reportApprovalProblem('voided, but no Dropbox folder was found to mark VOID', purchase.folder);
+      return { renamed: false, nothingToRename: true };
+    }
+    return { renamed: true, ...result };
   } catch (e) {
     reportApprovalProblem(`its Dropbox folder could not be marked VOID — ${e.message}`, purchase.folder);
     return { renamed: false, problem: e.message };
