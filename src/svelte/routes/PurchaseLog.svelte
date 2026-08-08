@@ -194,8 +194,16 @@
     const amt=Number(p.amount)||0,ad=p.amount!=null?fmt(amt):'—';
     const project=getProject(),basePath=project?.dropboxPath;
     const folderPath=(basePath&&p.folder)?basePath.replace(/\/+$/,'')+'/'+p.folder:null;
-    const paidLabel=p.status==='Void'?'—':(p.paid?'Paid':'Unpaid');
-    const paidCls=p.paid?'detail-paid--yes':'detail-paid--no';
+    // On a quote the attached file is the vendor's own quote document, not a
+    // receipt — calling it one hides the very thing the record exists to show:
+    // what the production gets for the price being quoted.
+    const isQuoteRec=p.isQuote||p.status==='Quote';
+    const docLabel=isQuoteRec?'Quote Document':'Receipt';
+    const docBtnLabel=isQuoteRec?'View Quote':'View Receipt';
+    // Nothing is owed on a quote, so it is neither paid nor unpaid. The log
+    // row already says so; the popup used to disagree with it.
+    const paidLabel=(p.status==='Void'||isQuoteRec)?'—':(p.paid?'Paid':'Unpaid');
+    const paidCls=isQuoteRec?'detail-muted':(p.paid?'detail-paid--yes':'detail-paid--no');
     const liHtml=(p.lineItems&&p.lineItems.length)?p.lineItems.map(li=>`<div class="detail-line-item"><span>${esc(li.label||li.lineItem||'—')}</span><span>${li.amount!=null?fmt(Number(li.amount)):'—'}</span></div>`).join(''):'<span class="detail-muted">None</span>';
     content.innerHTML=`
       <div class="detail-header"><h2 class="detail-title">Submission ${esc(p.folder??'—')}</h2><div class="detail-status">${statusBadge(p.status)}</div></div>
@@ -213,7 +221,7 @@
         <div class="detail-field"><label>Payment Status</label><span class="${paidCls}">${paidLabel}</span></div>
         <div class="detail-field"><label>W9 / Tax Form</label>${p.w9Url?`<button type="button" class="btn btn--ghost btn--sm" id="detail-view-w9-btn">📄 View W9</button>`:`<span>${p.w9Attached?'⚠ Marked attached, no file stored':'✘ Not attached'}</span>`}</div>
         <div class="detail-field"><label>Pay Method Doc</label>${p.payDocUrl?`<button type="button" class="btn btn--ghost btn--sm" id="detail-view-paydoc-btn">📄 View Pay Info</button>`:`<span>${p.payMethodDocAttached?'⚠ Marked attached, no file stored':'✘ Not attached'}</span>`}</div>
-        <div class="detail-field"><label>Receipt</label>${p.receiptUrl?`<button type="button" class="btn btn--ghost btn--sm" id="detail-view-receipt-btn">📄 View Receipt</button><span class="field-error" id="detail-receipt-error"></span>`:'<span class="detail-muted">None</span>'}</div>
+        <div class="detail-field"><label>${docLabel}</label>${p.receiptUrl?`<button type="button" class="btn btn--ghost btn--sm" id="detail-view-receipt-btn">📄 ${docBtnLabel}</button><span class="field-error" id="detail-receipt-error"></span>`:'<span class="detail-muted">None</span>'}</div>
         ${p.linkedFolder?`<div class="detail-field"><label>Linked Folder</label><span>${esc(p.linkedFolder)}</span></div>`:''}
         ${p.isFringe?`<div class="detail-field"><label>Fringe</label><span>Yes</span></div>`:''}
       </div>
@@ -233,12 +241,12 @@
       btn.textContent = 'Loading…';
       try {
         const bytes = await resolveReceiptBytes(p.receiptUrl);
-        if (!bytes) throw new Error('Receipt could not be loaded.');
+        if (!bytes) throw new Error(`${docLabel} could not be loaded.`);
         const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
         window.open(url, '_blank');
         setTimeout(() => URL.revokeObjectURL(url), 60000);
       } catch (err) {
-        if (errEl) errEl.textContent = err.message || 'Could not load receipt.';
+        if (errEl) errEl.textContent = err.message || `Could not load ${docLabel.toLowerCase()}.`;
       } finally {
         btn.disabled = false;
         btn.textContent = originalLabel;

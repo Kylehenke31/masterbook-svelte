@@ -779,7 +779,15 @@ export function calcSummary(purchases) {
     }
   }
 
-  // Net = everything committed or in-flight minus refunds
-  const net = approved + inReview + quotes - refunded;
+  // Net = everything committed or in-flight minus refunds. Quotes are counted
+  // and shown, but deliberately left out: a quote is a price a vendor has
+  // offered, not money the production has committed — nobody approved it and
+  // nothing is owed on it. Counting it would also double up the moment a quote
+  // is accepted, because accepting one means submitting a separate PO for the
+  // same money while the quote stays on the log as the record of what was
+  // offered.
+  // Kept in step with calcSummary in svelte/stores/purchases.js, which is the
+  // migrated copy of this function — the two must agree.
+  const net = approved + inReview - refunded;
   return { net, approved, quotes, refunded, inReview };
 }

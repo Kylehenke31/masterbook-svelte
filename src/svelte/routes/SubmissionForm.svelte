@@ -101,7 +101,8 @@
                 <!-- Receipt / Invoice (REQUIRED) -->
                 <div class="field field--full">
                   <label for="f-receipt">
-                    Receipt / Invoice <span class="optional-label">(optional)</span>
+                    <span id="f-receipt-label-text">Receipt / Invoice</span>
+                    <span class="optional-label">(optional)</span>
                   </label>
                   <div class="receipt-input-row">
                     <input type="file" id="f-receipt" name="receipt"
@@ -461,6 +462,19 @@
         noteEl.className   = docsRequired ? 'doc-note doc-note--required' : 'doc-note';
       }
     });
+
+    // On a quote, the file being attached is the vendor's quote — the document
+    // that says what the price actually buys. It is the whole point of logging
+    // a quote, so the field should ask for it by name.
+    const quoting = isQuote(c);
+    const receiptLabel = c.querySelector('#f-receipt-label-text');
+    if (receiptLabel) receiptLabel.textContent = quoting ? 'Quote Document' : 'Receipt / Invoice';
+    const previewHint = c.querySelector('#preview-placeholder span:last-child');
+    if (previewHint) {
+      previewHint.innerHTML = quoting
+        ? 'Upload the vendor\'s quote<br>to preview it here'
+        : 'Upload a receipt or invoice<br>to preview it here';
+    }
 
     refreshDocFilenames(c);
   }

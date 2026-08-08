@@ -84,7 +84,9 @@
               <td>{p.salesperson || '—'}</td>
               <td><span class={statusBadgeClass(p.status)}>{p.status || '—'}</span></td>
               <td class="text-right">{fmt(p.amount)}</td>
-              <td>{p.status === 'Void' ? '—' : (p.paid ? 'Paid' : 'Unpaid')}</td>
+              <!-- A quote is not a payable, so it is neither paid nor unpaid —
+                   the same reason it is kept out of Outstanding above. -->
+              <td>{p.status === 'Void' || p.status === 'Quote' ? '—' : (p.paid ? 'Paid' : 'Unpaid')}</td>
             </tr>
           {/each}
         </tbody>

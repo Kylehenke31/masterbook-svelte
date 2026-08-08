@@ -310,6 +310,14 @@ export function calcSummary(list) {
       case 'Submitted':        inReview += amt; break;
     }
   }
-  const net = approved + inReview + quotes - refunded;
+  // Quotes are counted and shown, but deliberately left out of the net. A
+  // quote is a price a vendor has offered, not money the production has
+  // committed — nobody approved it and nothing is owed on it. Counting it
+  // would also double up the moment a quote is accepted, because accepting
+  // one means submitting a separate PO for the same money while the quote
+  // stays on the log as the record of what was offered.
+  // Kept in step with calcSummary in data.js, which is the pre-migration copy
+  // the Purchase Log still imports — the two must agree.
+  const net = approved + inReview - refunded;
   return { net, approved, inReview, quotes, refunded };
 }
