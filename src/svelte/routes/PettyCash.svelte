@@ -4,7 +4,7 @@
   import { reconcile, buildPettyCashPDF, pettyCashFilename,
            generateAndDownloadPettyCash } from '../lib/pettyCashSummary.js';
   import { isDropboxConnected, filePettyCashEnvelope } from '../lib/dropbox.js';
-  import { loadMyMembership } from '../lib/db.js';
+  import { loadMyMembership, loadProjectMembers } from '../lib/db.js';
   import { todayLocal } from '../lib/format.js';
   import { getActiveProjectId } from '../stores/project.js';
   import { authUser } from '../stores/auth.js';
@@ -28,11 +28,21 @@
   let editId    = $state(null);     // null = new, id = editing
   let expandedId = $state(null);    // which envelope's charges are shown inline
 
-  // Form fields
-  let fCustodianName   = $state('');
+  /* Form fields.
+
+     A custodian is usually someone on the project, but not always — cash gets
+     handed to a PA for a day, or to a driver who will never have a login. So
+     the picker offers the project's members and always keeps a way to type a
+     name that has no account behind it. The typed name is a plain string and
+     stays one; it is not a stub profile and nothing downstream expects it to
+     resolve to a user. */
+  const CUSTODIAN_OTHER = '__other__';
+  let fCustodianPick   = $state('');   // a member's userId, or CUSTODIAN_OTHER
+  let fCustodianName   = $state('');   // free-typed name, used when "other"
   let fOpeningBalance  = $state('');
   let custodianError   = $state(false);
   let balanceError      = $state(false);
+  let members          = $state([]);
 
   // Close / reconcile fields
   let closeId       = $state(null);
@@ -49,8 +59,12 @@
   let canReview = $derived(isReviewer(myMember));
 
   onMount(async () => {
+    const pid = getActiveProjectId();
     const u = $authUser;
-    myMember = u ? await loadMyMembership(getActiveProjectId(), u.id) : null;
+    myMember = u ? await loadMyMembership(pid, u.id) : null;
+    // Best-effort: an empty list only costs the convenience of the dropdown,
+    // so a failure here must not stop someone opening an envelope.
+    try { members = await loadProjectMembers(pid); } catch { members = []; }
   });
 
   // ── Load ───────────────────────────────────────────────────
@@ -107,11 +121,26 @@
     return figuresFor(env).balance;
   }
 
+  /** The name to store, and the member id behind it when there is one. */
+  function resolveCustodian() {
+    if (fCustodianPick && fCustodianPick !== CUSTODIAN_OTHER) {
+      const m = members.find(x => x.userId === fCustodianPick);
+      if (m) return { custodianName: m.displayName, custodianUserId: m.userId };
+    }
+    return { custodianName: fCustodianName.trim(), custodianUserId: null };
+  }
+
   // ── Envelope CRUD ──────────────────────────────────────────
   function openForm(id) {
     editId = id;
     const env = id === null ? {} : envelopes.find(e => e.id === id) || {};
-    fCustodianName  = env.custodianName || '';
+    // Reopen on the member if this envelope was tied to one and they are still
+    // on the project. Otherwise fall to the typed name — which is also what
+    // happens to an envelope whose custodian has since left, and is right:
+    // the envelope still belongs to whoever held the cash.
+    const linked = env.custodianUserId && members.some(m => m.userId === env.custodianUserId);
+    fCustodianPick  = linked ? env.custodianUserId : (env.custodianName ? CUSTODIAN_OTHER : '');
+    fCustodianName  = linked ? '' : (env.custodianName || '');
     fOpeningBalance = env.openingBalance != null ? String(env.openingBalance) : '';
     custodianError = false;
     balanceError = false;
@@ -122,7 +151,8 @@
 
   function saveForm() {
     let ok = true;
-    if (!fCustodianName.trim()) { custodianError = true; ok = false; }
+    const custodian = resolveCustodian();
+    if (!custodian.custodianName) { custodianError = true; ok = false; }
     const balanceNum = parseFloat(fOpeningBalance);
     if (isNaN(balanceNum) || balanceNum < 0) { balanceError = true; ok = false; }
     if (!ok) return;
@@ -130,14 +160,14 @@
     if (editId === null) {
       envelopes = [...envelopes, {
         id: crypto.randomUUID(),
-        custodianName: fCustodianName.trim(),
+        ...custodian,
         openedDate: todayLocal(),
         openingBalance: balanceNum,
         status: 'Active',
       }];
     } else {
       envelopes = envelopes.map(e => e.id === editId
-        ? { ...e, custodianName: fCustodianName.trim(), openingBalance: balanceNum }
+        ? { ...e, ...custodian, openingBalance: balanceNum }
         : e);
     }
     save();
@@ -488,12 +518,31 @@
 
     <div class="pc-form">
       <div class="pc-field">
-        <label for="pc-custodian">Custodian Name</label>
-        <input id="pc-custodian" class="pc-input" class:pc-input--error={custodianError} type="text"
-          bind:value={fCustodianName} placeholder="Who's holding this envelope"
-          oninput={() => custodianError = false} />
-        {#if custodianError}<span class="pc-field-error">Custodian name is required</span>{/if}
+        <label for="pc-custodian">Custodian</label>
+        <select id="pc-custodian" class="pc-input"
+          class:pc-input--error={custodianError && fCustodianPick !== CUSTODIAN_OTHER}
+          bind:value={fCustodianPick} onchange={() => custodianError = false}>
+          <option value="">Select custodian…</option>
+          {#each members as m (m.userId)}
+            <option value={m.userId}>{m.displayName}</option>
+          {/each}
+          <option value={CUSTODIAN_OTHER}>+ Someone not on the project</option>
+        </select>
+        {#if members.length === 0}
+          <span class="pc-hint">No project members loaded — enter a name below.</span>
+        {/if}
       </div>
+
+      {#if fCustodianPick === CUSTODIAN_OTHER || members.length === 0}
+        <div class="pc-field">
+          <label for="pc-custodian-name">Custodian Name</label>
+          <input id="pc-custodian-name" class="pc-input" class:pc-input--error={custodianError} type="text"
+            bind:value={fCustodianName} placeholder="Who's holding this envelope"
+            oninput={() => custodianError = false} />
+          <span class="pc-hint">No account needed — this is just the name on the envelope.</span>
+        </div>
+      {/if}
+      {#if custodianError}<span class="pc-field-error">Pick a custodian, or enter a name</span>{/if}
       <div class="pc-field">
         <label for="pc-balance">Opening Balance ($)</label>
         <input id="pc-balance" class="pc-input" class:pc-input--error={balanceError} type="number"
@@ -701,6 +750,7 @@
   .pc-input:focus  { outline: none; border-color: var(--gold, #6a8a6a); }
   .pc-input--error { border-color: var(--earth-red, #b84f4f); }
   .pc-field-error  { font-size: 0.75rem; color: var(--earth-red, #b84f4f); }
+  .pc-hint         { font-size: 0.72rem; color: var(--text-muted, #888); }
 
   .pc-form-actions {
     display: flex;
