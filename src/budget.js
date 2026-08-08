@@ -5,10 +5,35 @@
    Sub-line detail modal with OT support for labor sections.
    ============================================================ */
 
-import { addPurchase, getPurchases } from './data.js?v=6';
+// Imported without the ?v= cache-buster the pre-Vite entry used. A query
+// string makes a distinct module URL, and so a distinct module instance with
+// its own purchase list. The Svelte app hydrates plain './data.js', so reading
+// from './data.js?v=6' here returned an empty list forever — Daily Activity
+// and the Hot Cost Summary silently showed nothing, while Running Actuals kept
+// working only because it reads localStorage directly instead of asking here.
+//
+// The old app.js entry still imports './data.js?v=6', but it has not been
+// loadable for some time — it imports purchaseLog.js, submissionForm.js and
+// other modules that no longer exist — so there is no second live reader to
+// keep in step. If it is ever revived, drop the ?v= there too or it will
+// hydrate one instance while this file reads another.
+import { addPurchase, getPurchases } from './data.js';
 
 const BUDGET_KEY = 'movie-ledger-budget';
 const LOCK_KEY   = 'movie-ledger-budget-lock';
+
+/**
+ * Today as 'YYYY-MM-DD' in the user's own timezone.
+ *
+ * Not toISOString().slice(0,10) — that is UTC, so anywhere west of Greenwich
+ * it rolls over to tomorrow partway through the evening. Date pickers seeded
+ * that way opened on the wrong day and showed an empty panel for work the user
+ * had just logged. Purchases store their date as a local 'YYYY-MM-DD' string,
+ * so the comparison has to be made in the same frame of reference.
+ */
+function _todayLocal(d = new Date()) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 const PROD_INFO_KEY        = 'movie-ledger-prod-info';
 const HOT_COST_LOG_KEY     = 'movie-ledger-hot-costs';
@@ -1826,7 +1851,7 @@ function _openFringePopup() {
   _fringeFile = null;
 
   const fmtAmt = n => '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const today  = new Date().toISOString().slice(0, 10);
+  const today  = _todayLocal();
 
   // Gather ALL fringe submissions from the purchase log
   let purchases = [];
@@ -3149,7 +3174,7 @@ export function renderHotCosts(container) {
   _buildActualsMap();
 
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = _todayLocal();
 
   /* Status filter state — all checked by default */
   const _activityFilters = { approved: true, inReview: true, quotes: true };
@@ -3200,8 +3225,11 @@ export function renderHotCosts(container) {
       const statusCls = p.status === 'Returned' ? 'bud-neg' : '';
       const statusLabel = esc(p.status || '—');
 
-      const paidLabel = p.paid ? 'Paid' : 'Unpaid';
-      const paidCls   = p.paid ? 'hc-paid--yes' : 'hc-paid--no';
+      // A quote is not a payable, so it is neither paid nor unpaid — the same
+      // reason the Purchase Log and Purchase Orders log both show a dash.
+      const isQuoteRec = p.isQuote || p.status === 'Quote';
+      const paidLabel = isQuoteRec ? '—' : (p.paid ? 'Paid' : 'Unpaid');
+      const paidCls   = isQuoteRec ? '' : (p.paid ? 'hc-paid--yes' : 'hc-paid--no');
 
       // Extract just the number prefix from the line item (e.g. "5200" from "5200 – Camera Equipment")
       const lineNum = (p.lineItem || '—').split(/\s*[–—-]\s*/)[0];
