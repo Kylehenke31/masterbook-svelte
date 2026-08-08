@@ -506,7 +506,7 @@ export function updatePurchase(id, changes) {
   }
   // Refund entries always stay "Refunded" and negative
   if (merged.isReturn || merged.method === 'Return') {
-    if (merged.status === 'Approved') merged.status = 'Refunded';
+    if (merged.status === 'Approved' || merged.status === 'Committed') merged.status = 'Refunded';
     merged.amount = -Math.abs(Number(merged.amount) || 0);
   }
   DB.purchases[idx] = merged;
@@ -559,8 +559,78 @@ export function togglePaid(id) {
   return updatePurchase(id, { paid: !p.paid });
 }
 
-export function approvePurchase(id) {
-  return updatePurchase(id, { status: 'Approved' });
+/**
+ * Initials for an approval bubble: "Kyle Henke" → "KH".
+ *
+ * Stored on the approval rather than derived at render time, because the
+ * bubble is a record of who signed off — it should still read "KH" after that
+ * person is removed from the project and their profile is no longer loadable.
+ */
+export function initialsFor(name, email) {
+  const src = String(name || '').trim() || String(email || '').split('@')[0] || '';
+  const parts = src.split(/[\s._-]+/).filter(Boolean);
+  if (!parts.length) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+/**
+ * Record one person's sign-off.
+ *
+ * Approvals accumulate rather than replacing each other: a show where two
+ * accountants review and a line producer commits needs to see all three, and
+ * a single-person show simply has one. Nothing here decides whether that is
+ * *enough* — that judgement belongs to whoever commits, which is why no
+ * minimum is enforced.
+ *
+ * Re-approving is idempotent. Somebody clicking twice, or revisiting a record
+ * they already signed, should not stack duplicate bubbles.
+ */
+export function approvePurchase(id, approver = {}) {
+  const p = getPurchaseById(id);
+  if (!p) return null;
+  const userId = approver.userId || null;
+  const existing = Array.isArray(p.approvals) ? p.approvals : [];
+  if (userId && existing.some(a => a.userId === userId)) return p;
+  const name = approver.name || approver.email || 'Unknown';
+  const approvals = [...existing, {
+    userId,
+    name,
+    initials: initialsFor(approver.name, approver.email),
+    at: new Date().toISOString(),
+  }];
+  return updatePurchase(id, { status: 'Approved', approvals, approvedBy: name });
+}
+
+/** Withdraw your own sign-off, for a mind changed before commit. */
+export function unapprovePurchase(id, userId) {
+  const p = getPurchaseById(id);
+  if (!p || !userId) return null;
+  const approvals = (p.approvals || []).filter(a => a.userId !== userId);
+  return updatePurchase(id, {
+    approvals,
+    status: approvals.length ? 'Approved' : 'In Review',
+    approvedBy: approvals.length ? approvals[approvals.length - 1].name : null,
+  });
+}
+
+/**
+ * Commit a reviewed record — the point it becomes real.
+ *
+ * Everything that treats an expense as money spent keys on 'Committed', not
+ * 'Approved': the budget actuals, the credit card logs, the petty cash
+ * balances, the Purchase Orders outstanding total, and the Dropbox filing.
+ * Approving is an opinion; committing is the decision, and only an admin or
+ * accountant may make it.
+ */
+export function commitPurchase(id, committer = {}) {
+  const p = getPurchaseById(id);
+  if (!p) return null;
+  return updatePurchase(id, {
+    status: 'Committed',
+    committedBy: committer.name || committer.email || 'Unknown',
+    committedAt: new Date().toISOString(),
+  });
 }
 
 /**
@@ -578,6 +648,11 @@ export function sendBackPurchase(id, reason = '') {
     status: 'Rejected',
     rejectionReason: String(reason || '').trim(),
     rejectedAt: new Date().toISOString(),
+    // Sign-offs are cleared. They were given for a version of this record that
+    // is about to change, and carrying them forward would show a line producer
+    // two accountants' approval of something neither has seen.
+    approvals: [],
+    approvedBy: null,
   });
 }
 
@@ -661,6 +736,18 @@ export async function hydrateFromCloud(projectId) {
       return;
     }
     DB.purchases = purchases;
+    // Migrate what came down, and push the result back. Without this the cloud
+    // copy keeps saying 'Approved' and re-applies it on every load, so the
+    // migration would appear to work and then quietly undo itself.
+    let cloudMigrated = false;
+    for (const p of DB.purchases) {
+      if (migrateApprovedToCommitted(p)) cloudMigrated = true;
+    }
+    if (cloudMigrated) {
+      persist();
+      const h = await getCloudHelpers();
+      if (h) await h.cloudSaveAllPurchases(projectId, DB.purchases).catch(() => {});
+    }
     // Recompute folder counters from cloud data
     let low = 0, high = 0, poNext = 1;
     const ccLogNext = {};
@@ -692,6 +779,34 @@ export async function hydrateFromCloud(projectId) {
   } catch (e) {
     console.warn('[data] hydrateFromCloud failed:', e.message);
   }
+}
+
+/**
+ * 'Approved' used to be the terminal state — it filed the paperwork and posted
+ * the budget actual. Those things now happen at 'Committed', so a record
+ * approved under the old rule is already committed in every sense that
+ * matters; leaving it as 'Approved' would silently drop it out of the budget,
+ * the logs and the outstanding totals.
+ *
+ * Keyed on the absence of `approvals`, which only the new flow ever writes, so
+ * this cannot catch a record that was approved-but-not-yet-committed under the
+ * new rules — exactly the record it must not touch.
+ *
+ * Applied to cloud-loaded records as well as local ones. hydrateFromCloud
+ * replaces DB.purchases wholesale, so migrating only on the localStorage path
+ * meant the migration was undone by the next sync a second later.
+ *
+ * @returns true when the record was changed.
+ */
+function migrateApprovedToCommitted(p) {
+  if (p.status !== 'Approved' || Array.isArray(p.approvals)) return false;
+  p.status = 'Committed';
+  p.committedBy = p.approvedBy || 'Migrated';
+  p.committedAt = p.approvedAt || new Date().toISOString();
+  p.approvals = p.approvedBy
+    ? [{ userId: null, name: p.approvedBy, initials: initialsFor(p.approvedBy), at: p.committedAt }]
+    : [];
+  return true;
 }
 
 export function hydrate() {
@@ -732,6 +847,7 @@ export function hydrate() {
         p.status = 'In Review';
         migrated = true;
       }
+      if (migrateApprovedToCommitted(p)) migrated = true;
     }
     if (migrated) persist();
   } else if (localStorage.getItem(DEMO_SEED_KEY) === 'on') {
@@ -758,7 +874,7 @@ export function hydrate() {
 
 /* ── Summary Calculations ── */
 export function calcSummary(purchases) {
-  let approved = 0, inReview = 0, quotes = 0, refunded = 0;
+  let committed = 0, approved = 0, inReview = 0, quotes = 0, refunded = 0;
 
   for (const p of purchases) {
     if (p.status === 'Void') continue;
@@ -771,11 +887,15 @@ export function calcSummary(purchases) {
     }
 
     switch (p.status) {
-      case 'Approved':          approved += amt; break;
-      case 'Pending Approval':  inReview += amt; break;
-      case 'Quote':             quotes   += amt; break;
-      case 'In Review':         inReview += amt; break;
-      case 'Submitted':         inReview += amt; break;
+      // Committed is the money actually spent — it is what the budget, the
+      // logs and the filed paperwork all agree on. Approved is a step short:
+      // signed off, waiting for someone to commit it.
+      case 'Committed':         committed += amt; break;
+      case 'Approved':          approved  += amt; break;
+      case 'Pending Approval':  inReview  += amt; break;
+      case 'Quote':             quotes    += amt; break;
+      case 'In Review':         inReview  += amt; break;
+      case 'Submitted':         inReview  += amt; break;
     }
   }
 
@@ -786,6 +906,6 @@ export function calcSummary(purchases) {
   // is accepted, because accepting one means submitting a separate PO for the
   // same money while the quote stays on the log as the record of what was
   // offered.
-  const net = approved + inReview - refunded;
-  return { net, approved, quotes, refunded, inReview };
+  const net = committed + approved + inReview - refunded;
+  return { net, committed, approved, quotes, refunded, inReview };
 }

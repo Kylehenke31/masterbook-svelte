@@ -187,7 +187,7 @@
     if (!selectedCard) return;
     const openId = openLogRow?.id ?? null;
     logRows = getPurchases().filter(p =>
-      p.method === 'CC' && p.status === 'Approved' &&
+      p.method === 'CC' && p.status === 'Committed' &&
       p.ccCardType === selectedCard.cardType && p.ccLast4 === selectedCard.last4 &&
       (!p.ccLogId || p.ccLogId === openId)
     );

@@ -1,13 +1,15 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
-  import { getPurchases, deletePurchase, voidPurchase, approvePurchase, sendBackPurchase,
-           calcSummary, getPurchaseById, togglePaid, updatePurchase } from '../../data.js';
+  import { getPurchases, deletePurchase, voidPurchase, approvePurchase, unapprovePurchase,
+           commitPurchase, sendBackPurchase, calcSummary, getPurchaseById, togglePaid,
+           updatePurchase } from '../../data.js';
   import { getBudgetLineMap } from '../../budget.js';
-  import { downloadDraftReceipt, loadMyMembership, uploadDraftReceipt } from '../lib/db.js';
+  import { downloadDraftReceipt, loadMyMembership, loadMyProfile, uploadDraftReceipt } from '../lib/db.js';
   import { getActiveProjectId } from '../stores/project.js';
   import { authUser } from '../stores/auth.js';
-  import { canEditPurchase, canApprovePurchase, explainEditBlock, isReviewer } from '../lib/permissions.js';
-  import { onPurchaseApproved, onPurchaseOrderVoided } from '../lib/approval.js';
+  import { canEditPurchase, canApprovePurchase, canCommitPurchase, explainEditBlock,
+           isReviewer } from '../lib/permissions.js';
+  import { onPurchaseCommitted, onPurchaseOrderVoided } from '../lib/approval.js';
   import { PDFDocument } from 'pdf-lib';
 
   /* ── Who am I on this project? ──
@@ -16,11 +18,21 @@
      from "no role" and would silently hide every action. */
   let myUserId = null;
   let myMember = null;   // { role, permissions } — what the grant checks need
+  let myEmail  = null;
+  let myName   = null;
   const _unsubRole = authUser.subscribe(async (u) => {
     myUserId = u?.id ?? null;
+    myEmail  = u?.email ?? null;
     myMember = u ? await loadMyMembership(getActiveProjectId(), u.id) : null;
+    myName   = u?.user_metadata?.display_name || null;
+    if (u && !myName) {
+      try { myName = (await loadMyProfile())?.display_name || null; } catch { /* falls back to email */ }
+    }
     refreshView?.();
   });
+
+  /** Who is signing — recorded on the approval so the bubble survives them. */
+  const me = () => ({ userId: myUserId, name: myName, email: myEmail });
 
   /* ── Receipt resolution — shared by the Review Queue's edit form and the
      read-only detail popup. purchase.receiptUrl is one of:
@@ -76,8 +88,25 @@
   function getProject() { try{return JSON.parse(localStorage.getItem('movie-ledger-project'))||null;}catch{return null;} }
 
   function statusBadge(st) {
-    const map={'Submitted':'submitted','In Review':'in-review','Approved':'approved','Pending Approval':'pending-approval','Refunded':'returned','Void':'void','Quote':'quote'};
+    const map={'Submitted':'submitted','In Review':'in-review','Approved':'approved','Committed':'committed','Pending Approval':'pending-approval','Rejected':'returned','Refunded':'returned','Void':'void','Quote':'quote'};
     return `<span class="badge badge--${map[st]??'submitted'}">${esc(st??'—')}</span>`;
+  }
+
+  /**
+   * The sign-off bubbles.
+   *
+   * One per person who has approved, showing their initials, with the full
+   * name and time on hover. This is the column a line producer scans: it
+   * answers "have my accountants looked at this yet" without opening anything.
+   */
+  function approvalBubbles(p) {
+    const list = Array.isArray(p.approvals) ? p.approvals : [];
+    if (!list.length) return '<span class="appr-none">—</span>';
+    return `<span class="appr-bubbles">${list.map(a => {
+      const when = a.at ? new Date(a.at).toLocaleString() : '';
+      const mine = a.userId && a.userId === myUserId;
+      return `<span class="appr-bubble${mine?' appr-bubble--mine':''}" title="${esc(a.name||'Unknown')}${when?` — ${esc(when)}`:''}">${esc(a.initials||'?')}</span>`;
+    }).join('')}</span>`;
   }
   function methodBadgeText(p) {
     switch(p.method){case'CC':return`CC ···${p.ccLast4??'????'}`;case'PO-CC':return`PO via CC···${p.ccLast4??'????'}`;case'PO':return'PO';case'Check':return'Check';case'Debit':return'Debit';case'ACH':return'ACH';case'Return':return'Return';default:return esc(p.method??'—');}
@@ -94,7 +123,9 @@
   function paidToggle(p) {
     if(p.status==='Void')return'<span class="paid-label paid-label--void">—</span>';
     if(p.status==='Quote')return'<span class="paid-label paid-label--na">—</span>';
-    if(p.status!=='Approved'&&p.status!=='Refunded')return'<span class="paid-label paid-label--na">—</span>';
+    // Only a committed record is a payable. An approved one is still waiting
+    // on somebody's decision, so there is nothing yet to mark paid.
+    if(p.status!=='Committed'&&p.status!=='Refunded')return'<span class="paid-label paid-label--na">—</span>';
     const isPaid=!!p.paid,cls=isPaid?'paid-toggle--paid':'paid-toggle--unpaid',label=isPaid?'Paid':'Unpaid';
     return `<button class="paid-toggle ${cls}" data-action="toggle-paid" data-id="${p.id}" title="${label}">${label}</button>`;
   }
@@ -106,8 +137,21 @@
     const isVoid = p.status === 'Void', btns = [];
     const mayEdit    = canEditPurchase(p, myUserId, myMember);
     const mayApprove = canApprovePurchase(p, myUserId, myMember);
+    const mayCommit  = canCommitPurchase(p, myMember);
+    const open       = ['In Review','Pending Approval','Approved'].includes(p.status);
+    const iSigned    = (p.approvals || []).some(a => a.userId && a.userId === myUserId);
 
-    if (!isVoid && mayApprove && ['In Review','Pending Approval'].includes(p.status))
+    // Sign off, or take a signature back. Both are cheap and reversible right
+    // up until somebody commits, which is the point of separating them.
+    if (!isVoid && mayApprove && open && !iSigned)
+      btns.push(`<button class="btn btn--ghost btn--sm" data-action="approve" data-id="${p.id}" title="Approve — add your sign-off">✔</button>`);
+    if (!isVoid && mayApprove && open && iSigned)
+      btns.push(`<button class="btn btn--ghost btn--sm btn--signed" data-action="unapprove" data-id="${p.id}" title="You approved this — click to withdraw">✔</button>`);
+    // Commit is the consequential one, so it is labelled rather than a glyph.
+    if (!isVoid && mayCommit && open)
+      btns.push(`<button class="btn btn--primary btn--sm" data-action="commit" data-id="${p.id}" title="Commit — post to the budget and file the paperwork">Commit</button>`);
+
+    if (!isVoid && mayApprove && ['In Review','Pending Approval','Approved'].includes(p.status))
       btns.push(`<button class="btn btn--warning btn--sm" data-action="return" data-id="${p.id}" title="Send back for correction">↩</button>`);
     if (!isVoid && mayApprove)
       btns.push(`<button class="btn btn--ghost btn--sm" data-action="void" data-id="${p.id}" title="Void">⊘</button>`);
@@ -121,11 +165,11 @@
     return btns.join('');
   }
   function rowHTML(p) {
-    const map={'Approved':'row--approved','In Review':'row--review','Submitted':'row--review','Pending Approval':'row--pending','Refunded':'row--returned','Void':'row--void','Quote':'row--quote'};
+    const map={'Committed':'row--approved','Approved':'row--pending','In Review':'row--review','Submitted':'row--review','Pending Approval':'row--pending','Rejected':'row--returned','Refunded':'row--returned','Void':'row--void','Quote':'row--quote'};
     const isVoid=p.status==='Void',isRefund=p.status==='Refunded',isQuote=p.isQuote||p.status==='Quote';
-    let ac='';if(isVoid)ac='amount--void';else if(isRefund)ac='amount--return';else if(isQuote)ac='amount--quote';else if(p.status==='Approved')ac='amount--approved';else if(p.status==='Pending Approval')ac='amount--pending';
+    let ac='';if(isVoid)ac='amount--void';else if(isRefund)ac='amount--return';else if(isQuote)ac='amount--quote';else if(p.status==='Committed')ac='amount--approved';else if(p.status==='Approved'||p.status==='Pending Approval')ac='amount--pending';
     const amt=Number(p.amount)||0,ad=p.amount!=null?fmt(amt):'—';
-    return `<tr data-id="${p.id}" class="${map[p.status]??''}"><td><span class="folder-num folder-link" data-action="detail" data-id="${p.id}" title="View details">${esc(p.folder??'—')}</span></td><td>${esc(p.date??'—')}</td><td class="vendor-cell"><span class="vendor-name">${esc(p.vendor??'—')}</span>${vendorTooltip(p)}</td><td>${methodBadge(p)}</td><td>${esc(p.description??'—')}</td><td>${padLineItem(p.lineItem??'—')}</td><td>${esc(p.submittedBy??'—')}</td><td>${statusBadge(p.status)}</td><td class="amount-cell"><span class="${ac}">${ad}</span></td><td class="paid-cell">${paidToggle(p)}</td><td class="actions-cell">${actionButtons(p)}</td></tr>`;
+    return `<tr data-id="${p.id}" class="${map[p.status]??''}"><td><span class="folder-num folder-link" data-action="detail" data-id="${p.id}" title="View details">${esc(p.folder??'—')}</span></td><td>${esc(p.date??'—')}</td><td class="vendor-cell"><span class="vendor-name">${esc(p.vendor??'—')}</span>${vendorTooltip(p)}</td><td>${methodBadge(p)}</td><td>${esc(p.description??'—')}</td><td>${padLineItem(p.lineItem??'—')}</td><td>${esc(p.submittedBy??'—')}</td><td class="appr-cell">${approvalBubbles(p)}</td><td>${statusBadge(p.status)}</td><td class="amount-cell"><span class="${ac}">${ad}</span></td><td class="paid-cell">${paidToggle(p)}</td><td class="actions-cell">${actionButtons(p)}</td></tr>`;
   }
   function queueRowHTML(p) {
     const map={'In Review':'row--review','Submitted':'row--review','Pending Approval':'row--pending'};
@@ -157,11 +201,14 @@
   function renderSummary(all) {
     const strip=container.querySelector('#summary-strip');if(!strip)return;
     const s=calcSummary(all);
-    strip.innerHTML=`<div class="summary-item summary-item--net"><span class="summary-item__label">Net Total</span><span class="summary-item__value">${fmt(s.net)}</span></div><div class="summary-item summary-item--approved"><span class="summary-item__label">Approved</span><span class="summary-item__value">${fmt(s.approved)}</span></div><div class="summary-item summary-item--inreview"><span class="summary-item__label">In Review</span><span class="summary-item__value">${fmt(s.inReview)}</span></div><div class="summary-item summary-item--quotes"><span class="summary-item__label">Quotes</span><span class="summary-item__value">${fmt(s.quotes)}</span></div><div class="summary-item summary-item--returns"><span class="summary-item__label">Refunded</span><span class="summary-item__value">${fmt(s.refunded)}</span></div>`;
+    // Committed leads: it is the only figure that matches the budget. Approved
+    // sits beside it as the money already signed off but not yet decided, which
+    // is the number a line producer is looking for when they open this page.
+    strip.innerHTML=`<div class="summary-item summary-item--net"><span class="summary-item__label">Net Total</span><span class="summary-item__value">${fmt(s.net)}</span></div><div class="summary-item summary-item--approved"><span class="summary-item__label">Committed</span><span class="summary-item__value">${fmt(s.committed)}</span></div><div class="summary-item summary-item--pending"><span class="summary-item__label">Approved</span><span class="summary-item__value">${fmt(s.approved)}</span></div><div class="summary-item summary-item--inreview"><span class="summary-item__label">In Review</span><span class="summary-item__value">${fmt(s.inReview)}</span></div><div class="summary-item summary-item--quotes"><span class="summary-item__label">Quotes</span><span class="summary-item__value">${fmt(s.quotes)}</span></div><div class="summary-item summary-item--returns"><span class="summary-item__label">Refunded</span><span class="summary-item__value">${fmt(s.refunded)}</span></div>`;
   }
   function renderRows(records) {
     const tbody=container.querySelector('#log-tbody');if(!tbody)return;
-    tbody.innerHTML=records.length===0?`<tr><td colspan="11" class="table-empty">No records match the current filters.</td></tr>`:records.map(rowHTML).join('');
+    tbody.innerHTML=records.length===0?`<tr><td colspan="12" class="table-empty">No records match the current filters.</td></tr>`:records.map(rowHTML).join('');
   }
   function renderQueueRows() {
     const tbody=container.querySelector('#rq-tbody');if(!tbody)return;
@@ -169,7 +216,10 @@
     // draft, and filtering on it put unfinished work in front of approvers as
     // though it were awaiting their decision. Only things actually sent for
     // review belong here.
-    const records=getPurchases().filter(p=>new Set(['In Review','Pending Approval']).has(p.status));
+    // 'Approved' belongs here too. A record several people have signed but
+    // nobody has committed is still waiting on somebody — dropping it out of
+    // the queue the moment the first reviewer signs is how it gets forgotten.
+    const records=getPurchases().filter(p=>new Set(['In Review','Pending Approval','Approved']).has(p.status));
     tbody.innerHTML=records.length===0?`<tr><td colspan="11" class="table-empty">No submissions currently awaiting review.</td></tr>`:records.map(queueRowHTML).join('');
   }
   function updateSortIndicators() {
@@ -301,15 +351,41 @@
     if(action==='delete'){if(confirm('Delete this record permanently?')){deletePurchase(id);refreshView();if(fromQueue)renderQueueRows();}}
     else if(action==='void'){const p=getPurchaseById(id),msg=p&&p.status==='Approved'?`VOID submission "${p.folder} — ${p.vendor}"?\n\nThis will remove all data from the budget and logs. The folder will be renamed with VOID. This action CANNOT be undone.`:p?`VOID submission "${p.folder??''} — ${p.vendor??''}"?\n\nThe folder will be renamed with VOID. This action CANNOT be undone.`:'VOID?';if(confirm(msg)){const rec=getPurchaseById(id);voidPurchase(id);refreshView();if(fromQueue)renderQueueRows();window.dispatchEvent(new Event('ledger-data-changed'));onPurchaseOrderVoided(rec);}}
     else if(action==='approve'){
-      if(confirm('Approve this record?')){
-        approvePurchase(id);
+      // Approving is only a signature. It writes nothing to Dropbox and puts
+      // nothing in the budget — those wait for a commit — so it does not need
+      // a confirmation, and adding one would make signing off feel heavier
+      // than it is on a show where several people sign the same record.
+      approvePurchase(id, me());
+      refreshView();
+      if(fromQueue)renderQueueRows();
+    }
+    else if(action==='unapprove'){
+      unapprovePurchase(id, myUserId);
+      refreshView();
+      if(fromQueue)renderQueueRows();
+    }
+    else if(action==='commit'){
+      const p=getPurchaseById(id);
+      if(!canCommitPurchase(p, myMember)){
+        alert('Only an admin or accountant can commit a record.');
+        return;
+      }
+      const signed=(p?.approvals||[]).length;
+      if(confirm(
+        `Commit ${p?.folder||'this record'} — ${p?.vendor||''}?\n\n` +
+        (signed
+          ? `Signed off by ${(p.approvals||[]).map(a=>a.name).join(', ')}.\n\n`
+          : `Nobody has signed off on this yet.\n\n`) +
+        `It goes into the budget as an actual and its paperwork is filed to Dropbox.`
+      )){
+        commitPurchase(id, me());
         refreshView();
         if(fromQueue)renderQueueRows();
-        maybeGeneratePOSummary(id);
-        // Join the card's open log and file the receipt. Deliberately not
-        // awaited: a Dropbox outage must not hold up an approval, and any
-        // failure reports itself through the sync indicator.
-        onPurchaseApproved(getPurchaseById(id), updatePurchase).then(() => refreshView());
+        window.dispatchEvent(new Event('ledger-data-changed'));
+        // File the paperwork and join the card's open log. Deliberately not
+        // awaited: a Dropbox outage must not hold up a commit, and any failure
+        // reports itself through the sync indicator.
+        onPurchaseCommitted(getPurchaseById(id), updatePurchase).then(() => refreshView());
       }
     }
     else if(action==='return'){
@@ -709,6 +785,7 @@
                 <th data-sort="folder">Folder</th><th data-sort="date">Date</th><th data-sort="vendor">Vendor</th>
                 <th data-sort="method">Method</th><th data-sort="description">Description</th>
                 <th data-sort="lineItem">Line Item</th><th data-sort="submittedBy">Submitted By</th>
+                <th>Approved</th>
                 <th data-sort="status">Status</th><th data-sort="amount" class="text-right">Amount</th>
                 <th>Paid</th><th>Actions</th>
               </tr></thead>

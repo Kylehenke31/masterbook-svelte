@@ -43,6 +43,22 @@ export const DRAFT_STATUSES = ['Draft', 'Submitted'];
 export const AWAITING_REVIEW_STATUSES = ['In Review', 'Pending Approval'];
 
 /**
+ * Roles that may commit — the only roles that can cause a file to be written
+ * to the production's Dropbox, or money to land in the budget.
+ *
+ * This is a *role* check, and deliberately narrower than reviewing. Reviewing
+ * is 'edit on Expenses', which a coordinator can hold; committing is the
+ * decision that makes an expense real, and a production that hands out
+ * Expenses: Edit for day-to-day review should not thereby hand out the ability
+ * to file paperwork under its own name.
+ *
+ * Because it is narrower than the purchases RLS policy — which grants updates
+ * on the Expenses grant — the database has to enforce this separately, or the
+ * button is decoration. See the commit guard in the purchases update policy.
+ */
+export const COMMIT_ROLES = ['admin', 'accounting'];
+
+/**
  * Does this member review expenses?
  *
  * Accepts the whole membership — { role, permissions } — rather than a role
@@ -87,6 +103,30 @@ export function canApprovePurchase(purchase, userId, member) {
 }
 
 /**
+ * May this member commit — turning a reviewed record into a real one?
+ *
+ * Role-based, not grant-based, and the one place in this file where that is
+ * on purpose. Committing files paperwork to the production's Dropbox and puts
+ * money in the budget; those are decisions for the people accountable for the
+ * books, not for anyone who happens to hold Expenses: Edit so they can help
+ * review.
+ *
+ * Nothing here checks how many approvals a record carries. A one-person show
+ * commits its own work; a larger one waits for its accountants to sign off
+ * first. Which of those is happening is a judgement for the committer, who can
+ * see the approval bubbles, not a rule for this function.
+ */
+export function canCommitPurchase(purchase, member) {
+  if (!purchase || !member) return false;
+  if (COMMITTABLE_STATUSES.indexOf(purchase.status) === -1) return false;
+  const role = typeof member === 'string' ? member : member.role;
+  return COMMIT_ROLES.includes(role);
+}
+
+/** A record has to have been looked at before it can be made real. */
+export const COMMITTABLE_STATUSES = ['In Review', 'Pending Approval', 'Approved'];
+
+/**
  * Why editing is blocked, phrased for the person who is blocked.
  * Returns null when editing is allowed.
  */
@@ -97,8 +137,9 @@ export function explainEditBlock(purchase, userId, member) {
     if (AWAITING_REVIEW_STATUSES.includes(purchase.status)) {
       return 'Submitted for approval — locked until an approver reviews it or sends it back.';
     }
-    if (purchase.status === 'Approved') return 'Approved — approved records cannot be changed.';
-    if (purchase.status === 'Void')     return 'Voided records cannot be changed.';
+    if (purchase.status === 'Approved')  return 'Approved — waiting to be committed, and locked until it is.';
+    if (purchase.status === 'Committed') return 'Committed — it is in the budget and its paperwork is filed.';
+    if (purchase.status === 'Void')      return 'Voided records cannot be changed.';
     return `${purchase.status} records cannot be changed by the submitter.`;
   }
   return 'Only the person who submitted this, or an approver, can change it.';

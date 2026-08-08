@@ -100,7 +100,7 @@
   function chargesFor(envelopeId) {
     const env = envelopes.find(e => e.id === envelopeId);
     const all = getPurchases().filter(p =>
-      p.method === 'Petty Cash' && p.status === 'Approved' &&
+      p.method === 'Petty Cash' && p.status === 'Committed' &&
       p.pettyCashEnvelopeId === envelopeId
     );
     if (env?.chargeIds) {

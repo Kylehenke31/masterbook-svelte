@@ -527,8 +527,17 @@ a:hover {
   border: 1px solid var(--earth-blue);
 }
 
-/* Approved — earth sage green */
+/* Approved — signed off, still waiting on a commit. Amber, not green: green
+   is reserved for Committed, which is the state that means the money is real
+   and the paperwork is filed. */
 .badge--approved {
+  background: var(--badge-pending-bg);
+  color: var(--earth-amber);
+  border: 1px solid var(--earth-amber);
+}
+
+/* Committed — earth sage green. The end of the line. */
+.badge--committed {
   background: var(--badge-approved-bg);
   color: var(--earth-green);
   border: 1px solid var(--earth-green);
@@ -621,6 +630,44 @@ a:hover {
 .summary-item--quotes .summary-item__value   { color: var(--earth-purple); }
 .summary-item--returns .summary-item__value  { color: var(--earth-red); }
 .summary-item--inreview .summary-item__value { color: var(--earth-blue); }
+.summary-item--pending .summary-item__value  { color: var(--earth-amber); }
+
+/* ── Approval bubbles ──
+   One per person who has signed off, initials only. The column is scanned,
+   not read: a line producer wants to know at a glance whether their
+   accountants have been through a record yet, and a name per row would make
+   that a paragraph. Full name and time live in the tooltip. */
+.appr-cell    { white-space: nowrap; }
+.appr-none    { color: var(--text-muted); }
+.appr-bubbles { display: inline-flex; gap: 3px; }
+
+.appr-bubble {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  background: var(--badge-approved-bg);
+  color: var(--earth-green);
+  border: 1px solid var(--earth-green);
+  cursor: default;
+}
+
+/* Your own signature, so you can tell at a glance whether you have signed. */
+.appr-bubble--mine {
+  background: var(--earth-green);
+  color: var(--bg, #141414);
+}
+
+/* The approve button, once you are the one who signed it. */
+.btn--signed {
+  color: var(--earth-green);
+  border-color: var(--earth-green);
+}
 
 /* ── Log Controls ── */
 .log-header {

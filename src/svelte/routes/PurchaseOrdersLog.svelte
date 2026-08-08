@@ -19,12 +19,17 @@
   );
 
   /* ── Outstanding payments ──
-     An approved PO is already an actual in the budget: the cost is committed
-     and the paperwork is filed. Whether the money has physically gone out is a
+     A committed PO is already an actual in the budget: the cost is decided and
+     the paperwork is filed. Whether the money has physically gone out is a
      separate question, and this is where it gets answered — the list of what
-     has been approved but not yet paid, which is what an accountant works
-     through. Quotes are excluded: nothing is owed on a PO nobody approved. */
-  let approved   = $derived(pos.filter(p => p.status === 'Approved'));
+     has been committed but not yet paid, which is what an accountant works
+     through.
+
+     Approved-but-not-committed POs are deliberately absent: a sign-off is not
+     yet a debt, and listing one as outstanding would have an accountant chasing
+     payment on an order the line producer has not agreed to. Quotes are out for
+     the same reason, one step earlier. */
+  let approved   = $derived(pos.filter(p => p.status === 'Committed'));
   let outstanding = $derived(approved.filter(p => !p.paid));
   let settled     = $derived(approved.filter(p => p.paid));
   const sum = list => list.reduce((t, p) => t + (Number(p.amount) || 0), 0);

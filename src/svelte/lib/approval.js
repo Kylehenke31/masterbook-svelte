@@ -1,16 +1,22 @@
 /**
- * approval.js — what happens the moment an expense is approved.
+ * approval.js — what happens the moment an expense is committed.
  *
- * Approval is the point the paperwork becomes real: the charge joins its
- * card's open Credit Card Log, and its receipt is filed into Dropbox. Both
- * used to wait until someone generated a log, which meant an approved receipt
- * could sit unfiled indefinitely.
+ * Commit is the point the paperwork becomes real: the charge joins its card's
+ * open Credit Card Log, and its receipt is filed into Dropbox. Both used to
+ * wait until someone generated a log, which meant a settled receipt could sit
+ * unfiled indefinitely.
+ *
+ * Approval is a step short of this and has no side effects at all. Sign-offs
+ * accumulate on a record as opinions — two accountants and then a line
+ * producer — and none of them writes anything. Only commit does, which is why
+ * commit is the action restricted to admins and accountants: it is the only
+ * way an action inside this app can put a file in the production's Dropbox.
  *
  * "Paid" is deliberately not consulted. A credit card charge has already been
- * made by the time anyone approves it — approval is the admin confirming the
- * details are right, not authorising a payment. Paid is a reconciliation flag
- * ticked later, and gating log membership on it left approved receipts
- * stranded until someone remembered.
+ * made by the time anyone reviews it — committing is confirming the details
+ * are right, not authorising a payment. Paid is a reconciliation flag ticked
+ * later, and gating log membership on it left settled receipts stranded until
+ * someone remembered.
  *
  * Every step is best-effort and reported rather than thrown: a Dropbox outage
  * must not be able to block an approval, but it must not pass silently either
@@ -81,21 +87,21 @@ export async function onPurchaseOrderVoided(purchase) {
 }
 
 /**
- * Approving a Purchase Order.
+ * Committing a Purchase Order.
  *
  * A PO is a document in its own right rather than a line on a periodic log, so
- * there is no log to join — approval renders its Summary PDF once and files it
+ * there is no log to join — commit renders its Summary PDF once and files it
  * under Purchase Orders.
  *
  * The PDF is rendered a single time and used for both the Dropbox copy and the
  * download. Rendering twice risked the filed copy and the one in the approver's
  * hands differing if the record changed in between.
  *
- * Approval is also what makes the PO an actual in the budget — see the filter
+ * Commit is also what makes the PO an actual in the budget — see the filter
  * in budget.js. Payment is tracked separately by the Paid flag, which is what
  * the Purchase Orders log uses as its outstanding-payments checklist.
  */
-async function onPurchaseOrderApproved(purchase, applyChanges) {
+async function onPurchaseOrderCommitted(purchase, applyChanges) {
   if (purchase.poSummaryFiled) return { alreadyFiled: true };
 
   // The filed document is the whole packet: topsheet, invoice, payment
@@ -140,7 +146,7 @@ async function onPurchaseOrderApproved(purchase, applyChanges) {
   try {
     if (!(await isDropboxConnected())) {
       handOver();
-      reportApprovalProblem('approved, but Dropbox is not connected — the PO Summary was downloaded instead of filed', purchase.folder);
+      reportApprovalProblem('committed, but Dropbox is not connected — the PO Summary was downloaded instead of filed', purchase.folder);
       return { filed: false, downloaded: true, problem: 'dropbox not connected' };
     }
     const { filePurchaseOrder } = await import('./dropbox.js');
@@ -166,15 +172,21 @@ async function onPurchaseOrderApproved(purchase, applyChanges) {
 }
 
 /**
- * Run the side effects of approving a purchase.
+ * Run the side effects of committing a purchase.
  *
- * @param purchase        the freshly-approved record
+ * Committing, not approving. Approvals accumulate as opinions and carry no
+ * consequences; commit is the single decision that files the paperwork and
+ * puts the money in the budget, and it is restricted to admins and
+ * accountants. Hanging these effects off approval would mean the first
+ * reviewer to click caused a write to the production's Dropbox.
+ *
+ * @param purchase        the freshly-committed record
  * @param applyChanges    (id, changes) => void — how to persist the log stamp
  * @returns {Promise<{ logNumber?: string, filed?: boolean, problem?: string }>}
  */
-export async function onPurchaseApproved(purchase, applyChanges) {
+export async function onPurchaseCommitted(purchase, applyChanges) {
   if (!purchase) return {};
-  if (purchase.method === 'PO') return onPurchaseOrderApproved(purchase, applyChanges);
+  if (purchase.method === 'PO') return onPurchaseOrderCommitted(purchase, applyChanges);
   if (purchase.method !== 'CC') return {};   // only CC charges belong to a CC Log
 
   const projectId = getActiveProjectId();

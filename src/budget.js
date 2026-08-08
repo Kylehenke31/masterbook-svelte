@@ -880,15 +880,20 @@ function _buildActualsMap() {
   };
 
   purchases
-    // Actualize on approval, not on payment.
+    // Actualize on commit, not on payment.
     //
-    // Approval is the point the cost is committed and the paperwork is filed;
+    // Commit is the point the cost is decided and the paperwork is filed;
     // whether the money has physically left yet is a separate question, and
     // answering it is what the Paid flag and the Purchase Orders log are for.
-    // Waiting for Paid meant an approved PO was invisible in the budget until
+    // Waiting for Paid meant a committed PO was invisible in the budget until
     // somebody remembered to tick a box, which is exactly when a production
     // overspends without seeing it.
-    .filter(p => p.status === 'Approved')
+    //
+    // Nor on approval: approvals are opinions that accumulate — two accountants
+    // signing off is not the same as the line producer deciding it is real.
+    // Actualizing on the first approval would put money in the budget that
+    // nobody had finally agreed to.
+    .filter(p => p.status === 'Committed')
     .forEach(p => {
       if (Array.isArray(p.lineItems) && p.lineItems.length > 0) {
         // Detailed per-item breakdown, assigned via the Review Queue's
@@ -3513,11 +3518,9 @@ function _openHotCostSummary(filters = { approved: true, inReview: true, quotes:
     return bucket && filters[bucket];
   });
 
-  // Approved, regardless of payment — see the note in the budget actuals
+  // Committed, regardless of payment — see the note in the budget actuals
   // filter above. Kept under the old name to avoid churn at its call sites.
-  const approvedPaid = purchases.filter(p =>
-    p.status === 'Approved' && p.status !== 'Void'
-  );
+  const approvedPaid = purchases.filter(p => p.status === 'Committed');
   const inReview = purchases.filter(p =>
     p.status === 'Pending' || p.status === 'In Review'
   );
