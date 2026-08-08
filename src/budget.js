@@ -5,18 +5,14 @@
    Sub-line detail modal with OT support for labor sections.
    ============================================================ */
 
-// Imported without the ?v= cache-buster the pre-Vite entry used. A query
-// string makes a distinct module URL, and so a distinct module instance with
-// its own purchase list. The Svelte app hydrates plain './data.js', so reading
-// from './data.js?v=6' here returned an empty list forever — Daily Activity
-// and the Hot Cost Summary silently showed nothing, while Running Actuals kept
-// working only because it reads localStorage directly instead of asking here.
-//
-// The old app.js entry still imports './data.js?v=6', but it has not been
-// loadable for some time — it imports purchaseLog.js, submissionForm.js and
-// other modules that no longer exist — so there is no second live reader to
-// keep in step. If it is ever revived, drop the ?v= there too or it will
-// hydrate one instance while this file reads another.
+// Imported without a ?v= cache-buster. The pre-Vite entry used those on every
+// import, and they are worse than useless here: a query string makes a
+// distinct module URL, and so a distinct module instance with its own purchase
+// list. This file read './data.js?v=6' while the app hydrated plain
+// './data.js', so getPurchases() answered from an array nobody ever filled —
+// Daily Activity and the Hot Cost Summary silently showed nothing, and Running
+// Actuals only kept working because it reads localStorage directly instead of
+// asking here. Keep every data.js import in this project bare.
 import { addPurchase, getPurchases } from './data.js';
 import { todayLocal } from './svelte/lib/format.js';
 
