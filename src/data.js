@@ -786,8 +786,6 @@ export function calcSummary(purchases) {
   // is accepted, because accepting one means submitting a separate PO for the
   // same money while the quote stays on the log as the record of what was
   // offered.
-  // Kept in step with calcSummary in svelte/stores/purchases.js, which is the
-  // migrated copy of this function — the two must agree.
   const net = approved + inReview - refunded;
   return { net, approved, quotes, refunded, inReview };
 }
