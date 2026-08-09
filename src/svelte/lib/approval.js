@@ -218,40 +218,29 @@ export async function onPurchaseCommitted(purchase, applyChanges) {
   // File the receipt now rather than at packaging.
   if (!purchase.receiptUrl) return { logNumber: log.log_number, filed: false };
 
-  // A receipt is a file the submitter already uploaded, not a document this
-  // app generated, so there is nothing meaningful to hand back on a manual
-  // plan — the person filing it by hand already has it. Joining the log still
-  // happened, which is the part that matters to the books.
-  const { resolvePlan } = await import('./fileDocument.js');
-  const { plan } = await resolvePlan();
-  if (plan.destination === 'manual') {
-    return { logNumber: log.log_number, filed: false, manual: true };
-  }
-  if (plan.destination === 'local') {
-    reportApprovalProblem(
-      'the charge joined its log, but receipts are still filed to Dropbox only — this one was not filed locally',
-      purchase.folder);
-    return { logNumber: log.log_number, filed: false, problem: 'local receipt filing not supported yet' };
-  }
-  if (plan.mode === 'prompt' &&
-      !confirm(`File the receipt for ${purchase.folder || 'this charge'} to Dropbox?`)) {
-    return { logNumber: log.log_number, filed: false, skipped: true };
-  }
+  const stamped = { ...purchase, ccLogId: log.id, ccLogNumber: log.log_number };
+  const { fileAttachments } = await import('./fileDocument.js');
+  const { ccReceiptFilename } = await import('./dropbox.js');
 
-  try {
-    if (!(await isDropboxConnected())) {
-      reportApprovalProblem('committed, but Dropbox is not connected so the receipt was not filed', purchase.folder);
-      return { logNumber: log.log_number, filed: false, problem: 'dropbox not connected' };
-    }
-    const stamped = { ...purchase, ccLogId: log.id, ccLogNumber: log.log_number };
-    const result = await fileCCLogReceipts(card, log.log_number, [stamped]);
-    if (result.failedCount) {
-      reportApprovalProblem(`receipt could not be filed to Dropbox — ${result.failed?.[0]?.message || 'unknown error'}`, purchase.folder);
-      return { logNumber: log.log_number, filed: false, problem: 'upload failed' };
-    }
-    return { logNumber: log.log_number, filed: true };
-  } catch (e) {
-    reportApprovalProblem(`receipt could not be filed to Dropbox — ${e.message}`, purchase.folder);
-    return { logNumber: log.log_number, filed: false, problem: e.message };
+  const result = await fileAttachments({
+    items: [{ ref: purchase.receiptUrl, filename: ccReceiptFilename(stamped, log.log_number) }],
+    folderId: '01-accounting/credit-cards',
+    // The same card folder Dropbox uses, so a production that switches between
+    // the two finds its receipts in the same place either way.
+    subfolder: `${card.cardType} ${card.last4}_${card.cardholderName}/Receipts`,
+    describe: purchase.folder || 'this charge',
+    dropboxFile: () => fileCCLogReceipts(card, log.log_number, [stamped]),
+  });
+
+  // Joining the log is the part that matters to the books, and it already
+  // happened — so a receipt that was skipped by choice is not a problem to
+  // report. One that failed is.
+  if (result.filedCount) return { logNumber: log.log_number, filed: true, destination: result.destination };
+  if (result.manual || result.skipped) {
+    return { logNumber: log.log_number, filed: false, manual: result.manual, skipped: result.skipped };
   }
+  reportApprovalProblem(
+    `the charge joined log ${log.log_number}, but its receipt was not filed — ${result.problem || result.failed?.[0]?.message || result.reason || 'unknown error'}`,
+    purchase.folder);
+  return { logNumber: log.log_number, filed: false, problem: result.problem || 'upload failed' };
 }

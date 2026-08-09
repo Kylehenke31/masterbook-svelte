@@ -108,3 +108,71 @@ export async function fileDocument(opts) {
     return { destination: 'dropbox', filed: false, downloaded: ok, problem: e.message };
   }
 }
+
+/**
+ * File a set of attachments — receipts, mostly — according to the plan.
+ *
+ * Separate from fileDocument because these are not documents this app made.
+ * They are files somebody already uploaded, which changes what the manual
+ * setting means: there is nothing useful to hand back, because the person
+ * filing by hand is the one who supplied them. So manual skips rather than
+ * downloading a pile of PDFs somebody already has.
+ *
+ * @param opts.items      [{ ref, filename }] — ref is a receiptUrl-style
+ *                        reference; bytes are resolved here
+ * @param opts.folderId   folderTree id the set belongs under
+ * @param opts.subfolder  optional folder inside it
+ * @param opts.dropboxFile async () => ({ filedCount, failedCount, failed })
+ *                        — Dropbox has its own naming and retry rules per
+ *                        document type, so it stays with that type
+ * @param opts.describe   short human name for the prompt
+ */
+export async function fileAttachments(opts) {
+  const { items = [], folderId, subfolder, dropboxFile, describe } = opts;
+  const { plan } = await resolvePlan();
+
+  if (!items.length) return { destination: plan.destination, filedCount: 0, failedCount: 0 };
+
+  if (plan.destination === 'manual') {
+    return { destination: 'manual', filedCount: 0, failedCount: 0, manual: true,
+             degradedFrom: plan.degradedFrom, reason: plan.reason };
+  }
+
+  if (plan.mode === 'prompt') {
+    const where = plan.destination === 'dropbox' ? 'Dropbox' : 'the project folder on this computer';
+    const what = `${items.length} ${items.length === 1 ? 'receipt' : 'receipts'}`;
+    if (!confirm(`File ${what} for ${describe || 'this record'} to ${where}?`)) {
+      return { destination: plan.destination, filedCount: 0, failedCount: 0, skipped: true };
+    }
+  }
+
+  if (plan.destination === 'local') {
+    const { folderPathById } = await import('./folderTree.js');
+    const { writeLocalFile } = await import('./localFiling.js');
+    const { resolveAttachmentBytes } = await import('./attachments.js');
+    const segments = folderPathById(folderId).split('/');
+    if (subfolder) segments.push(subfolder);
+
+    const failed = [];
+    let filedCount = 0;
+    for (const item of items) {
+      try {
+        const bytes = await resolveAttachmentBytes(item.ref);
+        if (!bytes) { failed.push({ filename: item.filename, message: 'nothing stored for it' }); continue; }
+        await writeLocalFile(segments, item.filename, bytes);
+        filedCount++;
+      } catch (e) {
+        failed.push({ filename: item.filename, message: e.message });
+      }
+    }
+    return { destination: 'local', filedCount, failedCount: failed.length, failed };
+  }
+
+  try {
+    const r = await dropboxFile();
+    return { destination: 'dropbox', filedCount: r.filedCount ?? 0,
+             failedCount: r.failedCount ?? 0, failed: r.failed, path: r.receiptsPath || r.folderPath };
+  } catch (e) {
+    return { destination: 'dropbox', filedCount: 0, failedCount: items.length, problem: e.message };
+  }
+}

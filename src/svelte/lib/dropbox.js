@@ -270,12 +270,6 @@ function sanitizeFolderSegment(name) {
   return String(name || '').replace(/[\\/]/g, '-').trim().replace(/[. ]+$/, '') || 'Untitled';
 }
 
-function base64ToBytes(base64) {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return bytes;
-}
 
 /** Two decimals, no thousands separators — commas read badly in a filename. */
 function fmtMoneyForFilename(n) {
@@ -370,11 +364,24 @@ export async function voidPurchaseOrderFolder(purchase) {
  * number stays in the *filename*, which is what now distinguishes receipts
  * from different periods sharing that folder.
  */
+/**
+ * What a credit card receipt is called, wherever it is filed.
+ *
+ * Exported because the local-folder path names them too, and a receipt that is
+ * called one thing in Dropbox and another on disk is the same receipt only to
+ * whoever filed it.
+ */
+export async function ccReceiptFilename(p, logNumber) {
+  const { padReceiptNum } = await import('./format.js');
+  return sanitizeFolderSegment(
+    `${p.ccLast4}_${logNumber}_${padReceiptNum(p.ccReceiptNum) || '000'}_${p.vendor}_${p.date}_$${fmtMoneyForFilename(p.amount)}`
+  ) + '.pdf';
+}
+
 export async function fileCCLogReceipts(card, logNumber, purchases) {
   const { projectFolderName, getProject } = await import('../stores/project.js');
   const { folderPathById } = await import('./folderTree.js');
-  const { padReceiptNum } = await import('./format.js');
-  const { downloadDraftReceipt } = await import('./db.js');
+  const { resolveAttachmentBytes } = await import('./attachments.js');
 
   const project  = getProject();
   const rootName = sanitizeFolderSegment(projectFolderName(project));
@@ -394,19 +401,9 @@ export async function fileCCLogReceipts(card, logNumber, purchases) {
   for (const p of purchases) {
     if (!p.receiptUrl) continue;
     try {
-      let bytes;
-      if (p.receiptUrl.startsWith('data:')) {
-        bytes = base64ToBytes(p.receiptUrl.split(',')[1]);
-      } else if (p.receiptUrl.startsWith('supabase://')) {
-        const buf = await downloadDraftReceipt(p.receiptUrl);
-        if (!buf) throw new Error('could not download staged receipt');
-        bytes = new Uint8Array(buf);
-      } else {
-        continue; // unrecognized reference — nothing to file
-      }
-      const filename = sanitizeFolderSegment(
-        `${p.ccLast4}_${logNumber}_${padReceiptNum(p.ccReceiptNum) || '000'}_${p.vendor}_${p.date}_$${fmtMoneyForFilename(p.amount)}`
-      ) + '.pdf';
+      const bytes = await resolveAttachmentBytes(p.receiptUrl);
+      if (!bytes) throw new Error('could not read the stored receipt');
+      const filename = await ccReceiptFilename(p, logNumber);
       await uploadFileWithRetry(`${receiptsPath}/${filename}`, bytes);
       filedCount++;
     } catch (e) {
@@ -437,17 +434,28 @@ export async function fileCCLogReceipts(card, logNumber, purchases) {
  * receipt would not download serves nobody. The count comes back so the caller
  * can say what happened.
  */
+/** Envelope folder name, shared by the Dropbox and local-folder paths. */
+export function pettyCashFolderName(envelope) {
+  return sanitizeFolderSegment(
+    `${envelope.custodianName || 'Unknown'}_${envelope.closedDate || envelope.openedDate || ''}`);
+}
+
+/** What one petty cash receipt is called, wherever it is filed. */
+export function pettyCashReceiptFilename(p) {
+  return sanitizeFolderSegment(
+    `${p.folder || '0000'}_${p.vendor || 'Unknown'}_${p.date || ''}_$${fmtMoneyForFilename(p.amount)}`
+  ) + '.pdf';
+}
+
 export async function filePettyCashEnvelope(envelope, charges, summaryBytes, filename) {
   const { projectFolderName, getProject } = await import('../stores/project.js');
   const { folderPathById } = await import('./folderTree.js');
-  const { downloadDraftReceipt } = await import('./db.js');
+  const { resolveAttachmentBytes } = await import('./attachments.js');
 
   const project  = getProject();
   const rootName = sanitizeFolderSegment(projectFolderName(project));
   const pcPath   = `/${rootName}/${folderPathById('01-accounting/petty-cash')}`;
-  const envFolder = sanitizeFolderSegment(
-    `${envelope.custodianName || 'Unknown'}_${envelope.closedDate || envelope.openedDate || ''}`);
-  const folderPath = `${pcPath}/${envFolder}`;
+  const folderPath = `${pcPath}/${pettyCashFolderName(envelope)}`;
 
   await createFolderWithRetry(pcPath);
   await createFolderWithRetry(folderPath);
@@ -459,20 +467,9 @@ export async function filePettyCashEnvelope(envelope, charges, summaryBytes, fil
   for (const p of charges) {
     if (!p.receiptUrl) continue;
     try {
-      let bytes;
-      if (p.receiptUrl.startsWith('data:')) {
-        bytes = base64ToBytes(p.receiptUrl.split(',')[1]);
-      } else if (p.receiptUrl.startsWith('supabase://')) {
-        const buf = await downloadDraftReceipt(p.receiptUrl);
-        if (!buf) throw new Error('could not download staged receipt');
-        bytes = new Uint8Array(buf);
-      } else {
-        continue; // unrecognized reference — nothing to file
-      }
-      const receiptName = sanitizeFolderSegment(
-        `${p.folder || '0000'}_${p.vendor || 'Unknown'}_${p.date || ''}_$${fmtMoneyForFilename(p.amount)}`
-      ) + '.pdf';
-      await uploadFileWithRetry(`${folderPath}/${receiptName}`, bytes);
+      const bytes = await resolveAttachmentBytes(p.receiptUrl);
+      if (!bytes) throw new Error('could not read the stored receipt');
+      await uploadFileWithRetry(`${folderPath}/${pettyCashReceiptFilename(p)}`, bytes);
       filedCount++;
     } catch (e) {
       failed.push({ purchaseId: p.id, message: e.message });

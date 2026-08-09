@@ -17,28 +17,11 @@
  */
 
 import { PDFDocument } from 'pdf-lib';
+import { resolveAttachmentBytes } from './attachments.js';
 
-/** Fetch stored bytes for a document reference the app understands. */
-async function loadDocBytes(ref) {
-  if (!ref) return null;
-  try {
-    if (ref.startsWith('data:')) {
-      const base64 = ref.split(',')[1] || '';
-      const binary = atob(base64);
-      const bytes = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-      return bytes;
-    }
-    if (ref.startsWith('supabase://')) {
-      const { downloadDraftReceipt } = await import('./db.js');
-      const buf = await downloadDraftReceipt(ref);
-      return buf ? new Uint8Array(buf) : null;
-    }
-  } catch (e) {
-    console.warn('[poPacket] could not load a document:', e.message);
-  }
-  return null;
-}
+/* Reference decoding lives in attachments.js — the filing code reads the same
+   formats, and two decoders drift. */
+const loadDocBytes = (ref) => resolveAttachmentBytes(ref);
 
 /**
  * Build the combined PO packet.

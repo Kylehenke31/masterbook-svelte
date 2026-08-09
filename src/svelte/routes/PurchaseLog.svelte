@@ -5,6 +5,7 @@
            updatePurchase } from '../../data.js';
   import { getBudgetLineMap } from '../../budget.js';
   import { downloadDraftReceipt, loadMyMembership, loadMyProfile, uploadDraftReceipt } from '../lib/db.js';
+  import { resolveAttachmentBytes } from '../lib/attachments.js';
   import { getActiveProjectId } from '../stores/project.js';
   import { authUser } from '../stores/auth.js';
   import { canEditPurchase, canApprovePurchase, canCommitPurchase, hasCommitRole,
@@ -34,31 +35,11 @@
   /** Who is signing — recorded on the approval so the bubble survives them. */
   const me = () => ({ userId: myUserId, name: myName, email: myEmail });
 
-  /* ── Receipt resolution — shared by the Review Queue's edit form and the
-     read-only detail popup. purchase.receiptUrl is one of:
-       null                              — no receipt
-       data:application/pdf;base64,...   — legacy: inlined on the record by
-                                           older direct submissions. Still read
-                                           here, but no longer written.
-       supabase://tempdocs/{path}        — staged in Supabase Storage (both
-                                           drafts and direct submissions)
-     Anything else (e.g. a future dropbox: reference) isn't inline-viewable
-     here yet. Returns raw PDF bytes, or null if there's nothing to show. */
-  async function resolveReceiptBytes(receiptUrl) {
-    if (!receiptUrl) return null;
-    if (receiptUrl.startsWith('data:')) {
-      const base64 = receiptUrl.split(',')[1] || '';
-      const binary = atob(base64);
-      const bytes = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-      return bytes;
-    }
-    if (receiptUrl.startsWith('supabase://')) {
-      const buf = await downloadDraftReceipt(receiptUrl);
-      return buf ? new Uint8Array(buf) : null;
-    }
-    return null;
-  }
+  /* Receipt bytes for the Review Queue's edit form and the read-only detail
+     popup. The reference formats, and the decoding of them, live in
+     attachments.js — this used to carry its own copy, which is how one of them
+     ends up not understanding a reference the filing code does. */
+  const resolveReceiptBytes = (ref) => resolveAttachmentBytes(ref);
 
   /* Once a PO is both Approved and Paid, silently generate its PO Summary
      PDF — guarded by poSummaryGenerated so re-toggling Paid doesn't

@@ -3,7 +3,8 @@
   import { getPurchases } from '../../data.js';
   import { reconcile, buildPettyCashPDF, pettyCashFilename,
            generateAndDownloadPettyCash } from '../lib/pettyCashSummary.js';
-  import { isDropboxConnected, filePettyCashEnvelope } from '../lib/dropbox.js';
+  // Dropbox is reached through the filing plan now, not directly — fileEnvelope
+  // imports what it needs where it needs it.
   import { loadMyMembership, loadProjectMembers } from '../lib/db.js';
   import { todayLocal } from '../lib/format.js';
   import { getActiveProjectId } from '../stores/project.js';
@@ -238,6 +239,67 @@
   }
 
   /**
+   * File a reconciled envelope wherever the project's filing plan says.
+   *
+   * The reconciliation PDF and the receipts behind it are one packet, so they
+   * go to the same place or the packet is worse than useless — a summary in
+   * Dropbox citing receipts that only exist on somebody's laptop is a paper
+   * trail with a hole in it. Both go through the plan, and the message says
+   * where they actually landed rather than assuming Dropbox.
+   */
+  async function fileEnvelope(approved, charges, bytes) {
+    const { fileDocument, fileAttachments } = await import('../lib/fileDocument.js');
+    const { pettyCashFolderName, pettyCashReceiptFilename,
+            filePettyCashEnvelope } = await import('../lib/dropbox.js');
+    const folder = pettyCashFolderName(approved);
+    const withReceipts = charges.filter(p => p.receiptUrl);
+
+    const summary = await fileDocument({
+      bytes,
+      filename: pettyCashFilename(approved),
+      folderId: '01-accounting/petty-cash',
+      subfolder: folder,
+      describe: `${approved.custodianName}'s envelope`,
+      // Dropbox files the summary and its receipts in one call, so the
+      // attachment pass below has nothing left to do on that path.
+      dropboxFile: async (b) => {
+        const r = await filePettyCashEnvelope(approved, charges, b, pettyCashFilename(approved));
+        return { path: r.folderPath, filename: pettyCashFilename(approved),
+                 receiptsFiled: r.filedCount, receiptsFailed: r.failedCount };
+      },
+    });
+
+    if (!summary.filed) {
+      if (summary.manual || summary.skipped) {
+        return { filedPath: null, message: 'Approved. The reconciliation was downloaded for you to file.' };
+      }
+      return { filedPath: null,
+               message: `Approved, but the reconciliation was not filed — ${summary.problem || summary.reason || 'unknown error'}. It was downloaded instead.` };
+    }
+
+    let receiptNote = '';
+    if (summary.destination === 'dropbox') {
+      receiptNote = summary.receiptsFailed
+        ? `, ${summary.receiptsFailed} receipt${summary.receiptsFailed === 1 ? '' : 's'} failed to upload`
+        : summary.receiptsFiled ? ` with ${summary.receiptsFiled} receipt${summary.receiptsFiled === 1 ? '' : 's'}` : '';
+    } else if (withReceipts.length) {
+      const r = await fileAttachments({
+        items: withReceipts.map(p => ({ ref: p.receiptUrl, filename: pettyCashReceiptFilename(p) })),
+        folderId: '01-accounting/petty-cash',
+        subfolder: folder,
+        describe: `${approved.custodianName}'s envelope`,
+        dropboxFile: async () => ({ filedCount: 0, failedCount: 0 }),
+      });
+      receiptNote = r.failedCount
+        ? `, ${r.failedCount} receipt${r.failedCount === 1 ? '' : 's'} failed`
+        : r.filedCount ? ` with ${r.filedCount} receipt${r.filedCount === 1 ? '' : 's'}` : '';
+    }
+
+    const where = summary.destination === 'dropbox' ? 'Dropbox' : 'the project folder on this computer';
+    return { filedPath: summary.path || null, message: `Approved and filed to ${where}${receiptNote}.` };
+  }
+
+  /**
    * Approve a reconciliation and file it.
    *
    * This is the point the envelope becomes the production's record rather than
@@ -254,7 +316,7 @@
       `Counted ${fmt(r.counted)} against an expected ${fmt(r.expectedRemaining)}` +
       `${r.variance ? ` — ${r.variance > 0 ? 'over' : 'short'} by ${fmt(Math.abs(r.variance))}` : ' — balanced'}.` +
       `${r.owedToCustodian > 0 ? `\n${env.custodianName} is owed ${fmt(r.owedToCustodian)} out of pocket.` : ''}` +
-      `\n\nIt will be filed to Dropbox under Petty Cash.`
+      `\n\nIt will be filed under Petty Cash, wherever this project files its paperwork.`
     )) return;
 
     busyId = id; actionErr = ''; actionMsg = '';
@@ -265,17 +327,8 @@
         reviewedDate: todayLocal(),
       };
       const bytes = await buildPettyCashPDF(approved, charges);
-
-      let filedPath = null;
-      if (await isDropboxConnected()) {
-        const res = await filePettyCashEnvelope(approved, charges, bytes, pettyCashFilename(approved));
-        filedPath = res.folderPath;
-        actionMsg = res.failedCount
-          ? `Approved and filed, but ${res.failedCount} of ${res.filedCount + res.failedCount} receipts failed to upload.`
-          : `Approved and filed to Dropbox${res.filedCount ? ` with ${res.filedCount} receipt${res.filedCount === 1 ? '' : 's'}` : ''}.`;
-      } else {
-        actionMsg = 'Approved, but Dropbox is not connected so nothing was filed. Connect it from Project Settings, then re-file from here.';
-      }
+      const { filedPath, message } = await fileEnvelope(approved, charges, bytes);
+      actionMsg = message;
 
       envelopes = envelopes.map(e => e.id !== id ? e : { ...approved, filedPath });
       save();
@@ -286,19 +339,18 @@
     }
   }
 
-  /** Re-run the filing for an envelope approved while Dropbox was offline. */
+  /** Re-run the filing for an envelope approved while filing was unavailable. */
   async function refile(id) {
     const env = envelopes.find(e => e.id === id);
     if (!env) return;
     busyId = id; actionErr = ''; actionMsg = '';
     try {
-      if (!(await isDropboxConnected())) throw new Error('Dropbox is still not connected.');
       const charges = chargesFor(id);
       const bytes = await buildPettyCashPDF(env, charges);
-      const res = await filePettyCashEnvelope(env, charges, bytes, pettyCashFilename(env));
-      envelopes = envelopes.map(e => e.id !== id ? e : { ...e, filedPath: res.folderPath });
+      const { filedPath, message } = await fileEnvelope(env, charges, bytes);
+      envelopes = envelopes.map(e => e.id !== id ? e : { ...e, filedPath });
       save();
-      actionMsg = `Filed to Dropbox${res.filedCount ? ` with ${res.filedCount} receipt${res.filedCount === 1 ? '' : 's'}` : ''}.`;
+      actionMsg = message;
     } catch (e) {
       actionErr = e.message || 'Could not file this envelope.';
     } finally {
