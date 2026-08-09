@@ -53,3 +53,28 @@ create policy purchases_update on public.purchases
       or public.has_project_role(project_id, array['admin','accounting']::public.project_role[])
     )
   );
+
+-- Deleting a committed record has to follow the same rule, or the protection
+-- is decorative: a reviewer who cannot edit a committed PO but can delete it
+-- outright has a bigger hammer, not a smaller one. Deleting one takes its
+-- money back out of the budget while its paperwork stays filed in Dropbox.
+
+drop policy if exists purchases_delete on public.purchases;
+
+create policy purchases_delete on public.purchases
+  for delete to authenticated
+  using (
+    public.is_project_member(project_id)
+    and not public.is_cc_log_locked(public.try_uuid(data ->> 'ccLogId'))
+    and (
+      public.has_feature(project_id, 'expenses', 'edit')
+      or (
+        data ->> 'submittedByUserId' = (select auth.uid())::text
+        and coalesce(data ->> 'status', '') in ('Draft', 'Submitted', 'Rejected')
+      )
+    )
+    and (
+      coalesce(data ->> 'status', '') <> 'Committed'
+      or public.has_project_role(project_id, array['admin','accounting']::public.project_role[])
+    )
+  );

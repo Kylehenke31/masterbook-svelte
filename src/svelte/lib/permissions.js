@@ -89,6 +89,12 @@ export function isAuthor(purchase, userId) {
  */
 export function canEditPurchase(purchase, userId, member) {
   if (!purchase) return false;
+  // A committed record is closed to everyone but the roles that could have
+  // committed it. Its money is in the budget and its paperwork is filed, so
+  // changing it means the books and the filed copy disagree. The RLS policy
+  // enforces this; reviewers who are not admins or accountants would otherwise
+  // be shown edit and delete buttons that fail on click.
+  if (purchase.status === 'Committed') return hasCommitRole(member);
   if (isReviewer(member)) return true;
   return isAuthor(purchase, userId)
     && AUTHOR_EDITABLE_STATUSES.includes(purchase.status);
@@ -117,8 +123,22 @@ export function canApprovePurchase(purchase, userId, member) {
  * see the approval bubbles, not a rule for this function.
  */
 export function canCommitPurchase(purchase, member) {
-  if (!purchase || !member) return false;
+  if (!purchase) return false;
   if (COMMITTABLE_STATUSES.indexOf(purchase.status) === -1) return false;
+  return hasCommitRole(member);
+}
+
+/**
+ * The role test on its own, without asking about a particular record.
+ *
+ * Committed records are locked to these roles for *any* change, not just for
+ * committing — the RLS policy refuses to let anyone else write a row that is
+ * in Committed. Marking one Paid is the case that matters in practice, and it
+ * needs to ask the question without a status that canCommitPurchase would
+ * reject.
+ */
+export function hasCommitRole(member) {
+  if (!member) return false;
   const role = typeof member === 'string' ? member : member.role;
   return COMMIT_ROLES.includes(role);
 }

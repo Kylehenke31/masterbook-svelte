@@ -7,8 +7,8 @@
   import { downloadDraftReceipt, loadMyMembership, loadMyProfile, uploadDraftReceipt } from '../lib/db.js';
   import { getActiveProjectId } from '../stores/project.js';
   import { authUser } from '../stores/auth.js';
-  import { canEditPurchase, canApprovePurchase, canCommitPurchase, explainEditBlock,
-           isReviewer } from '../lib/permissions.js';
+  import { canEditPurchase, canApprovePurchase, canCommitPurchase, hasCommitRole,
+           explainEditBlock, isReviewer } from '../lib/permissions.js';
   import { onPurchaseCommitted, onPurchaseOrderVoided } from '../lib/approval.js';
   import { PDFDocument } from 'pdf-lib';
 
@@ -127,6 +127,10 @@
     // on somebody's decision, so there is nothing yet to mark paid.
     if(p.status!=='Committed'&&p.status!=='Refunded')return'<span class="paid-label paid-label--na">—</span>';
     const isPaid=!!p.paid,cls=isPaid?'paid-toggle--paid':'paid-toggle--unpaid',label=isPaid?'Paid':'Unpaid';
+    // A committed record is locked to admins and accountants for any change,
+    // marking it paid included — the RLS policy refuses the write from anyone
+    // else. Show the state without the button rather than a toggle that fails.
+    if(!hasCommitRole(myMember))return`<span class="paid-label paid-label--na" title="Only an admin or accountant can change this">${label}</span>`;
     return `<button class="paid-toggle ${cls}" data-action="toggle-paid" data-id="${p.id}" title="${label}">${label}</button>`;
   }
   // Actions are shown only when the server would actually allow them. Offering
