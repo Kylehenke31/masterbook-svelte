@@ -159,20 +159,55 @@
     if (!ok) return;
 
     if (editId === null) {
-      envelopes = [...envelopes, {
+      const opened = todayLocal();
+      const created = {
         id: crypto.randomUUID(),
         ...custodian,
-        openedDate: todayLocal(),
+        openedDate: opened,
         openingBalance: balanceNum,
         status: 'Active',
-      }];
-    } else {
-      envelopes = envelopes.map(e => e.id === editId
-        ? { ...e, ...custodian, openingBalance: balanceNum }
-        : e);
+        // Named once, here, and never derived again. Receipts are filed into
+        // this folder as they are committed, so a name that moved when the
+        // envelope closed would leave them behind in the old one.
+        folderName: `${custodian.custodianName}_${opened}`,
+      };
+      envelopes = [...envelopes, created];
+      save();
+      closeForm();
+      provisionEnvelopeFolder(created);
+      return;
     }
+    envelopes = envelopes.map(e => e.id === editId
+      ? { ...e, ...custodian, openingBalance: balanceNum }
+      : e);
     save();
     closeForm();
+  }
+
+  /**
+   * Make the envelope's folder as soon as it is opened.
+   *
+   * Not awaited by saveForm: opening an envelope is a local decision and must
+   * not wait on Dropbox, let alone fail because of it. If this does not land,
+   * the first receipt filed into the folder creates it — both filing paths
+   * create parents — so the only thing lost is seeing it early.
+   */
+  async function provisionEnvelopeFolder(env) {
+    try {
+      const { ensureFolder } = await import('../lib/fileDocument.js');
+      const { pettyCashFolderName } = await import('../lib/dropbox.js');
+      const r = await ensureFolder({
+        folderId: '01-accounting/petty-cash',
+        subfolder: pettyCashFolderName(env),
+      });
+      if (r.created) {
+        actionMsg = `Opened. Receipts will be filed to ${r.path}.`;
+      } else if (r.problem) {
+        actionErr = `Envelope opened, but its folder could not be created — ${r.problem}. It will be made when the first receipt is filed.`;
+      }
+    } catch (e) {
+      actionErr = `Envelope opened, but its folder could not be created — ${e.message}.`;
+    }
   }
 
   // ── Closing: the custodian counts what is left ─────────────

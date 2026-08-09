@@ -434,10 +434,37 @@ export async function fileCCLogReceipts(card, logNumber, purchases) {
  * receipt would not download serves nobody. The count comes back so the caller
  * can say what happened.
  */
-/** Envelope folder name, shared by the Dropbox and local-folder paths. */
+/**
+ * Envelope folder name, shared by the Dropbox and local-folder paths.
+ *
+ * A stored `folderName` always wins. The folder is created when the envelope
+ * is opened and receipts go into it as they are committed, so the name has to
+ * stop moving from that moment — deriving it from `closedDate || openedDate`
+ * would rename the folder the day the envelope closes and leave every receipt
+ * already filed there behind in the old one. The derivation is kept only for
+ * envelopes opened before the name was stored.
+ */
 export function pettyCashFolderName(envelope) {
+  if (envelope?.folderName) return sanitizeFolderSegment(envelope.folderName);
   return sanitizeFolderSegment(
-    `${envelope.custodianName || 'Unknown'}_${envelope.closedDate || envelope.openedDate || ''}`);
+    `${envelope?.custodianName || 'Unknown'}_${envelope?.closedDate || envelope?.openedDate || ''}`);
+}
+
+/**
+ * Create a folder in the project's Dropbox by folderTree id, plus an optional
+ * subfolder inside it. Parents are created too, so this works on a project
+ * connected before that part of the tree existed.
+ */
+export async function ensureDropboxFolder(folderId, subfolder) {
+  const { projectFolderName, getProject } = await import('../stores/project.js');
+  const { folderPathById } = await import('./folderTree.js');
+  const rootName = sanitizeFolderSegment(projectFolderName(getProject()));
+  const base = `/${rootName}/${folderPathById(folderId)}`;
+  await createFolderWithRetry(base);
+  if (!subfolder) return base;
+  const full = `${base}/${sanitizeFolderSegment(subfolder)}`;
+  await createFolderWithRetry(full);
+  return full;
 }
 
 /** What one petty cash receipt is called, wherever it is filed. */
@@ -445,6 +472,23 @@ export function pettyCashReceiptFilename(p) {
   return sanitizeFolderSegment(
     `${p.folder || '0000'}_${p.vendor || 'Unknown'}_${p.date || ''}_$${fmtMoneyForFilename(p.amount)}`
   ) + '.pdf';
+}
+
+/**
+ * File one petty cash receipt into its envelope's folder, as it is committed.
+ *
+ * Same folder and same filename the reconciliation pass uses, so the two
+ * cannot end up with two copies of one receipt under different names — and so
+ * re-filing at reconciliation overwrites rather than duplicates.
+ */
+export async function filePettyCashReceipt(envelope, purchase) {
+  const { resolveAttachmentBytes } = await import('./attachments.js');
+  const bytes = await resolveAttachmentBytes(purchase.receiptUrl);
+  if (!bytes) return { filedCount: 0, failedCount: 1, failed: [{ message: 'could not read the stored receipt' }] };
+
+  const folderPath = await ensureDropboxFolder('01-accounting/petty-cash', pettyCashFolderName(envelope));
+  await uploadFileWithRetry(`${folderPath}/${pettyCashReceiptFilename(purchase)}`, bytes);
+  return { filedCount: 1, failedCount: 0, folderPath };
 }
 
 export async function filePettyCashEnvelope(envelope, charges, summaryBytes, filename) {

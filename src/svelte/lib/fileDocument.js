@@ -110,6 +110,40 @@ export async function fileDocument(opts) {
 }
 
 /**
+ * Create a folder where the plan files things, without putting anything in it.
+ *
+ * For a petty cash envelope this runs when the envelope is opened, so the
+ * custodian can see where their receipts are going to land before any exist.
+ * On a manual plan there is nowhere to create it, which is not a failure —
+ * `created: false` with no problem attached says so.
+ *
+ * Best-effort by design: an envelope must open whether or not Dropbox answers.
+ * The folder gets created again on the first receipt filed into it anyway,
+ * since both paths create parents as needed.
+ */
+export async function ensureFolder({ folderId, subfolder }) {
+  const { plan } = await resolvePlan();
+  if (plan.destination === 'manual') {
+    return { created: false, destination: 'manual', reason: plan.reason };
+  }
+  try {
+    if (plan.destination === 'local') {
+      const { folderPathById } = await import('./folderTree.js');
+      const { ensureLocalFolder } = await import('./localFiling.js');
+      const segments = folderPathById(folderId).split('/');
+      if (subfolder) segments.push(subfolder);
+      const path = await ensureLocalFolder(segments);
+      return { created: true, destination: 'local', path };
+    }
+    const { ensureDropboxFolder } = await import('./dropbox.js');
+    const path = await ensureDropboxFolder(folderId, subfolder);
+    return { created: true, destination: 'dropbox', path };
+  } catch (e) {
+    return { created: false, destination: plan.destination, problem: e.message };
+  }
+}
+
+/**
  * File a set of attachments — receipts, mostly — according to the plan.
  *
  * Separate from fileDocument because these are not documents this app made.

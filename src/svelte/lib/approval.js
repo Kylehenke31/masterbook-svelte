@@ -176,6 +176,67 @@ async function onPurchaseOrderCommitted(purchase, applyChanges) {
   return { filed: false, downloaded: result.downloaded, problem: result.problem || result.reason };
 }
 
+const ENVELOPES_KEY = 'movie-ledger-petty-cash-envelopes';
+
+function findEnvelope(envelopeId) {
+  if (!envelopeId) return null;
+  let envelopes = [];
+  try { envelopes = JSON.parse(localStorage.getItem(ENVELOPES_KEY)) || []; } catch {}
+  return envelopes.find(e => e.id === envelopeId) || null;
+}
+
+/**
+ * Committing a petty cash charge files its receipt into the envelope's folder.
+ *
+ * Incremental rather than all at once when the envelope is reconciled. A
+ * custodian spending against an envelope over three weeks should be able to
+ * open the folder and see what is in it, and an accountant should not have to
+ * wait for the envelope to close to check somebody's paperwork. The
+ * reconciliation PDF joins them at the end.
+ *
+ * Filing at commit rather than at submission is deliberate: an uncommitted
+ * charge may still be sent back for correction, and a receipt filed for a
+ * charge that then changes is a copy of something that never happened.
+ */
+async function onPettyCashCommitted(purchase, applyChanges) {
+  if (!purchase.receiptUrl) return { filed: false, noReceipt: true };
+
+  const envelope = findEnvelope(purchase.pettyCashEnvelopeId);
+  if (!envelope) {
+    reportApprovalProblem(
+      'committed, but it is not attached to a petty cash envelope, so its receipt was not filed',
+      purchase.folder);
+    return { filed: false, problem: 'envelope not found' };
+  }
+
+  const { fileAttachments } = await import('./fileDocument.js');
+  const { pettyCashFolderName, pettyCashReceiptFilename } = await import('./dropbox.js');
+
+  const result = await fileAttachments({
+    items: [{ ref: purchase.receiptUrl, filename: pettyCashReceiptFilename(purchase) }],
+    folderId: '01-accounting/petty-cash',
+    subfolder: pettyCashFolderName(envelope),
+    describe: `${envelope.custodianName || 'this envelope'}`,
+    dropboxFile: async () => {
+      const { filePettyCashReceipt } = await import('./dropbox.js');
+      return await filePettyCashReceipt(envelope, purchase);
+    },
+  });
+
+  if (result.filedCount) {
+    // Stamped so the reconciliation can tell what is already filed, and so a
+    // receipt is not silently assumed present when it never landed.
+    applyChanges(purchase.id, { pettyCashReceiptFiled: true });
+    return { filed: true, destination: result.destination };
+  }
+  if (result.manual || result.skipped) return { filed: false, manual: result.manual, skipped: result.skipped };
+
+  reportApprovalProblem(
+    `committed, but its receipt was not filed to ${envelope.custodianName || 'the'} envelope — ${result.problem || result.failed?.[0]?.message || result.reason || 'unknown error'}`,
+    purchase.folder);
+  return { filed: false, problem: result.problem || 'upload failed' };
+}
+
 /**
  * Run the side effects of committing a purchase.
  *
@@ -192,6 +253,7 @@ async function onPurchaseOrderCommitted(purchase, applyChanges) {
 export async function onPurchaseCommitted(purchase, applyChanges) {
   if (!purchase) return {};
   if (purchase.method === 'PO') return onPurchaseOrderCommitted(purchase, applyChanges);
+  if (purchase.method === 'Petty Cash') return onPettyCashCommitted(purchase, applyChanges);
   if (purchase.method !== 'CC') return {};   // only CC charges belong to a CC Log
 
   const projectId = getActiveProjectId();

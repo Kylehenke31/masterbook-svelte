@@ -142,6 +142,12 @@ async function dirFor(pathSegments) {
   return dir;
 }
 
+/** Create one nested folder under the project folder, if it is not there. */
+export async function ensureLocalFolder(pathSegments) {
+  await dirFor(pathSegments);
+  return pathSegments.join('/');
+}
+
 /**
  * Create the whole project folder structure on disk — the same tree
  * folderTree.js describes and dropbox.js provisions, so a production that
