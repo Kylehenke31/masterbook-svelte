@@ -1,5 +1,6 @@
 <script>
   import { onMount } from 'svelte';
+  import { version as APP_VERSION } from '../../package.json';
   import { currentRoute } from './stores/router.js';
   import {
     projectStore, refreshProjectStore,
@@ -747,9 +748,30 @@
   <Chat projectId={getActiveProjectId()} bind:open={chatOpen} bind:unread={chatUnread} />
 {/if}
 
+<!-- Build marker. Deliberately tiny and unclickable: it exists so a screenshot
+     carries its own version, not as something to read while working. Sourced
+     from package.json so it cannot drift from what was actually built. -->
+<span class="app-version" aria-hidden="true">v{APP_VERSION}</span>
+
 {/if} <!-- end auth gate -->
 
 <style>
+  /* Bottom-right build marker. Fixed to the viewport rather than the shell so
+     it stays put on every route, and pointer-events:none so it can never sit
+     between a click and a control underneath it. */
+  .app-version {
+    position: fixed;
+    right: 8px;
+    bottom: 6px;
+    z-index: 40;
+    font-size: 0.62rem;
+    letter-spacing: 0.04em;
+    color: var(--text-muted, #888);
+    opacity: 0.5;
+    pointer-events: none;
+    user-select: none;
+  }
+
   .app-shell {
     display: flex;
     flex-direction: column;

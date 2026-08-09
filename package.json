@@ -1,6 +1,6 @@
 {
   "name": "the-masterbook",
-  "version": "0.1.0-alpha",
+  "version": "2.0.0",
   "description": "The Masterbook — Production Management Desktop App",
   "main": "electron/main.js",
   "scripts": {
