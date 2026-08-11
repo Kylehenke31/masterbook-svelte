@@ -38,7 +38,20 @@ export async function cloudSaveProject(project) {
   const { error } = await supabase
     .from('projects')
     .upsert({ id: project.id, owner_id: user.id, data: project });
-  if (error) console.warn('[db] cloudSaveProject error:', error.message);
+  if (!error) return;
+  // Reported, not just logged. A project that never reaches the cloud has no
+  // row, so the trigger that makes its creator an admin never fires, and every
+  // later thing gated on membership fails somewhere far away — a receipt
+  // upload denied by RLS, with nothing connecting it back to here. That is
+  // exactly how this went unnoticed until somebody tried to submit a purchase.
+  console.warn('[db] cloudSaveProject error:', error.message);
+  window.dispatchEvent(new CustomEvent('masterbook-sync-error', {
+    detail: {
+      table: 'projects', operation: 'cloudSaveProject',
+      message: `the project was saved on this device only — ${error.message}`,
+      at: new Date().toISOString(),
+    },
+  }));
 }
 
 /* ── Purchases ───────────────────────────────────────────────── */

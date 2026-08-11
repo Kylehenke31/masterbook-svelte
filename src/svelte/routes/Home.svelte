@@ -323,10 +323,22 @@
         _createdAt: new Date().toISOString(),
       };
 
+      // Order matters. saveProject reads the *active* id to decide what it is
+      // saving and where to sync it, so the new id has to be active before it
+      // runs, and registered before syncRegistryEntry looks for it.
+      //
+      // Saving first was two bugs at once. On a fresh install there was no
+      // active id, so saveProject skipped the cloud entirely — the project
+      // existed only in localStorage, no row was inserted, the trigger that
+      // makes the creator an admin never fired, and everything gated on
+      // membership then failed. Uploading a receipt was the first thing to
+      // notice, with an RLS error nobody could act on. And where a project
+      // *was* already open, the new project's data was written under the old
+      // project's id, overwriting it.
       const newId = crypto.randomUUID();
-      saveProject(newProject);
-      registerProject(newId, newProject);
       setActiveProjectId(newId);
+      registerProject(newId, newProject);
+      saveProject(newProject);
       snapshotProject(newId);
       hydrate();
       refreshProjectStore();
