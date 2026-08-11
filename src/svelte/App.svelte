@@ -49,7 +49,7 @@
   import Chat             from './components/Chat.svelte';
   import Login            from './routes/Login.svelte';
   import { authUser, authLoading, signOut } from './stores/auth.js';
-  import { loadProjectsFromCloud } from './stores/project.js';
+  import { loadProjectsFromCloud, ensureProjectInCloud } from './stores/project.js';
 
   let authState      = $state(null);   // mirrors authUser store
   let authIsLoading  = $state(true);   // mirrors authLoading store
@@ -73,6 +73,11 @@
       // reload before the project they were invited to appears.
       await acceptPendingInvites().catch(() => 0);
       await loadProjectsFromCloud();
+      // Repair a project that only ever reached localStorage before asking
+      // what this user may do in it — the membership that question reads is
+      // created by a trigger on the project row, so with no row the answer is
+      // always "nothing", and every later failure points somewhere else.
+      await ensureProjectInCloud();
       const activeId = getActiveProjectId();
       myMembership = activeId ? await loadMyMembership(activeId, user.id) : null;
       setSyncMember(myMembership);

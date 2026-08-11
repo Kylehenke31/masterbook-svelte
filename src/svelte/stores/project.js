@@ -59,6 +59,44 @@ export function saveProject(data) {
   }
 }
 
+/**
+ * Make sure the active project actually exists in the cloud.
+ *
+ * A project saved only to localStorage looks completely normal — it opens, it
+ * has a name, you can work in it — while having no row in `projects`. With no
+ * row, the on_project_created trigger never ran, so the person who made it was
+ * never recorded as its admin, and everything gated on membership fails
+ * somewhere far from the cause. Submitting a purchase is usually where it
+ * shows up, as "Receipt upload failed: new row violates row-level security
+ * policy", because the receipts bucket tests membership in the project the
+ * upload path names.
+ *
+ * Inserting the row is what repairs it: that is what fires the trigger.
+ *
+ * One case this cannot fix, and says so rather than pretending: a row that
+ * exists while you are *not* a member of it. cloudLoadProjects only returns
+ * projects you belong to, so an orphan looks identical to a missing row from
+ * here — but the upsert then resolves to an UPDATE, which needs admin rights
+ * you do not have, and fails. The error surfaces through the sync channel
+ * instead of being swallowed, which is the most this layer can honestly do.
+ */
+export async function ensureProjectInCloud() {
+  const id = getActiveProjectId();
+  const project = getProject();
+  if (!id || !project) return { skipped: true };
+  try {
+    const { cloudLoadProjects, cloudSaveProject } = await import('../lib/db.js');
+    const mine = await cloudLoadProjects();
+    if (mine.some(p => p.id === id)) return { present: true };
+    await cloudSaveProject({ ...project, id });
+    console.warn('[project] active project was missing from the cloud — inserted it so membership could be granted');
+    return { repaired: true };
+  } catch (e) {
+    console.warn('[project] ensureProjectInCloud failed:', e.message);
+    return { failed: true, message: e.message };
+  }
+}
+
 /* ── Registry ── */
 export function getRegistry() {
   try { return JSON.parse(localStorage.getItem(REGISTRY_KEY)) || []; } catch { return []; }
