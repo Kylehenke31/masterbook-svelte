@@ -38,12 +38,12 @@ export async function cloudSaveProject(project) {
   const { error } = await supabase
     .from('projects')
     .upsert({ id: project.id, owner_id: user.id, data: project });
-  if (!error) return;
-  // Reported, not just logged. A project that never reaches the cloud has no
-  // row, so the trigger that makes its creator an admin never fires, and every
-  // later thing gated on membership fails somewhere far away — a receipt
-  // upload denied by RLS, with nothing connecting it back to here. That is
-  // exactly how this went unnoticed until somebody tried to submit a purchase.
+  if (!error) return { ok: true };
+  // Reported, not just logged, and the outcome is returned rather than
+  // discarded. A project that never reaches the cloud has no row, so the
+  // trigger that makes its creator an admin never fires, and every later thing
+  // gated on membership fails somewhere far away — a receipt upload denied by
+  // RLS, with nothing connecting it back to here.
   console.warn('[db] cloudSaveProject error:', error.message);
   window.dispatchEvent(new CustomEvent('masterbook-sync-error', {
     detail: {
@@ -52,6 +52,24 @@ export async function cloudSaveProject(project) {
       at: new Date().toISOString(),
     },
   }));
+  return { ok: false, error: error.message };
+}
+
+/**
+ * Ask the database to record you as admin of a project you own.
+ *
+ * Needed because project_members can only be written by an existing admin, so
+ * a project whose creating trigger did not fire has no members and no way to
+ * gain any. claim_project_admin is security definer and grants admin only to
+ * the account recorded as the project's owner, asking for itself.
+ */
+export async function claimProjectAdmin(projectId) {
+  const { data, error } = await supabase.rpc('claim_project_admin', { p_project_id: projectId });
+  if (error) {
+    console.warn('[db] claimProjectAdmin error:', error.message);
+    return { ok: false, error: error.message };
+  }
+  return { ok: data === true, notOwner: data === false };
 }
 
 /* ── Purchases ───────────────────────────────────────────────── */

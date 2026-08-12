@@ -85,12 +85,37 @@ export async function ensureProjectInCloud() {
   const project = getProject();
   if (!id || !project) return { skipped: true };
   try {
-    const { cloudLoadProjects, cloudSaveProject } = await import('../lib/db.js');
-    const mine = await cloudLoadProjects();
-    if (mine.some(p => p.id === id)) return { present: true };
-    await cloudSaveProject({ ...project, id });
-    console.warn('[project] active project was missing from the cloud — inserted it so membership could be granted');
-    return { repaired: true };
+    const { cloudLoadProjects, cloudSaveProject, claimProjectAdmin } = await import('../lib/db.js');
+
+    // cloudLoadProjects only returns projects you are a member of, so this
+    // says "not visible to me", not "not there" — which is the whole problem.
+    const visible = (await cloudLoadProjects()).some(p => p.id === id);
+
+    if (!visible) {
+      const saved = await cloudSaveProject({ ...project, id });
+      // Checked, not assumed. Reporting a repair that did not happen is worse
+      // than reporting nothing: it sends the next hour of debugging somewhere
+      // else entirely.
+      if (saved && saved.ok === false) {
+        console.warn('[project] active project is missing from the cloud and could not be inserted:', saved.error);
+        return { failed: true, message: saved.error };
+      }
+    }
+
+    // Claim admin whether or not the row was just written. A row that already
+    // existed without a membership is exactly the state that cannot be fixed
+    // any other way — writing to project_members needs an admin, and there
+    // isn't one. This is a no-op when membership is already correct.
+    const claim = await claimProjectAdmin(id);
+    if (claim.ok) {
+      console.warn('[project] recorded you as admin of the active project');
+      return { repaired: true, claimed: true };
+    }
+    if (claim.notOwner) {
+      console.warn('[project] you are not the owner of the active project, so admin could not be claimed');
+      return { notOwner: true };
+    }
+    return { present: visible, claimFailed: claim.error };
   } catch (e) {
     console.warn('[project] ensureProjectInCloud failed:', e.message);
     return { failed: true, message: e.message };

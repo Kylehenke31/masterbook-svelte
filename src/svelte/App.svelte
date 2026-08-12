@@ -80,6 +80,28 @@
       await ensureProjectInCloud();
       const activeId = getActiveProjectId();
       myMembership = activeId ? await loadMyMembership(activeId, user.id) : null;
+
+      // Being signed in, with a project open, and not a member of it is a
+      // broken state rather than a quiet one: every write is refused by RLS,
+      // and the refusal surfaces wherever the write happened to be — most
+      // often as an unreadable storage error while submitting a purchase.
+      // Say so here, where the cause is, and print what a policy would be
+      // comparing so the mismatch is visible rather than inferred.
+      if (activeId && !myMembership) {
+        console.warn(
+          '[project] NOT A MEMBER of the active project — writes will be refused by RLS.\n' +
+          `  user id:    ${user.id}\n` +
+          `  project id: ${activeId}\n` +
+          '  receipts would upload to: ' + activeId + '/{purchaseId}.pdf'
+        );
+        window.dispatchEvent(new CustomEvent('masterbook-sync-error', {
+          detail: {
+            table: 'project_members', operation: 'loadMyMembership',
+            message: 'you are not a member of the open project, so saving anything will be refused',
+            at: new Date().toISOString(),
+          },
+        }));
+      }
       setSyncMember(myMembership);
       setCreativeMember(myMembership);
       if (activeId) {
