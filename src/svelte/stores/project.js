@@ -85,28 +85,29 @@ export async function ensureProjectInCloud() {
   const project = getProject();
   if (!id || !project) return { skipped: true };
   try {
-    const { cloudLoadProjects, cloudSaveProject, claimProjectAdmin } = await import('../lib/db.js');
+    const { cloudSaveProject, claimProjectAdmin } = await import('../lib/db.js');
 
-    // cloudLoadProjects only returns projects you are a member of, so this
-    // says "not visible to me", not "not there" — which is the whole problem.
-    const visible = (await cloudLoadProjects()).some(p => p.id === id);
+    // Claim admin *first*, and never skip it because saving failed.
+    //
+    // Saving first cannot work in the state this exists to repair. The row is
+    // already there but you are not a member, so the upsert resolves to an
+    // UPDATE, projects_admin_update demands admin, and it fails with "new row
+    // violates row-level security policy" — after which an earlier version of
+    // this returned early and never tried the one call that breaks the
+    // deadlock. Claiming needs no membership, only ownership, so it works
+    // whether the row is orphaned or fine, and makes the save legal afterwards.
+    let claim = await claimProjectAdmin(id);
 
-    if (!visible) {
+    // The only case where there is genuinely nothing to claim yet: no row.
+    // Insert it, then claim what we just created.
+    if (claim.reason === 'no_such_project') {
       const saved = await cloudSaveProject({ ...project, id });
-      // Checked, not assumed. Reporting a repair that did not happen is worse
-      // than reporting nothing: it sends the next hour of debugging somewhere
-      // else entirely.
       if (saved && saved.ok === false) {
         console.warn('[project] active project is missing from the cloud and could not be inserted:', saved.error);
         return { failed: true, message: saved.error };
       }
+      claim = await claimProjectAdmin(id);
     }
-
-    // Claim admin whether or not the row was just written. A row that already
-    // existed without a membership is exactly the state that cannot be fixed
-    // any other way — writing to project_members needs an admin, and there
-    // isn't one. This is a no-op when membership is already correct.
-    const claim = await claimProjectAdmin(id);
     if (claim.ok) {
       console.warn('[project] recorded you as admin of the active project');
       return { repaired: true, claimed: true };
@@ -123,7 +124,7 @@ export async function ensureProjectInCloud() {
         ? owned.map(p => `${p.title} (${p.id}) member=${p.is_member}`).join('; ')
         : 'none'}`
     );
-    return { present: visible, reason: claim.reason, owned };
+    return { reason: claim.reason, owned };
   } catch (e) {
     console.warn('[project] ensureProjectInCloud failed:', e.message);
     return { failed: true, message: e.message };
