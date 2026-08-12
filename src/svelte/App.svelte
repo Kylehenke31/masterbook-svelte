@@ -275,6 +275,15 @@
     // Pull the new project's sections from cloud, then remount
     cloudSyncing = true;
     try {
+      // Same check sign-in does. Switching into a project is the other way to
+      // arrive somewhere you may have no membership in, and the symptom is
+      // identical — everything refused, far from the cause.
+      await ensureProjectInCloud();
+      // No user id passed — loadMyMembership resolves it itself, and getUser
+      // is not imported here.
+      myMembership = await loadMyMembership(targetId);
+      setSyncMember(myMembership);
+      setCreativeMember(myMembership);
       await Promise.all([
         hydrateFromCloud(targetId),
         syncAllSectionsFromCloud(targetId),

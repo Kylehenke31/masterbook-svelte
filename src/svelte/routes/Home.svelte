@@ -7,7 +7,7 @@
     getActiveProjectId, setActiveProjectId,
     registerProject, snapshotProject, restoreProject,
     switchProject, PROJECT_DATA_KEYS,
-    refreshProjectStore,
+    refreshProjectStore, ensureProjectInCloud,
   } from '../stores/project.js';
 
   let container;
@@ -342,6 +342,20 @@
       snapshotProject(newId);
       hydrate();
       refreshProjectStore();
+
+      // Confirm the project actually landed in the cloud and that its creator
+      // is its admin, before letting them into it.
+      //
+      // saveProject syncs fire-and-forget, so without this the first thing
+      // anyone does in a brand new project races the row that has to exist for
+      // them to be allowed to do it — and losing that race looks like an
+      // unreadable RLS error on whatever they tried, not like a project that
+      // was never saved. Waiting a moment here is worth never seeing that.
+      ensureProjectInCloud().then(r => {
+        if (r?.failed || (r?.reason && r.reason !== 'granted')) {
+          console.warn('[project] new project may not be usable yet:', r);
+        }
+      });
 
       window.location.hash = '#settings';
     });
