@@ -67,9 +67,27 @@ export async function claimProjectAdmin(projectId) {
   const { data, error } = await supabase.rpc('claim_project_admin', { p_project_id: projectId });
   if (error) {
     console.warn('[db] claimProjectAdmin error:', error.message);
-    return { ok: false, error: error.message };
+    return { ok: false, reason: 'rpc_error', error: error.message };
   }
-  return { ok: data === true, notOwner: data === false };
+  // 'granted' | 'no_such_project' | 'no_owner_recorded' | 'not_owner' | 'not_signed_in'
+  return { ok: data === 'granted', reason: data };
+}
+
+/** Projects this account owns, whether or not it is a member of them. */
+export async function myOwnedProjects() {
+  const { data, error } = await supabase.rpc('my_owned_projects');
+  if (error) { console.warn('[db] myOwnedProjects error:', error.message); return []; }
+  return data || [];
+}
+
+/** Delete a project you own but may not be a member of. */
+export async function deleteOwnedProject(projectId) {
+  const { data, error } = await supabase.rpc('delete_owned_project', { p_project_id: projectId });
+  if (error) {
+    console.warn('[db] deleteOwnedProject error:', error.message);
+    return { ok: false, reason: 'rpc_error', error: error.message };
+  }
+  return { ok: data === 'deleted', reason: data };
 }
 
 /* ── Purchases ───────────────────────────────────────────────── */

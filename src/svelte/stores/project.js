@@ -111,11 +111,19 @@ export async function ensureProjectInCloud() {
       console.warn('[project] recorded you as admin of the active project');
       return { repaired: true, claimed: true };
     }
-    if (claim.notOwner) {
-      console.warn('[project] you are not the owner of the active project, so admin could not be claimed');
-      return { notOwner: true };
-    }
-    return { present: visible, claimFailed: claim.error };
+
+    // Say which fault this is. They need different responses, and reporting
+    // them as one failure is what kept this undiagnosed.
+    const { myOwnedProjects } = await import('../lib/db.js');
+    const owned = await myOwnedProjects().catch(() => []);
+    console.warn(
+      `[project] could not become admin of the active project — reason: ${claim.reason}\n` +
+      `  active project id: ${id}\n` +
+      `  projects this account owns: ${owned.length
+        ? owned.map(p => `${p.title} (${p.id}) member=${p.is_member}`).join('; ')
+        : 'none'}`
+    );
+    return { present: visible, reason: claim.reason, owned };
   } catch (e) {
     console.warn('[project] ensureProjectInCloud failed:', e.message);
     return { failed: true, message: e.message };
