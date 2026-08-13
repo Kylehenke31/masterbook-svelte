@@ -54,12 +54,24 @@ export async function cloudSaveProject(project) {
     const raw = session?.access_token?.split('.')[1];
     if (raw) tokenSub = JSON.parse(atob(raw.replace(/-/g, '+').replace(/_/g, '/'))).sub;
   } catch { tokenSub = '(unreadable)'; }
+  // When the ids match and the row is still refused, the policy being enforced
+  // is not the one we think. Read the real ones rather than argue from the
+  // migration files, which is what went wrong for several rounds here.
+  let policies = '(unavailable)';
+  try {
+    const { data } = await supabase.rpc('debug_table_policies', { p_table: 'projects' });
+    policies = (data || []).map(p =>
+      `${p.policyname} [${p.cmd}${p.permissive === 'PERMISSIVE' ? '' : ' RESTRICTIVE'}] roles=${p.roles} check=${p.with_check || '—'}`
+    ).join('\n                    ') || '(none — RLS on with no policies denies everything)';
+  } catch { /* function may not exist yet */ }
+
   console.warn(
     '[db] cloudSaveProject error:', error.message,
     '\n  owner_id sent:  ', user.id,
     '\n  token subject:  ', tokenSub,
     '\n  match:          ', tokenSub === user.id,
     '\n  project id:     ', project.id,
+    '\n  policies on projects:\n                    ' + policies,
   );
   window.dispatchEvent(new CustomEvent('masterbook-sync-error', {
     detail: {
