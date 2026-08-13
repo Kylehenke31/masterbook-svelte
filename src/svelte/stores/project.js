@@ -85,7 +85,7 @@ export async function ensureProjectInCloud() {
   const project = getProject();
   if (!id || !project) return { skipped: true };
   try {
-    const { cloudSaveProject, claimProjectAdmin } = await import('../lib/db.js');
+    const { cloudInsertProject, claimProjectAdmin } = await import('../lib/db.js');
 
     // Claim admin *first*, and never skip it because saving failed.
     //
@@ -101,10 +101,13 @@ export async function ensureProjectInCloud() {
     // The only case where there is genuinely nothing to claim yet: no row.
     // Insert it, then claim what we just created.
     if (claim.reason === 'no_such_project') {
-      const saved = await cloudSaveProject({ ...project, id });
-      if (saved && saved.ok === false) {
+      // Plain INSERT, not upsert — see cloudInsertProject. An upsert here is
+      // judged against the UPDATE policy too, which demands an admin the
+      // project does not have yet, so it can never create the first row.
+      const saved = await cloudInsertProject({ ...project, id });
+      if (!saved.ok) {
         console.warn('[project] active project is missing from the cloud and could not be inserted:', saved.error);
-        return { failed: true, message: saved.error };
+        return { failed: true, reason: 'insert_refused', message: saved.error };
       }
       claim = await claimProjectAdmin(id);
     }

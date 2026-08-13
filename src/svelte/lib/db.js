@@ -32,6 +32,32 @@ export async function cloudLoadProjects() {
  * Upsert a project. id must be the project's UUID.
  * Silently no-ops if not authenticated.
  */
+/**
+ * Create a project row with a plain INSERT.
+ *
+ * Deliberately not upsert. PostgREST's upsert is INSERT ... ON CONFLICT DO
+ * UPDATE, and Postgres evaluates the UPDATE policy's WITH CHECK for that
+ * statement — projects_admin_update requires admin on the project. Nobody is
+ * an admin of a project that does not exist yet, so creating one by upsert
+ * fails with "new row violates row-level security policy" while the INSERT
+ * policy it appears to be failing is perfectly satisfied.
+ *
+ * That is the whole deadlock: the upsert needs admin, admin comes from the
+ * trigger on insert, and the insert never happens. A plain INSERT is subject
+ * only to projects_insert_own — owner_id = auth.uid() — which the creator
+ * always satisfies.
+ */
+export async function cloudInsertProject(project) {
+  const user = await getUser();
+  if (!user) return { ok: false, error: 'not signed in' };
+  const { error } = await supabase
+    .from('projects')
+    .insert({ id: project.id, owner_id: user.id, data: project });
+  if (!error) return { ok: true };
+  console.warn('[db] cloudInsertProject error:', error.message);
+  return { ok: false, error: error.message };
+}
+
 export async function cloudSaveProject(project) {
   const user = await getUser();
   if (!user) return;
