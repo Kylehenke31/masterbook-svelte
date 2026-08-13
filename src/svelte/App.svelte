@@ -77,7 +77,7 @@
       // what this user may do in it — the membership that question reads is
       // created by a trigger on the project row, so with no row the answer is
       // always "nothing", and every later failure points somewhere else.
-      await ensureProjectInCloud();
+      const repair = await ensureProjectInCloud();
       const activeId = getActiveProjectId();
       myMembership = activeId ? await loadMyMembership(activeId, user.id) : null;
 
@@ -88,16 +88,28 @@
       // Say so here, where the cause is, and print what a policy would be
       // comparing so the mismatch is visible rather than inferred.
       if (activeId && !myMembership) {
+        // Put the reason on screen, not only in the console. This state stops
+        // every write, and "why" is a single word the database already told
+        // us — making somebody open devtools to read it has cost hours.
+        const why = {
+          no_such_project:   'this project was never saved to the cloud',
+          no_owner_recorded: 'the project has no owner recorded, so nobody can claim it',
+          not_owner:         'the project belongs to a different account',
+          not_signed_in:     'the session was not recognised',
+          rpc_error:         'the database refused the request',
+        }[repair?.reason] || repair?.reason || 'unknown';
+
         console.warn(
           '[project] NOT A MEMBER of the active project — writes will be refused by RLS.\n' +
+          `  reason:     ${repair?.reason ?? 'n/a'}\n` +
           `  user id:    ${user.id}\n` +
           `  project id: ${activeId}\n` +
-          '  receipts would upload to: ' + activeId + '/{purchaseId}.pdf'
+          `  owns:       ${(repair?.owned || []).map(p => `${p.title} (${p.id}) member=${p.is_member}`).join('; ') || 'nothing'}`
         );
         window.dispatchEvent(new CustomEvent('masterbook-sync-error', {
           detail: {
             table: 'project_members', operation: 'loadMyMembership',
-            message: 'you are not a member of the open project, so saving anything will be refused',
+            message: `you are not a member of the open project, so nothing can be saved — ${why}`,
             at: new Date().toISOString(),
           },
         }));
