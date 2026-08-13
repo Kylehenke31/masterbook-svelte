@@ -226,6 +226,8 @@
   // of a failed save: the record reached the cloud, its paperwork did not reach
   // Dropbox. Labelling one of those "not saved to cloud" sends someone hunting
   // for data that was never lost, so the banner says which kind it is holding.
+  let syncProblemsOpen = $state(false);
+
   let syncProblemsAllDropbox = $derived(
     syncProblems.length > 0 && syncProblems.every(p => p.table === 'dropbox'));
 
@@ -616,15 +618,31 @@
          copies disagree, must say so. Failing quietly is what let the credit
          card and petty cash tables stay missing for months while the app went
          on presenting localStorage as if it were saved. -->
+    <!-- Click opens it; a separate × dismisses. It used to do the opposite:
+         the detail was tooltip-only and clicking threw it away, so the natural
+         move for anyone trying to read why their work was not saving destroyed
+         the only explanation of it. -->
     {#if syncProblems.length}
-      <button class="sync-problem" title={syncProblemDetail} onclick={() => syncProblems = []}>
-        ⚠ {syncProblems.length}
-        {#if syncProblemsAllDropbox}
-          filing {syncProblems.length === 1 ? 'issue' : 'issues'} — not filed to Dropbox
-        {:else}
-          sync {syncProblems.length === 1 ? 'issue' : 'issues'} — not saved to cloud
+      <div class="sync-problem-wrap">
+        <button class="sync-problem" onclick={() => syncProblemsOpen = !syncProblemsOpen}>
+          ⚠ {syncProblems.length}
+          {#if syncProblemsAllDropbox}
+            filing {syncProblems.length === 1 ? 'issue' : 'issues'} — not filed to Dropbox
+          {:else}
+            sync {syncProblems.length === 1 ? 'issue' : 'issues'} — not saved to cloud
+          {/if}
+          <span class="sync-problem-caret">{syncProblemsOpen ? '▾' : '▸'}</span>
+        </button>
+        {#if syncProblemsOpen}
+          <div class="sync-problem-detail">
+            {#each syncProblems as p (p.id)}
+              <p class="sync-problem-line"><strong>{p.table}</strong> — {p.message}</p>
+            {/each}
+            <button class="sync-problem-dismiss"
+              onclick={() => { syncProblems = []; syncProblemsOpen = false; }}>Dismiss</button>
+          </div>
         {/if}
-      </button>
+      </div>
     {/if}
 
     <div class="sidebar-bottom-row">
@@ -1206,11 +1224,38 @@
     white-space: nowrap;
   }
 
+  .sync-problem-wrap { margin-bottom: 6px; }
+
+  .sync-problem-caret { float: right; opacity: 0.7; }
+
+  .sync-problem-detail {
+    padding: 8px;
+    border: 1px solid currentColor;
+    border-top: none;
+    font-size: 0.65rem;
+    line-height: 1.5;
+    color: var(--text-secondary, #ccc);
+    max-height: 180px;
+    overflow-y: auto;
+  }
+  .sync-problem-line { margin: 0 0 6px; }
+  .sync-problem-line strong { color: var(--text-primary, #eee); }
+
+  .sync-problem-dismiss {
+    font: inherit;
+    font-size: 0.62rem;
+    background: none;
+    border: 1px solid var(--border, #333);
+    color: var(--text-muted, #888);
+    padding: 2px 8px;
+    cursor: pointer;
+  }
+  .sync-problem-dismiss:hover { color: var(--text-primary, #eee); }
+
   .sync-problem {
     display: block;
     width: 100%;
     text-align: left;
-    margin-bottom: 6px;
     padding: 6px 8px;
     font-size: 0.65rem;
     font-family: inherit;

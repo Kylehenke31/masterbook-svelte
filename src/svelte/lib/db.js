@@ -44,7 +44,23 @@ export async function cloudSaveProject(project) {
   // trigger that makes its creator an admin never fires, and every later thing
   // gated on membership fails somewhere far away — a receipt upload denied by
   // RLS, with nothing connecting it back to here.
-  console.warn('[db] cloudSaveProject error:', error.message);
+  // The insert policy is `owner_id = auth.uid()`, so a refusal means the id we
+  // sent and the id the database resolved from the token disagree. Decode the
+  // token's subject and compare, rather than assuming they match — that
+  // assumption is why this took several passes to find.
+  let tokenSub = '(no session)';
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const raw = session?.access_token?.split('.')[1];
+    if (raw) tokenSub = JSON.parse(atob(raw.replace(/-/g, '+').replace(/_/g, '/'))).sub;
+  } catch { tokenSub = '(unreadable)'; }
+  console.warn(
+    '[db] cloudSaveProject error:', error.message,
+    '\n  owner_id sent:  ', user.id,
+    '\n  token subject:  ', tokenSub,
+    '\n  match:          ', tokenSub === user.id,
+    '\n  project id:     ', project.id,
+  );
   window.dispatchEvent(new CustomEvent('masterbook-sync-error', {
     detail: {
       table: 'projects', operation: 'cloudSaveProject',
