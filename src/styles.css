@@ -3601,12 +3601,6 @@ textarea {
   height: auto;
   margin-bottom: 10px;
 }
-.pm-welcome-text {
-  font-size: 14px;
-  font-weight: 400;
-  color: var(--text-muted);
-  letter-spacing: 0.03em;
-}
 /* --- Project Settings Logo Uploads --- */
 .pi-logos-row {
   display: flex;
@@ -3703,24 +3697,27 @@ textarea {
   border-color: var(--gold);
   border-width: 2px;
 }
-.pm-card--create {
+/* Create New Project reads as an action, not a fourth project.
+   It used to be a dashed tile the same size as a real project, which gave
+   equal weight to "open the show you are working on" and "start a new one". */
+.pm-create-link {
+  grid-column: 1 / -1;
+  justify-self: center;
+  background: none;
+  border: none;
+  padding: 6px 4px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-secondary);
   cursor: pointer;
-  border-style: dashed;
-  transition: background var(--transition), border-color var(--transition);
+  transition: color var(--transition);
 }
-.pm-card--create:hover {
-  background: var(--bg-hover);
-  border-color: var(--text-secondary);
-}
+.pm-create-link:hover { color: var(--gold); }
 .pm-card__icon {
   color: var(--gold);
   margin-bottom: 4px;
-}
-.pm-card__icon--create {
-  color: var(--text-secondary);
-}
-.pm-card--create:hover .pm-card__icon--create {
-  color: var(--text-primary);
 }
 .pm-card__title {
   font-size: 16px;
@@ -3731,11 +3728,6 @@ textarea {
 .pm-card__meta {
   font-size: 12px;
   color: var(--text-secondary);
-  margin: 0;
-}
-.pm-card__desc {
-  font-size: 13px;
-  color: var(--text-muted);
   margin: 0;
 }
 .pm-card__actions {
@@ -3753,11 +3745,36 @@ textarea {
 }
 
 /* Create form */
+/* Narrow enough that the eye does not travel. Four short fields stretched to
+   a 720px column left each control marooned at the end of its own row. */
 .pm-create-form {
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: 0;
-  padding: 24px;
+  padding: 20px;
+  max-width: 420px;
+  margin: 0 auto;
+}
+
+.pm-form-grid {
+  gap: 10px 12px;
+}
+
+/* Both buttons take the width of the wider label, so they read as two equal
+   choices rather than one large and one small. A grid sized to fit-content
+   with 1fr columns resolves every column to the widest item — no hardcoded
+   width to go stale the moment the wording changes. */
+.pm-form-actions {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 8px;
+  width: fit-content;
+  margin: 16px 0 0 auto;
+}
+.pm-form-btn {
+  width: 100%;
+  white-space: nowrap;
 }
 .pm-form-title {
   font-size: 18px;

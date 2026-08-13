@@ -64,29 +64,20 @@
       <section class="pm-section">
         <div class="pm-welcome">
           <img src="${logoSrc}" alt="The Masterbook" class="pm-welcome-logo" />
-          <p class="pm-welcome-text">Welcome to Masterbook!</p>
         </div>
         <div class="pm-header">
           <h2 class="pm-title">Project Menu</h2>
-          <p class="pm-subtitle">Create, open, or manage your productions.</p>
+          <p class="pm-subtitle">Create, open, or manage.</p>
         </div>
 
         <div class="pm-cards">
           ${hasProject ? _projectCard({ id: activeId, ...project }, true) : ''}
           ${otherProjects.map(r => _projectCard(r, false)).join('')}
 
-          <!-- Create New Project Card -->
-          <div class="pm-card pm-card--create" id="pm-create-card">
-            <div class="pm-card__icon pm-card__icon--create">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="32" height="32">
-                <circle cx="12" cy="12" r="10"/>
-                <line x1="12" y1="8" x2="12" y2="16"/>
-                <line x1="8" y1="12" x2="16" y2="12"/>
-              </svg>
-            </div>
-            <h3 class="pm-card__title">Create New Project</h3>
-            <p class="pm-card__desc">Start a new production from scratch.</p>
-          </div>
+          <!-- Create New Project — the action, not a card. A dashed box the
+               size of a project tile competed with the real projects beside
+               it for attention; the words alone are enough. -->
+          <button class="pm-create-link" id="pm-create-card">Create New Project</button>
         </div>
 
         ${archivedProjects.length > 0 ? `
@@ -119,16 +110,18 @@
           <h3 class="pm-form-title">New Project</h3>
           <p class="pm-form-subtitle">These fields cannot be changed after project creation.</p>
 
-          <div class="form-grid">
+          <div class="form-grid pm-form-grid">
             <div class="field field--full">
               <label for="pm-title">Project Title <span class="req">*</span></label>
-              <input type="text" id="pm-title" placeholder="e.g. The Feature Film" maxlength="100" required />
+              <input type="text" id="pm-title" maxlength="100" required />
               <span class="field-error" id="pm-err-title"></span>
             </div>
             <div class="field">
-              <label for="pm-prod-num">Production Number <span class="req">*</span></label>
-              <input type="text" id="pm-prod-num" placeholder="e.g. 2026-001" maxlength="30" required />
-              <span class="field-error" id="pm-err-prod-num"></span>
+              <label for="pm-cs-template">Call Sheet Type <span class="req">*</span></label>
+              <select id="pm-cs-template">
+                <option value="commercial">Commercial</option>
+                <option value="feature">Feature/TV (coming soon)</option>
+              </select>
             </div>
             <div class="field">
               <label for="pm-template">Budget Type <span class="req">*</span></label>
@@ -138,17 +131,15 @@
               </select>
             </div>
             <div class="field">
-              <label for="pm-cs-template">Call Sheet Type <span class="req">*</span></label>
-              <select id="pm-cs-template">
-                <option value="commercial">Commercial</option>
-                <option value="feature">Feature/TV (coming soon)</option>
-              </select>
+              <label for="pm-prod-num">Production Number <span class="req">*</span></label>
+              <input type="text" id="pm-prod-num" maxlength="30" required />
+              <span class="field-error" id="pm-err-prod-num"></span>
             </div>
           </div>
 
-          <div class="form-actions" style="margin-top:16px">
-            <button class="btn btn--ghost" id="pm-cancel-create">Cancel</button>
-            <button class="btn btn--primary" id="pm-confirm-create">Create Project</button>
+          <div class="form-actions pm-form-actions">
+            <button class="btn btn--ghost pm-form-btn" id="pm-cancel-create">Cancel</button>
+            <button class="btn btn--primary pm-form-btn" id="pm-confirm-create">Create Project</button>
           </div>
         </div>
       </section>
