@@ -727,7 +727,9 @@
 
 <div class="app-shell" class:app-shell--sidebar-collapsed={sidebarCollapsed}>
 
-  <main class="app-main" class:app-main--full={route === 'crew' || route === 'budget-lines'}>
+  <main class="app-main"
+        class:app-main--full={route === 'crew' || route === 'budget-lines'}
+        class:app-main--home={route === 'home' || !route}>
     {#if route === 'log'}
       <PurchaseLog />
     {:else if route === 'po-log'}
@@ -1172,6 +1174,27 @@
   .app-main--full {
     padding: 0;
     max-width: 100%;
+  }
+
+  /* The project menu's photograph, bled across the whole main area.
+     Applied here rather than inside the route so it fills the pane without
+     fighting the layout — a negative-margin bleed from within resolved its
+     width against the padded column and stopped short of the right edge.
+
+     The scrim is structural, not decorative: the picture is mostly pale sky
+     and this screen is light text, which over the sky is unreadable. It is
+     heaviest at the top where the type sits and lifts toward the bottom, so
+     the ridgeline and the moon still read as a photograph. */
+  .app-main--home {
+    background-image:
+      linear-gradient(to bottom,
+        rgba(10, 12, 16, 0.88) 0%,
+        rgba(10, 12, 16, 0.74) 40%,
+        rgba(10, 12, 16, 0.55) 100%),
+      url('/project-menu-bg.jpg');
+    background-size: cover;
+    background-position: center 30%;
+    background-repeat: no-repeat;
   }
 
   .coming-soon {
