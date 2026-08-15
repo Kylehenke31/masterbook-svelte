@@ -3607,10 +3607,14 @@ textarea {
   margin: 0;
   padding: 32px 16px 32px 72px;
 }
+/* Full width, so the mark centres on the screen rather than on the menu's
+   left-padded column. */
 .pm-welcome {
   display: flex;
   flex-direction: column;
   align-items: center;
+  width: 100%;
+  padding-top: 32px;
   margin-bottom: 56px;
 }
 .pm-welcome-logo {
@@ -6982,3 +6986,53 @@ tr:hover .cse-row-del { opacity: 0.6; }
   transition: opacity var(--transition);
 }
 .pm-link:hover { opacity: 0.6; }
+
+
+/* ── Archived projects ── */
+.pm-archived-section { margin-top: 20px; text-align: left; }
+
+.pm-arch-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 0;
+}
+
+.pm-arch-name {
+  font-size: 15px;
+  color: #23282e;
+  opacity: 0.75;
+}
+
+.pm-arch-actions { display: inline-flex; gap: 6px; }
+
+.pm-arch-btn {
+  background: none;
+  border: none;
+  padding: 1px 4px;
+  font: inherit;
+  font-size: 12px;
+  color: #23282e;
+  opacity: 0.7;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.pm-arch-btn:hover { opacity: 1; }
+.pm-arch-btn--danger { color: #8c2f2f; }
+
+/* ── Back out of the new-project view ── */
+.pm-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  padding: 0;
+  margin-bottom: 10px;
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity var(--transition);
+}
+.pm-back:hover { opacity: 1; }

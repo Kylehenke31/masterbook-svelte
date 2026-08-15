@@ -96,10 +96,14 @@
     const logoSrc = '/logo-day.png';
 
     container.innerHTML = `
+      <!-- Outside the section, which is left-padded to hold the menu. Inside
+           it the mark centred on the menu's column rather than on the screen,
+           which read as slightly off. -->
+      <div class="pm-welcome">
+        <img src="${logoSrc}" alt="The Masterbook" class="pm-welcome-logo" />
+      </div>
+
       <section class="pm-section">
-        <div class="pm-welcome">
-          <img src="${logoSrc}" alt="The Masterbook" class="pm-welcome-logo" />
-        </div>
 
         <!-- A list of things to open, not a grid of cards. Each project is one
              line: a caret, its name, and a ⋯ holding the things you rarely do
@@ -122,28 +126,34 @@
           <div class="pm-archived-section">
             <!-- The Archive entry in the menu above is this list's only toggle.
                  A second button here duplicated both the control and its id. -->
+            <!-- Archived projects read as a list like the live ones, rather
+                 than as stacked cards. They are the same kind of thing, seen
+                 in the same place, and the card layout gave three lines and a
+                 32px icon to something nobody is looking for. -->
             <div class="pm-archived-list hidden" id="pm-archived-list">
               ${archivedProjects.map(r => `
-                <div class="pm-card pm-card--archived" data-project-id="${_esc(r.id)}">
-                  <div class="pm-card__icon" style="opacity:0.4;">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="32" height="32">
-                      <path d="M3 8.5C3 7.4 3.9 6.5 5 6.5h3.5l1.5-2H19c1.1 0 2 .9 2 2V17c0 1.1-.9 2-2 2H5c-1.1 0-2-.9-2-2V8.5z"/>
-                    </svg>
-                  </div>
-                  <h3 class="pm-card__title" style="opacity:0.6;">${_esc(r.productionNumber ? r.productionNumber + '_' + r.title : r.title)}</h3>
-                  <p class="pm-card__meta" style="opacity:0.5;">${_esc(_tplLabel(r.budgetTemplate))} · Archived</p>
-                  <div class="pm-card__actions">
-                    <button class="btn btn--ghost btn--sm pm-restore-btn" data-pid="${_esc(r.id)}">Restore</button>
-                    <button class="btn btn--ghost btn--sm pm-delete-btn" data-pid="${_esc(r.id)}" style="color:var(--red,#e55);">Delete</button>
-                  </div>
+                <div class="pm-arch-row" data-project-id="${_esc(r.id)}">
+                  <span class="pm-arch-name">${_esc(r.productionNumber ? r.productionNumber + '_' + r.title : r.title)}</span>
+                  <span class="pm-arch-actions">
+                    <button class="pm-arch-btn pm-restore-btn" data-pid="${_esc(r.id)}">Restore</button>
+                    <button class="pm-arch-btn pm-arch-btn--danger pm-delete-btn" data-pid="${_esc(r.id)}">Delete</button>
+                  </span>
                 </div>
               `).join('')}
             </div>
           </div>
         ` : ''}
 
-        <!-- Create Project Form (hidden by default) -->
+        <!-- Create Project Form (hidden by default). Takes the screen on its
+             own: the menu behind it is a list of things you are not doing
+             while filling this in, and leaving it there gave the photograph
+             two competing blocks of text to hold. -->
         <div class="pm-create-form hidden" id="pm-create-form">
+          <button class="pm-back" id="pm-back-to-menu" aria-label="Back to project menu">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="18" height="18">
+              <polyline points="15 18 9 12 15 6"/>
+            </svg>
+          </button>
           <h3 class="pm-form-title">New Project</h3>
           <p class="pm-form-subtitle">These fields cannot be changed after project creation.</p>
 
@@ -277,10 +287,16 @@
 
     // Switch to another project
     c.querySelectorAll('.pm-switch-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', async () => {
         switchProject(btn.dataset.pid);
         hydrate();
-        _render();
+        // Switching used to re-render the menu and stop there, so clicking a
+        // project loaded it and then left you looking at the list you clicked
+        // from — indistinguishable from nothing having happened. Clicking a
+        // project's name means "take me into it".
+        await ensureProjectInCloud().catch(() => {});
+        refreshProjectStore();
+        window.location.hash = '#log';
       });
     });
 
@@ -325,18 +341,30 @@
     // Create card → show form
     const createCard = c.querySelector('#pm-create-card');
     const createForm = c.querySelector('#pm-create-form');
+    // The menu and the form are two views of this screen, not a form appended
+    // to a menu. Only one is on the picture at a time.
+    const menuNav = c.querySelector('.pm-menu');
+    const archived = c.querySelector('.pm-archived-section');
+    const showCreate = (show) => {
+      createForm?.classList.toggle('hidden', !show);
+      menuNav?.classList.toggle('hidden', show);
+      archived?.classList.toggle('hidden', show);
+    };
+
+    c.querySelector('#pm-back-to-menu')?.addEventListener('click', () => {
+      showCreate(false);
+    });
+
     if (createCard && createForm) {
       createCard.addEventListener('click', () => {
-        createForm.classList.remove('hidden');
-        createCard.classList.add('hidden');
+        showCreate(true);
         c.querySelector('#pm-title')?.focus();
       });
     }
 
     // Cancel create
     c.querySelector('#pm-cancel-create')?.addEventListener('click', () => {
-      createForm?.classList.add('hidden');
-      createCard?.classList.remove('hidden');
+      showCreate(false);
     });
 
     // Confirm create
