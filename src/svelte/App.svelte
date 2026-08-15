@@ -385,15 +385,25 @@
     const p    = getProject();
     const hasProject = !!p?.title && !p._archived;
 
+    // Every redirect below sends you somewhere other than where you asked to
+    // go, and silently — which is indistinguishable from a link that does
+    // nothing. Say which rule fired and what it was looking at.
+    const bounce = (to, why) => {
+      console.warn(`[route] "${hash || '(empty)'}" → ${to} — ${why}`,
+        { hasProject, title: p?.title ?? null, archived: !!p?._archived,
+          membershipRole: myMembership?.role ?? '(not loaded)' });
+      window.location.hash = to;
+    };
+
     // Archived project: only allow home and setup
     if (p?._archived && hash !== 'home' && hash !== 'setup') {
-      window.location.hash = '#home';
+      bounce('#home', 'the open project is archived');
       return; // hashchange will fire again → resolveRoute will re-run
     }
 
     // No project: block protected routes
     if (!hasProject && REQUIRES_PROJECT.has(hash)) {
-      window.location.hash = '#home';
+      bounce('#home', 'that route needs an open project and there is not one');
       return;
     }
 
@@ -406,7 +416,7 @@
     // A member without the grant for this section is sent to their own book
     // rather than shown an empty screen they cannot act on.
     if (!mayAccess(hash)) {
-      window.location.hash = '#my-book';
+      bounce('#my-book', 'your membership does not grant this section');
       return;
     }
 
