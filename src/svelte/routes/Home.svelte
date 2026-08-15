@@ -57,8 +57,14 @@
     const registry       = getRegistry();
     const otherProjects  = registry.filter(r => r.id !== activeId && !r._archived);
     const archivedProjects = registry.filter(r => r._archived);
-    const logoSrc        = document.documentElement.dataset.theme === 'light'
-      ? '/assets/logo-day.png' : '/assets/logo-night.png';
+    // Always the dark mark here, whatever the theme. This screen is a pale
+    // photograph rather than the app's dark surface, so the light logo — which
+    // is correct everywhere else — washes out against the sky.
+    //
+    // Served from the root, where public/ actually puts it. The /assets/ path
+    // this used resolves in dev but is where Vite writes hashed build output,
+    // so it is not a path to rely on.
+    const logoSrc = '/logo-day.png';
 
     container.innerHTML = `
       <section class="pm-section">

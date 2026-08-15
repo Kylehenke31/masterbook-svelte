@@ -3495,6 +3495,19 @@ textarea {
   padding: 8px 0;
   transition: width 0.16s ease;
 }
+/* On the project menu only the account button survives, so the panel itself
+   should not be visible at all — no surface, no border, no width reserved.
+   It stays fixed at the bottom-left so the ? still reaches account and
+   project switching from a screen with no sidebar. */
+.macro-sidebar--home {
+  background: none;
+  border-right: none;
+  width: auto;
+  padding: 0;
+  top: auto;
+  justify-content: flex-end;
+}
+
 .macro-sidebar--collapsed {
   width: 44px;
 }
@@ -3669,12 +3682,12 @@ textarea {
 .pm-title {
   font-size: 24px;
   font-weight: 700;
-  color: var(--text-primary);
+  color: #0b0d10;
   margin: 0 0 6px;
 }
 .pm-subtitle {
   font-size: 13px;
-  color: var(--text-secondary);
+  color: #23282e;
   margin: 0;
 }
 .pm-cards {
@@ -3711,11 +3724,11 @@ textarea {
   font-size: 14px;
   font-weight: 600;
   letter-spacing: 0.02em;
-  color: var(--text-secondary);
+  color: #0b0d10;
   cursor: pointer;
-  transition: color var(--transition);
+  transition: opacity var(--transition);
 }
-.pm-create-link:hover { color: var(--gold); }
+.pm-create-link:hover { opacity: 0.6; }
 .pm-card__icon {
   color: var(--gold);
   margin-bottom: 4px;

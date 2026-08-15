@@ -226,6 +226,10 @@
   // of a failed save: the record reached the cloud, its paperwork did not reach
   // Dropbox. Labelling one of those "not saved to cloud" sends someone hunting
   // for data that was never lost, so the banner says which kind it is holding.
+  // The project menu is the one screen with no project open, so the sidebar
+  // has nothing to navigate. Everything but the account button comes off it.
+  let onProjectMenu = $derived(route === 'home' || !route);
+
   let syncProblemsOpen = $state(false);
 
   let syncProblemsAllDropbox = $derived(
@@ -480,7 +484,13 @@
 {:else}
 
 <!-- Macro sidebar (far-left icon rail) -->
-<aside class="macro-sidebar" class:macro-sidebar--collapsed={sidebarCollapsed}>
+<!-- On the project menu the sidebar navigates a project that is not open yet,
+     so it is stripped to nothing but the account button. The chrome goes with
+     it — a 200px panel and its border would crop the photograph. -->
+<aside class="macro-sidebar"
+       class:macro-sidebar--collapsed={sidebarCollapsed}
+       class:macro-sidebar--home={onProjectMenu}>
+  {#if !onProjectMenu}
   <div class="macro-sidebar-top">
     {#if !sidebarCollapsed}
       <img src="/logo-night.png" class="sidebar-logo sidebar-logo--dark" alt="Masterbook" />
@@ -497,7 +507,8 @@
       </svg>
     </button>
   </div>
-  {#if !sidebarCollapsed}
+  {/if}
+  {#if !sidebarCollapsed && !onProjectMenu}
   <div class="macro-sidebar-items">
 
     {#if mayAccess('budget')}
@@ -714,18 +725,23 @@
       {/if}
     </div>
 
-    <!-- Project title → settings or initial setup -->
+    <!-- Project title → settings or initial setup. Hidden on the project menu,
+         where there is no project yet to name or configure. -->
+    {#if !onProjectMenu}
     <button
       class="header-project-title"
       class:has-project={_hasProject()}
       title={_headerTitle()}
       onclick={() => { window.location.hash = _headerTarget(); }}
     >{_headerTitle()}</button>
+    {/if}
   </div>
   {/if}
 </aside>
 
-<div class="app-shell" class:app-shell--sidebar-collapsed={sidebarCollapsed}>
+<div class="app-shell"
+     class:app-shell--sidebar-collapsed={sidebarCollapsed}
+     class:app-shell--home={onProjectMenu}>
 
   <main class="app-main"
         class:app-main--full={route === 'crew' || route === 'budget-lines'}
@@ -1185,17 +1201,20 @@
      and this screen is light text, which over the sky is unreadable. It is
      heaviest at the top where the type sits and lifts toward the bottom, so
      the ridgeline and the moon still read as a photograph. */
+  /* Undimmed, and cropped to fill whatever shape the window is — cover scales
+     to the larger axis and centres the overflow, so the frame is always full
+     rather than letterboxed. The type over it is black, which the sky carries
+     without needing the picture darkened. */
   .app-main--home {
-    background-image:
-      linear-gradient(to bottom,
-        rgba(10, 12, 16, 0.88) 0%,
-        rgba(10, 12, 16, 0.74) 40%,
-        rgba(10, 12, 16, 0.55) 100%),
-      url('/project-menu-bg.jpg');
+    background-image: url('/project-menu-bg.jpg');
     background-size: cover;
-    background-position: center 30%;
+    background-position: center center;
     background-repeat: no-repeat;
   }
+
+  /* Full bleed: with no sidebar to sit beside, the shell drops its offset so
+     the photograph reaches the left edge. */
+  .app-shell--home { margin-left: 0; }
 
   .coming-soon {
     display: flex;
