@@ -3693,14 +3693,23 @@ textarea {
 .pm-cards {
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 16px;
   margin-bottom: 24px;
 }
+
+/* Sized to its contents rather than to the column it sits in. Stretched across
+   the full 720px, a card holding a project name and two buttons was mostly
+   empty surface, and that emptiness now sits on a photograph where it reads as
+   a hole. 420px matches the new-project form, so the two panels on this screen
+   share an edge. */
 .pm-card {
+  width: 100%;
+  max-width: 420px;
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: 0;
-  padding: 24px;
+  padding: 20px 24px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -3715,8 +3724,9 @@ textarea {
    It used to be a dashed tile the same size as a real project, which gave
    equal weight to "open the show you are working on" and "start a new one". */
 .pm-create-link {
-  grid-column: 1 / -1;
-  justify-self: center;
+  /* .pm-cards is flex, not grid — grid-column/justify-self did nothing here,
+     and the button was full-width with centred text rather than centred. */
+  align-self: center;
   background: none;
   border: none;
   padding: 6px 4px;

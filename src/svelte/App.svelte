@@ -1206,10 +1206,17 @@
      rather than letterboxed. The type over it is black, which the sky carries
      without needing the picture darkened. */
   .app-main--home {
+    min-height: 100vh;
     background-image: url('/project-menu-bg.jpg');
     background-size: cover;
     background-position: center center;
     background-repeat: no-repeat;
+    /* Sized against the viewport rather than this element. cover was already
+       cropping to fill, but only to fill *the pane* — on a window taller than
+       the pane's content the picture stopped short and the surface showed
+       through beneath it. Fixed to the viewport it always covers the whole
+       screen, cropping whichever axis overflows. */
+    background-attachment: fixed;
   }
 
   /* Full bleed: with no sidebar to sit beside, the shell drops its offset so
