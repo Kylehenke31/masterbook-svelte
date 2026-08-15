@@ -18,6 +18,7 @@
   import { canAccessRoute } from './lib/features.js';
 
   import Home           from './routes/Home.svelte';
+  import Account        from './routes/Account.svelte';
   import MyBook         from './routes/MyBook.svelte';
   import ProjectMembers from './routes/ProjectMembers.svelte';
   import ElementsReport from './routes/ElementsReport.svelte';
@@ -762,6 +763,8 @@
       <SubmissionForm onDone={() => { window.location.hash = '#' + (submitReturnRoute || 'log'); }} />
     {:else if route === 'call-sheet'}
       <CallSheet />
+    {:else if route === 'account'}
+      <Account />
     {:else if route === 'home' || !route}
       <Home />
     {:else if route === 'crew'}

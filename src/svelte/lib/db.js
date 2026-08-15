@@ -134,6 +134,23 @@ export async function myOwnedProjects() {
   return data || [];
 }
 
+/**
+ * Remove yourself from a project.
+ *
+ * Needs the RPC for the same reason claiming admin does: project_members can
+ * only be written by an admin, so without it the only way off a project is to
+ * ask somebody else. Refuses to strand a project with no admins.
+ */
+export async function leaveProject(projectId) {
+  const { data, error } = await supabase.rpc('leave_project', { p_project_id: projectId });
+  if (error) {
+    console.warn('[db] leaveProject error:', error.message);
+    return { ok: false, reason: 'rpc_error', error: error.message };
+  }
+  // 'left' | 'not_a_member' | 'last_admin' | 'not_signed_in'
+  return { ok: data === 'left', reason: data };
+}
+
 /** Delete a project you own but may not be a member of. */
 export async function deleteOwnedProject(projectId) {
   const { data, error } = await supabase.rpc('delete_owned_project', { p_project_id: projectId });
