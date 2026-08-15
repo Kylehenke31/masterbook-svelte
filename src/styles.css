@@ -3599,16 +3599,19 @@ textarea {
    Project Menu (Home / Landing)
    ============================================================ */
 
+/* Left-aligned, held off the edge, and vertically loose — a list you read
+   down rather than a block centred in the frame. The photograph is the
+   composition; the menu sits in it. */
 .pm-section {
   max-width: 720px;
-  margin: 0 auto;
-  padding: 32px 16px;
+  margin: 0;
+  padding: 32px 16px 32px 72px;
 }
 .pm-welcome {
   display: flex;
   flex-direction: column;
   align-items: center;
-  margin-bottom: 32px;
+  margin-bottom: 56px;
 }
 .pm-welcome-logo {
   width: 180px;
@@ -3676,8 +3679,11 @@ textarea {
   padding: 0;
 }
 
+/* One centre line from the heading down to the archived list, rather than a
+   left-aligned header sitting above centred cards. */
 .pm-header {
   margin-bottom: 28px;
+  text-align: center;
 }
 .pm-title {
   font-size: 24px;
@@ -3698,23 +3704,21 @@ textarea {
   margin-bottom: 24px;
 }
 
-/* Sized to its contents rather than to the column it sits in. Stretched across
-   the full 720px, a card holding a project name and two buttons was mostly
-   empty surface, and that emptiness now sits on a photograph where it reads as
-   a hole. 420px matches the new-project form, so the two panels on this screen
-   share an edge. */
+/* No surface at all. A panel here punched a rectangle out of the photograph
+   to hold a name and three buttons; without it the project sits on the picture
+   like everything else on this screen, and its type joins the page's black. */
 .pm-card {
   width: 100%;
-  max-width: 420px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
+  max-width: 300px;
+  background: none;
+  border: none;
   border-radius: 0;
-  padding: 20px 24px;
+  padding: 8px 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
-  gap: 8px;
+  gap: 6px;
 }
 .pm-card--active {
   border-color: var(--gold);
@@ -3746,12 +3750,12 @@ textarea {
 .pm-card__title {
   font-size: 16px;
   font-weight: 700;
-  color: var(--text-primary);
+  color: #0b0d10;
   margin: 0;
 }
 .pm-card__meta {
   font-size: 12px;
-  color: var(--text-secondary);
+  color: #23282e;
   margin: 0;
 }
 .pm-card__actions {
@@ -6872,3 +6876,109 @@ tr:hover .cse-row-del { opacity: 0.6; }
 /* A record asserting an attachment with no file behind it. Amber, not red:
    it is a statement of fact about older records, not an error to act on. */
 .doc-missing { display: block; font-size: 0.7rem; color: var(--amber); margin-top: 3px; }
+
+
+/* ── Project menu list ── */
+.pm-menu {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 18px;
+}
+
+.pm-rows {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  margin-bottom: 6px;
+}
+
+.pm-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pm-row-open {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  background: none;
+  border: none;
+  padding: 2px 0;
+  font: inherit;
+  font-size: 20px;
+  color: #0b0d10;
+  cursor: pointer;
+}
+
+.pm-row-caret { opacity: 0.75; }
+
+/* The highlight lands on the name alone, not the whole row — the row is the
+   width of the longest project, and lighting all of it would mark dead space
+   as hoverable. */
+.pm-row-name {
+  padding: 1px 6px;
+  transition: background var(--transition), color var(--transition);
+}
+.pm-row-open:hover .pm-row-name,
+.pm-row-open:focus-visible .pm-row-name {
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.pm-row-more {
+  background: none;
+  border: none;
+  padding: 2px 6px;
+  font: inherit;
+  font-size: 18px;
+  line-height: 1;
+  color: #0b0d10;
+  opacity: 0.55;
+  cursor: pointer;
+  transition: opacity var(--transition);
+}
+.pm-row-more:hover, .pm-row-more[aria-expanded="true"] { opacity: 1; }
+
+/* The one place on this screen that keeps a surface: a floating menu needs an
+   edge to be readable over whatever part of the sky it lands on. */
+.pm-row-menu {
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-left: 6px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  min-width: 120px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+}
+
+.pm-row-menu-item {
+  background: none;
+  border: none;
+  padding: 7px 12px;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.pm-row-menu-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+.pm-link {
+  background: none;
+  border: none;
+  padding: 2px 6px 2px 0;
+  font: inherit;
+  font-size: 20px;
+  color: #0b0d10;
+  cursor: pointer;
+  transition: opacity var(--transition);
+}
+.pm-link:hover { opacity: 0.6; }

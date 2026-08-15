@@ -1205,18 +1205,23 @@
      to the larger axis and centres the overflow, so the frame is always full
      rather than letterboxed. The type over it is black, which the sky carries
      without needing the picture darkened. */
-  .app-main--home {
-    min-height: 100vh;
+  /* The photograph is its own fixed layer covering the viewport, rather than a
+     background on this pane.
+     Painting it on the pane left pale bars down both edges: a background is
+     only drawn inside its element's box, so anywhere the pane did not reach —
+     the shell's own edges — showed through. A fixed layer pinned to all four
+     sides of the viewport has no edges to fall short of. */
+  .app-main--home { min-height: 100vh; background: none; }
+
+  .app-main--home::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
     background-image: url('/project-menu-bg.jpg');
     background-size: cover;
     background-position: center center;
     background-repeat: no-repeat;
-    /* Sized against the viewport rather than this element. cover was already
-       cropping to fill, but only to fill *the pane* — on a window taller than
-       the pane's content the picture stopped short and the surface showed
-       through beneath it. Fixed to the viewport it always covers the whole
-       screen, cropping whichever axis overflows. */
-    background-attachment: fixed;
   }
 
   /* Full bleed: with no sidebar to sit beside, the shell drops its offset so

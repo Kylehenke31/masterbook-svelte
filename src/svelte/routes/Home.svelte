@@ -10,6 +10,10 @@
     refreshProjectStore, ensureProjectInCloud,
   } from '../stores/project.js';
 
+  // The document-level close handler is bound once, not on every re-render —
+  // _wire() runs again after each render, and rebinding would stack listeners.
+  let _docCloseBound = false;
+
   let container;
 
   function _esc(str) {
@@ -22,6 +26,31 @@
 
   function _tplLabel(tpl) {
     return tpl === 'feature' ? 'Feature/TV' : 'Commercial';
+  }
+
+  /**
+   * One project, as a line.
+   *
+   * The name carries the primary action — open it if it is the one already
+   * loaded, switch to it otherwise — and the ⋯ holds everything else. Keeping
+   * the old handler class names means the existing wiring still finds these.
+   */
+  function _projectRow(r, isActive) {
+    const label = _esc(r.productionNumber ? r.productionNumber + '_' + r.title : r.title);
+    return `
+      <div class="pm-row" data-project-id="${_esc(r.id)}">
+        <button class="pm-row-open ${isActive ? 'pm-open-project' : 'pm-switch-btn'}"
+                data-pid="${_esc(r.id)}" title="${isActive ? 'Open' : 'Switch to'} ${label}">
+          <span class="pm-row-caret" aria-hidden="true">&gt;</span>
+          <span class="pm-row-name">${label}</span>
+        </button>
+        <button class="pm-row-more" data-pid="${_esc(r.id)}"
+                aria-label="More options for ${label}" aria-expanded="false">···</button>
+        <div class="pm-row-menu hidden" data-menu-for="${_esc(r.id)}">
+          <button class="pm-row-menu-item pm-settings-btn" data-pid="${_esc(r.id)}">Settings</button>
+          <button class="pm-row-menu-item pm-btn-archive" data-pid="${_esc(r.id)}">Archive</button>
+        </div>
+      </div>`;
   }
 
   function _projectCard(r, isActive) {
@@ -71,26 +100,28 @@
         <div class="pm-welcome">
           <img src="${logoSrc}" alt="The Masterbook" class="pm-welcome-logo" />
         </div>
-        <div class="pm-header">
-          <h2 class="pm-title">Project Menu</h2>
-          <p class="pm-subtitle">Create, open, or manage.</p>
-        </div>
 
-        <div class="pm-cards">
-          ${hasProject ? _projectCard({ id: activeId, ...project }, true) : ''}
-          ${otherProjects.map(r => _projectCard(r, false)).join('')}
+        <!-- A list of things to open, not a grid of cards. Each project is one
+             line: a caret, its name, and a ⋯ holding the things you rarely do
+             to it. Settings and Archive as permanent buttons put three
+             controls of equal weight on every row, when the one you want is
+             almost always the name. -->
+        <nav class="pm-menu">
+          <div class="pm-rows">
+            ${hasProject ? _projectRow({ id: activeId, ...project }, true) : ''}
+            ${otherProjects.map(r => _projectRow(r, false)).join('')}
+          </div>
 
-          <!-- Create New Project — the action, not a card. A dashed box the
-               size of a project tile competed with the real projects beside
-               it for attention; the words alone are enough. -->
-          <button class="pm-create-link" id="pm-create-card">Create New Project</button>
-        </div>
+          <button class="pm-link" id="pm-create-card">+ New Project</button>
+          ${archivedProjects.length > 0
+            ? `<button class="pm-link" id="pm-toggle-archived">Archive</button>` : ''}
+          <button class="pm-link" id="pm-account">Account</button>
+        </nav>
 
         ${archivedProjects.length > 0 ? `
           <div class="pm-archived-section">
-            <button class="btn btn--ghost btn--sm" id="pm-toggle-archived">
-              Show Archived Projects (${archivedProjects.length})
-            </button>
+            <!-- The Archive entry in the menu above is this list's only toggle.
+                 A second button here duplicated both the control and its id. -->
             <div class="pm-archived-list hidden" id="pm-archived-list">
               ${archivedProjects.map(r => `
                 <div class="pm-card pm-card--archived" data-project-id="${_esc(r.id)}">
@@ -156,6 +187,44 @@
 
   function _wire() {
     const c = container;
+
+    /* ── Per-project ⋯ menus ──
+       One open at a time, and a click anywhere else closes it. Without that,
+       opening a second leaves the first hanging over the list. */
+    const closeRowMenus = (except) => {
+      c.querySelectorAll('.pm-row-menu').forEach(m => {
+        if (m !== except) m.classList.add('hidden');
+      });
+      c.querySelectorAll('.pm-row-more').forEach(b => b.setAttribute('aria-expanded', 'false'));
+    };
+
+    c.querySelectorAll('.pm-row-more').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const menu = btn.parentElement.querySelector('.pm-row-menu');
+        const willOpen = menu.classList.contains('hidden');
+        closeRowMenus(willOpen ? menu : null);
+        menu.classList.toggle('hidden', !willOpen);
+        btn.setAttribute('aria-expanded', String(willOpen));
+      });
+    });
+
+    // Clicking into a menu must not close it before the item handler runs.
+    c.querySelectorAll('.pm-row-menu').forEach(m => {
+      m.addEventListener('click', e => e.stopPropagation());
+    });
+
+    if (!_docCloseBound) {
+      document.addEventListener('click', () => {
+        container?.querySelectorAll('.pm-row-menu').forEach(m => m.classList.add('hidden'));
+        container?.querySelectorAll('.pm-row-more').forEach(b => b.setAttribute('aria-expanded', 'false'));
+      });
+      _docCloseBound = true;
+    }
+
+    c.querySelector('#pm-account')?.addEventListener('click', () => {
+      window.location.hash = '#account';
+    });
 
     // Open project → go to Purchase Log
     c.querySelectorAll('.pm-open-project').forEach(btn => {
@@ -249,10 +318,8 @@
       if (!list) return;
       const showing = !list.classList.contains('hidden');
       list.classList.toggle('hidden');
-      const archivedCount = getRegistry().filter(r => r._archived).length;
-      toggleBtn.textContent = showing
-        ? `Show Archived Projects (${archivedCount})`
-        : 'Hide Archived Projects';
+      // The menu entry is a plain word, so it says what it will do next.
+      toggleBtn.textContent = showing ? 'Archive' : 'Hide Archive';
     });
 
     // Create card → show form
