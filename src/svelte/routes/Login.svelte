@@ -59,16 +59,17 @@
   }
 </script>
 
+<!-- Signing in is the first entry on the project menu, not a separate screen
+     in front of it. Same photograph, same centred mark, and the card sits
+     where the list of projects will be once there is someone to list them
+     for — so signing in reads as arriving at the menu rather than as passing
+     through a gate to somewhere else. -->
 <div class="login-wrap">
+  <div class="login-logo-wrap">
+    <img src="/logo-day.png" class="login-logo" alt="The Masterbook" />
+  </div>
+
   <div class="login-card">
-
-    <!-- Logo -->
-    <div class="login-logo-wrap">
-      <img src="/logo-night.png" class="login-logo login-logo--dark" alt="The Masterbook" />
-      <img src="/logo-day.png"   class="login-logo login-logo--light" alt="The Masterbook" />
-    </div>
-
-    <h1 class="login-title">The Masterbook</h1>
 
     {#if invitedEmail}
       <p class="login-invite">
@@ -158,43 +159,49 @@
 </div>
 
 <style>
+  /* The project menu's photograph, and its geometry: mark centred at the top,
+     content held off the left edge where the project list sits. */
   .login-wrap {
     position: fixed;
     inset: 0;
     display: flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--bg-base, #111);
+    flex-direction: column;
+    align-items: flex-start;
+    background-image: url('/project-menu-bg.jpg');
+    background-size: cover;
+    background-position: center center;
+    background-repeat: no-repeat;
     z-index: 9999;
-    padding: 24px;
+    padding: 32px 24px 24px 72px;
+    overflow-y: auto;
   }
 
   .login-card {
     width: 100%;
-    max-width: 400px;
+    max-width: 340px;
     background: var(--bg-surface, #1a1a1a);
     border: 1px solid var(--border, #333);
     border-radius: 0;
     padding: 40px 36px 36px;
-    box-shadow: 0 16px 48px rgba(0,0,0,0.5);
+    box-shadow: 0 10px 40px rgba(0,0,0,0.35);
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 0;
   }
 
-  /* Logo */
+  /* Centred on the screen, matching the project menu — the same mark in the
+     same place, so signing in and arriving are one continuous screen.
+     Always the dark one: this is a pale photograph whatever the theme. */
   .login-logo-wrap {
-    margin-bottom: 16px;
+    align-self: center;
+    margin-bottom: 56px;
   }
   .login-logo {
-    width: 72px;
+    width: 180px;
     height: auto;
     display: block;
   }
-  .login-logo--light { display: none; }
-  :global([data-theme="light"]) .login-logo--dark  { display: none; }
-  :global([data-theme="light"]) .login-logo--light { display: block; }
 
   .login-title {
     font-size: 1.5rem;

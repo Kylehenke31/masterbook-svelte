@@ -328,6 +328,12 @@
   async function handleSignOut() {
     closeDropdown();
     lastSyncedUserId = null;  // allow re-sync if user signs back in
+    // Land on the project menu rather than wherever they happened to be.
+    // Signing back in otherwise drops you straight into the last project's
+    // budget or call sheet, which is rarely where the next session starts —
+    // and if that project was archived or left in the meantime, into a screen
+    // that immediately bounces.
+    window.location.hash = '#home';
     await signOut();
     // authUser store will update → authState becomes null → Login screen shows
   }
@@ -718,6 +724,15 @@
             </div>
             <div class="pd-divider"></div>
             <button class="pd-action-btn" role="menuitem" onclick={handleNewProject}>+ New Project</button>
+            <div class="pd-divider"></div>
+            <!-- The project menu is otherwise only reachable by signing out or
+                 by knowing the URL: the sidebar that used to lead there is
+                 stripped on that screen, and nothing inside a project points
+                 back to it. -->
+            <button class="pd-action-btn" role="menuitem"
+              onclick={() => { closeDropdown(); window.location.hash = '#home'; }}>
+              Top Menu
+            </button>
             <div class="pd-divider"></div>
             <button class="pd-action-btn pd-action-btn--signout" role="menuitem" onclick={handleSignOut}>
               Sign Out
