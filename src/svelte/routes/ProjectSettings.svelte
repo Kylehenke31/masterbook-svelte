@@ -523,8 +523,14 @@
       if (statusEl) {
         statusEl.textContent = 'Saved ✓';
         statusEl.classList.add('saved');
-        setTimeout(() => { statusEl.textContent = ''; statusEl.classList.remove('saved'); }, 2500);
       }
+
+      // Saving settings is the last step of setting a project up, so it ends
+      // by putting the person inside the project rather than leaving them on
+      // the form they just finished. My Book rather than the Purchase Log:
+      // everyone has their own book whatever their grants, where the expense
+      // log needs Expenses and would bounce a crew member straight back out.
+      setTimeout(() => { window.location.hash = '#my-book'; }, 600);
     });
   }
 

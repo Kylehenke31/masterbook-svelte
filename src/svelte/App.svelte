@@ -354,6 +354,10 @@
    * Routes that require an active non-archived project.
    * Navigating to these without a project → redirect to #home.
    */
+  /* Screens that are not about a project, and so survive one being archived:
+     the project menu, first-time setup, and the personal account page. */
+  const PROJECT_INDEPENDENT_ROUTES = new Set(['home', 'setup', 'account', '']);
+
   const REQUIRES_PROJECT = new Set([
     'log', 'submit', 'crew', 'calendar', 'schedules', 'breakdowns',
     'one-liner', 'script-order', 'shooting-schedule', 'elements-report',
@@ -395,8 +399,15 @@
       window.location.hash = to;
     };
 
-    // Archived project: only allow home and setup
-    if (p?._archived && hash !== 'home' && hash !== 'setup') {
+    // Archived project: its own screens are closed, but screens that are not
+    // about a project stay open.
+    //
+    // This rule used to block everything except home and setup, which meant an
+    // archived project quietly took the account page down with it — and since
+    // the redirect was silent, clicking Account looked like a dead link rather
+    // than like a consequence of the project's state. Account belongs to the
+    // person, not the production.
+    if (p?._archived && !PROJECT_INDEPENDENT_ROUTES.has(hash)) {
       bounce('#home', 'the open project is archived');
       return; // hashchange will fire again → resolveRoute will re-run
     }
