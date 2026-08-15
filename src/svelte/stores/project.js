@@ -117,17 +117,11 @@ export async function ensureProjectInCloud() {
     }
 
     // Say which fault this is. They need different responses, and reporting
-    // them as one failure is what kept this undiagnosed.
-    const { myOwnedProjects } = await import('../lib/db.js');
-    const owned = await myOwnedProjects().catch(() => []);
-    console.warn(
-      `[project] could not become admin of the active project — reason: ${claim.reason}\n` +
-      `  active project id: ${id}\n` +
-      `  projects this account owns: ${owned.length
-        ? owned.map(p => `${p.title} (${p.id}) member=${p.is_member}`).join('; ')
-        : 'none'}`
-    );
-    return { reason: claim.reason, owned };
+    // them as one failure is what kept this undiagnosed. The reason travels
+    // back to the caller, which puts it on screen — the console line is the
+    // short version, not a dump of everything that might be relevant.
+    console.warn(`[project] could not become admin of the open project — ${claim.reason}`);
+    return { reason: claim.reason };
   } catch (e) {
     console.warn('[project] ensureProjectInCloud failed:', e.message);
     return { failed: true, message: e.message };

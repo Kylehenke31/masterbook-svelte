@@ -100,13 +100,7 @@
           rpc_error:         'the database refused the request',
         }[repair?.reason] || repair?.reason || 'unknown';
 
-        console.warn(
-          '[project] NOT A MEMBER of the active project — writes will be refused by RLS.\n' +
-          `  reason:     ${repair?.reason ?? 'n/a'}\n` +
-          `  user id:    ${user.id}\n` +
-          `  project id: ${activeId}\n` +
-          `  owns:       ${(repair?.owned || []).map(p => `${p.title} (${p.id}) member=${p.is_member}`).join('; ') || 'nothing'}`
-        );
+        console.warn(`[project] not a member of the open project — ${why}. Writes will be refused.`);
         window.dispatchEvent(new CustomEvent('masterbook-sync-error', {
           detail: {
             table: 'project_members', operation: 'loadMyMembership',
@@ -398,10 +392,13 @@
     // Every redirect below sends you somewhere other than where you asked to
     // go, and silently — which is indistinguishable from a link that does
     // nothing. Say which rule fired and what it was looking at.
+    //
+    // Development only. Unlike the other warnings in this app, this one fires
+    // on perfectly healthy navigation — opening the menu with no project is a
+    // redirect, not a fault — so in production it would be noise around the
+    // lines that do mean something. Vite folds the branch away at build time.
     const bounce = (to, why) => {
-      console.warn(`[route] "${hash || '(empty)'}" → ${to} — ${why}`,
-        { hasProject, title: p?.title ?? null, archived: !!p?._archived,
-          membershipRole: myMembership?.role ?? '(not loaded)' });
+      if (import.meta.env.DEV) console.warn(`[route] "${hash || '(empty)'}" → ${to} — ${why}`);
       window.location.hash = to;
     };
 

@@ -70,35 +70,24 @@ export async function cloudSaveProject(project) {
   // trigger that makes its creator an admin never fires, and every later thing
   // gated on membership fails somewhere far away — a receipt upload denied by
   // RLS, with nothing connecting it back to here.
-  // The insert policy is `owner_id = auth.uid()`, so a refusal means the id we
-  // sent and the id the database resolved from the token disagree. Decode the
-  // token's subject and compare, rather than assuming they match — that
-  // assumption is why this took several passes to find.
-  let tokenSub = '(no session)';
+  // The insert policy is `owner_id = auth.uid()`, so a refusal usually means
+  // the id we sent and the id the database resolved from the token disagree.
+  // Checked rather than assumed — assuming they matched is what hid this for
+  // several rounds — but only reported when they actually differ, since the
+  // matching case says nothing and every line printed on a healthy failure is
+  // a line someone has to read past on the next one.
+  let mismatch = '';
   try {
     const { data: { session } } = await supabase.auth.getSession();
     const raw = session?.access_token?.split('.')[1];
-    if (raw) tokenSub = JSON.parse(atob(raw.replace(/-/g, '+').replace(/_/g, '/'))).sub;
-  } catch { tokenSub = '(unreadable)'; }
-  // When the ids match and the row is still refused, the policy being enforced
-  // is not the one we think. Read the real ones rather than argue from the
-  // migration files, which is what went wrong for several rounds here.
-  let policies = '(unavailable)';
-  try {
-    const { data } = await supabase.rpc('debug_table_policies', { p_table: 'projects' });
-    policies = (data || []).map(p =>
-      `${p.policyname} [${p.cmd}${p.permissive === 'PERMISSIVE' ? '' : ' RESTRICTIVE'}] roles=${p.roles} check=${p.with_check || '—'}`
-    ).join('\n                    ') || '(none — RLS on with no policies denies everything)';
-  } catch { /* function may not exist yet */ }
+    const sub = raw ? JSON.parse(atob(raw.replace(/-/g, '+').replace(/_/g, '/'))).sub : null;
+    if (sub && sub !== user.id) {
+      mismatch = `\n  the session and the request disagree about who you are —` +
+                 `\n  owner_id sent: ${user.id}\n  token subject: ${sub}`;
+    }
+  } catch { /* an unreadable token is not worth failing the save report over */ }
 
-  console.warn(
-    '[db] cloudSaveProject error:', error.message,
-    '\n  owner_id sent:  ', user.id,
-    '\n  token subject:  ', tokenSub,
-    '\n  match:          ', tokenSub === user.id,
-    '\n  project id:     ', project.id,
-    '\n  policies on projects:\n                    ' + policies,
-  );
+  console.warn(`[db] cloudSaveProject error: ${error.message}${mismatch}`);
   window.dispatchEvent(new CustomEvent('masterbook-sync-error', {
     detail: {
       table: 'projects', operation: 'cloudSaveProject',
@@ -127,12 +116,6 @@ export async function claimProjectAdmin(projectId) {
   return { ok: data === 'granted', reason: data };
 }
 
-/** Projects this account owns, whether or not it is a member of them. */
-export async function myOwnedProjects() {
-  const { data, error } = await supabase.rpc('my_owned_projects');
-  if (error) { console.warn('[db] myOwnedProjects error:', error.message); return []; }
-  return data || [];
-}
 
 /**
  * Remove yourself from a project.
