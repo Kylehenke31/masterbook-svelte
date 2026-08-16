@@ -211,7 +211,6 @@
           
           <!-- ── Actions ── -->
           <div class="form-actions setup-actions">
-            <button type="button" id="ps-btn-back" class="btn btn--ghost">← Back to Project</button>
             <div class="setup-save-group">
               <span class="setup-save-status" id="ps-save-status"></span>
               <button type="submit" class="btn btn--primary">Save Settings</button>
@@ -364,11 +363,6 @@
       const next = e.currentTarget.checked ? 'dark' : 'light';
       document.documentElement.dataset.theme = next;
       localStorage.setItem('movie-ledger-theme', next);
-    });
-
-    // Back button
-    c.querySelector('#ps-btn-back')?.addEventListener('click', () => {
-      window.location.hash = '#log';
     });
 
     // Dropbox connection

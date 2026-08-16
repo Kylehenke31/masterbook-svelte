@@ -1578,6 +1578,11 @@ a:hover {
   display: flex;
   align-items: center;
   gap: 12px;
+  /* Holds the save controls against the right edge whether or not anything
+     shares the row. space-between above does that only while there are two
+     children — Project Settings now has one, and without this its Save button
+     slid to the left of an empty bar. */
+  margin-left: auto;
   margin-left: auto;
 }
 
