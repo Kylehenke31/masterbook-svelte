@@ -285,6 +285,18 @@
     overflow-y: auto;
   }
 
+  /* The 72px left inset places the card where the project list sits on a
+     desktop. On a phone it just shoves a 340px card into what is left of a
+     375px screen, squeezing it to 279px and hanging it off-centre. Below
+     560px it centres instead. */
+  @media (max-width: 560px) {
+    .login-wrap {
+      padding: 24px 16px;
+      align-items: center;
+    }
+    .login-card { max-width: 100%; }
+  }
+
   .login-card {
     width: 100%;
     max-width: 340px;

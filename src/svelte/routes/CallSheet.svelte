@@ -102,17 +102,21 @@ Thank you,
     // which settles, but not before the browser reports an undelivered
     // notification. The column's width owes nothing to the scale.
     const target = previewStage.parentElement || previewStage;
+    let raf = 0;
     const ro = new ResizeObserver(([entry]) => {
       const next = Math.min(1, entry.contentRect.width / PAGE_W);
-      // Only when it actually moves. The stage's height is derived from this
-      // scale, so assigning unconditionally resized the very box being
-      // observed and the observer fired again — settling, but logging
-      // "ResizeObserver loop completed with undelivered notifications" on the
-      // way. Sub-pixel changes are not worth a re-render either.
-      if (Math.abs(next - previewScale) > 0.001) previewScale = next;
+      // Only when it actually moves, and never from inside the observer's own
+      // delivery. Setting the scale resizes the stage, which is inside the box
+      // being observed, so assigning synchronously queues a second
+      // notification in the same frame — harmless, but the browser reports it
+      // as an undelivered-notification loop. A frame later it is just a normal
+      // resize.
+      if (Math.abs(next - previewScale) <= 0.001) return;
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => { previewScale = next; });
     });
     ro.observe(target);
-    return () => ro.disconnect();
+    return () => { cancelAnimationFrame(raf); ro.disconnect(); };
   });
 
   /* The document decides its own length — letter or legal, depending on how
