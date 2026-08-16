@@ -84,8 +84,20 @@ export async function cloudSaveProject(project) {
    * belongs to somebody else the claim refuses, nothing is retried, and the
    * original error is reported as before.
    */
+  let claimReason = null;
+  let rowVisible  = null;
   if (error) {
+    /* An upsert takes the UPDATE path only if it can *see* the conflicting
+       row, so a project you cannot select is refused before any policy about
+       writing is considered. Record whether it was visible, because "cannot
+       read it" and "cannot write it" are different faults and this message has
+       reported them identically through several rounds of getting this wrong. */
+    const { data: seen } = await supabase
+      .from('projects').select('id').eq('id', project.id).maybeSingle();
+    rowVisible = !!seen;
+
     const claim = await claimProjectAdmin(project.id);
+    claimReason = claim.reason;
     if (claim.ok) ({ error } = await attempt());
   }
 
@@ -112,11 +124,21 @@ export async function cloudSaveProject(project) {
     }
   } catch { /* an unreadable token is not worth failing the save report over */ }
 
-  console.warn(`[db] cloudSaveProject error: ${error.message}${mismatch}`);
+  /* Name the project and what was already tried. Without this the message is
+     the same sentence every time and says nothing about which of several
+     projects failed, whether the row could even be read, or what the repair
+     said when it ran. */
+  const detail =
+    `\n  project: ${project.id}` +
+    `\n  row readable by me: ${rowVisible === null ? 'not checked' : rowVisible}` +
+    `\n  claim_project_admin said: ${claimReason ?? 'not attempted'}` +
+    `\n  title: ${project.title || '(untitled)'}`;
+  console.warn(`[db] cloudSaveProject error: ${error.message}${mismatch}${detail}`);
   window.dispatchEvent(new CustomEvent('masterbook-sync-error', {
     detail: {
       table: 'projects', operation: 'cloudSaveProject',
-      message: `the project was saved on this device only — ${error.message}`,
+      message: `the project was saved on this device only — ${error.message} ` +
+               `(project ${String(project.id).slice(0, 8)}, readable: ${rowVisible}, claim: ${claimReason ?? 'n/a'})`,
       at: new Date().toISOString(),
     },
   }));

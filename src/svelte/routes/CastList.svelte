@@ -225,6 +225,21 @@
   /* ── Hold/off date inputs (local state) ── */
   let holdDateInput = $state('');
   let offDateInput  = $state('');
+  /* Same reason as CrewList: a contenteditable whose content is rendered from
+     an expression ends up with two text nodes — Svelte's and the one the
+     browser makes as you type — and the value appears twice after blur. With
+     no expression inside the element there is nothing to collide with. */
+  function cellText(node, value) {
+    node.textContent = value ?? '';
+    return {
+      update(next) {
+        const v = next ?? '';
+        if (document.activeElement === node) return;   // typing; leave the caret alone
+        if (node.textContent !== v) node.textContent = v;
+      },
+    };
+  }
+
 </script>
 
 <div class="cast-inner">
@@ -253,8 +268,9 @@
         <div class="cp-sec-group">
           <div class="cp-sec-header">
             <span class="cp-sec-name" contenteditable="plaintext-only"
+              use:cellText={sec.sectionName}
               onblur={e => setSectionName(sec.sectionId, e.target.textContent.trim())}
-              onkeydown={e => e.key === 'Enter' && e.target.blur()}>{sec.sectionName}</span>
+              onkeydown={e => e.key === 'Enter' && e.target.blur()}></span>
             <button class="cp-sec-add" title="Add member" onclick={() => addMember(sec.sectionId)}>+</button>
           </div>
           {#each sec.memberIds as mid (mid)}

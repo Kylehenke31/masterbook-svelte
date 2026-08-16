@@ -487,6 +487,33 @@
   /* ── Protected sections (can't delete) ── */
   const PROTECTED = ['CLIENT','AGENCY','PRODUCTION'];
   function isProtected(sec) { return PROTECTED.includes(sec.sectionName?.toUpperCase()); }
+  /* ── Editable cell text ──────────────────────────────────────────
+   * Set imperatively instead of rendered as {value}.
+   *
+   * A contenteditable whose content comes from an expression is edited by two
+   * parties. Svelte creates a text node and keeps a reference to it; typing
+   * makes the browser create or replace text nodes of its own. On blur the
+   * value is written to state, Svelte re-renders and writes to *its* node —
+   * which is no longer the one the browser left behind. Both survive, and the
+   * cell reads "DanaDana".
+   *
+   * With no expression inside the element Svelte creates no node to fight
+   * over, and this owns the content outright.
+   */
+  function cellText(node, value) {
+    node.textContent = value ?? '';
+    return {
+      update(next) {
+        const v = next ?? '';
+        // Never while the cell is being edited: assigning textContent collapses
+        // the selection to the start, so a re-render mid-typing would throw the
+        // caret to the front of the cell on every keystroke.
+        if (document.activeElement === node) return;
+        if (node.textContent !== v) node.textContent = v;
+      },
+    };
+  }
+
 </script>
 
 <div class="crew-inner">
@@ -532,8 +559,9 @@
                 rowspan="3" style="width:{c.width}px;min-width:{c.width}px;">
               {#if c.check}
                 <span class="crew-col-label" contenteditable="plaintext-only"
+                  use:cellText={c.label}
                   onblur={e => renameCheckCol(c.key, e.target.textContent.trim())}
-                  onkeydown={e => e.key === 'Enter' && e.target.blur()}>{c.label}</span>
+                  onkeydown={e => e.key === 'Enter' && e.target.blur()}></span>
                 <button class="btn btn--ghost btn--sm crew-del-col" title="Remove column"
                   onclick={() => deleteCheckCol(c.key)}>✕</button>
               {:else}
@@ -582,8 +610,9 @@
             <td class="crew-cell crew-cell--sticky crew-sec-name-cell" colspan="2"
                 style="position:sticky;left:{HANDLE_W}px;z-index:2;">
               <span class="crew-sec-name" contenteditable="plaintext-only"
+                use:cellText={sec.sectionName}
                 onblur={e => setSectionName(si, e.target.textContent.trim())}
-                onkeydown={e => e.key === 'Enter' && e.target.blur()}>{sec.sectionName}</span>
+                onkeydown={e => e.key === 'Enter' && e.target.blur()}></span>
               <button class="btn btn--ghost btn--sm crew-add-row" title="Add row"
                 onclick={() => addRow(si)}>+</button>
             </td>
@@ -624,11 +653,12 @@
                     style={c.frozen?`position:sticky;left:${c.left}px;z-index:2;`:''}>
                   <div class="crew-cell-inner" contenteditable="plaintext-only"
                     data-si={si} data-ri={ri} data-col={c.key}
+                    use:cellText={c.key === 'phone' ? formatPhone(row[c.key] ?? '') : (row[c.key] ?? '')}
                     onblur={e => setCellValue(si, ri, c.key, e.target.textContent.trim())}
                     onkeydown={e => handleCellKeydown(e, si, ri, c.key)}
                     onmousedown={e => handleCellMouseDown(e, si, ri, c.key)}
                     onmouseover={e => handleCellMouseOver(e, si, ri, c.key)}
-                  >{c.key === 'phone' ? formatPhone(row[c.key] ?? '') : (row[c.key] ?? '')}</div>
+                  ></div>
                 </td>
               {/each}
 
@@ -659,11 +689,12 @@
                   <td class="crew-cell crew-cell--right{i===0?' crew-cell--right-first':''}">
                     <div class="crew-cell-inner" contenteditable="plaintext-only"
                       data-si={si} data-ri={ri} data-col={c.key}
+                      use:cellText={row[c.key] ?? ''}
                       onblur={e => setCellValue(si, ri, c.key, e.target.textContent.trim())}
                       onkeydown={e => handleCellKeydown(e, si, ri, c.key)}
                       onmousedown={e => handleCellMouseDown(e, si, ri, c.key)}
                       onmouseover={e => handleCellMouseOver(e, si, ri, c.key)}
-                    >{row[c.key] ?? ''}</div>
+                    ></div>
                   </td>
                 {/if}
               {/each}
