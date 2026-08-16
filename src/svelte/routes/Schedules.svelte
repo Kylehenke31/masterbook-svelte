@@ -240,64 +240,45 @@
   let totalPrepEvents = $derived(prepDays.reduce((s, d) => s + d.events.length, 0));
 </script>
 
+{#snippet toolRow(t)}
+  <!-- The whole row is the control when the tool exists, and a plain row when
+       it does not — a disabled thing that still looks pressable is worse than
+       one that plainly is not. -->
+  <svelte:element this={t.active ? 'button' : 'div'}
+    class="sched-row{t.active ? ' sched-row--active' : ''}"
+    type={t.active ? 'button' : undefined}
+    disabled={t.active ? undefined : true}
+    onclick={() => t.active && handleCard(t.id)}>
+    <span class="sched-row-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+           stroke-linecap="round" stroke-linejoin="round" width="17" height="17" aria-hidden="true">
+        <path d={t.icon}/>
+      </svg>
+    </span>
+    <span class="sched-row-title">{t.label}</span>
+    <span class="sched-row-desc">{t.desc}</span>
+    {#if t.active}
+      <span class="sched-row-go" aria-hidden="true">&rsaquo;</span>
+    {:else}
+      <span class="sched-row-soon">Coming Soon</span>
+    {/if}
+  </svelte:element>
+{/snippet}
+
 {#if view === 'hub'}
   <section class="sched-section">
     <h2 class="sched-title">Schedules</h2>
     <p class="sched-subtitle">Production scheduling tools. The Breakdown is the master schedule that feeds all other formats.</p>
 
-    <div class="sched-grid">
-      {#each SCHEDULE_TYPES as t}
-        <div class="sched-card{t.active ? ' sched-card--active' : ''}"
-             role={t.active ? 'button' : undefined}
-             tabindex={t.active ? 0 : undefined}
-             onclick={() => t.active && handleCard(t.id)}
-             onkeydown={e => (e.key==='Enter'||e.key===' ') && t.active && handleCard(t.id)}>
-          <div class="sched-card-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
-                 stroke-linecap="round" stroke-linejoin="round" width="28" height="28">
-              <path d={t.icon}/>
-            </svg>
-          </div>
-          <div class="sched-card-body">
-            <span class="sched-card-title">{t.label}</span>
-            <span class="sched-card-desc">{t.desc}</span>
-          </div>
-          {#if t.active}
-            <span class="sched-card-badge sched-card-badge--ready">Open</span>
-          {:else}
-            <span class="sched-card-badge">Coming Soon</span>
-          {/if}
-        </div>
-      {/each}
+    <div class="sched-list">
+      {#each SCHEDULE_TYPES as t}{@render toolRow(t)}{/each}
     </div>
 
     <h2 class="sched-title" style="margin-top:32px;">Reports</h2>
     <p class="sched-subtitle">Production reports generated from your breakdown and schedule data.</p>
 
-    <div class="sched-grid">
-      {#each REPORT_TYPES as t}
-        <div class="sched-card{t.active ? ' sched-card--active' : ''}"
-             role={t.active ? 'button' : undefined}
-             tabindex={t.active ? 0 : undefined}
-             onclick={() => t.active && handleCard(t.id)}
-             onkeydown={e => (e.key==='Enter'||e.key===' ') && t.active && handleCard(t.id)}>
-          <div class="sched-card-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
-                 stroke-linecap="round" stroke-linejoin="round" width="28" height="28">
-              <path d={t.icon}/>
-            </svg>
-          </div>
-          <div class="sched-card-body">
-            <span class="sched-card-title">{t.label}</span>
-            <span class="sched-card-desc">{t.desc}</span>
-          </div>
-          {#if t.active}
-            <span class="sched-card-badge sched-card-badge--ready">Open</span>
-          {:else}
-            <span class="sched-card-badge">Coming Soon</span>
-          {/if}
-        </div>
-      {/each}
+    <div class="sched-list">
+      {#each REPORT_TYPES as t}{@render toolRow(t)}{/each}
     </div>
   </section>
 
@@ -384,39 +365,49 @@
   .sched-subtitle { font-size: 0.82rem; color: var(--text-muted, #888); margin-bottom: 18px; }
   .sched-back-row { margin-bottom: 16px; }
 
-  .sched-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 12px;
-    margin-bottom: 8px;
-  }
-  .sched-card {
+  /* A list, not a grid of boxes. Seven tools in seven panels read as seven
+     destinations of equal weight; as rows they read as a menu, which is what
+     this screen is. One rule between them, none after the last. */
+  .sched-list {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    padding: 14px 14px 12px;
-    border: 1px solid var(--border, #333);
-    border-radius: 0;
-    background: var(--bg-elevated, #1e1e1e);
-    opacity: 0.55;
-    position: relative;
+    margin-bottom: 8px;
+    border-top: 1px solid var(--border-subtle, #232328);
   }
-  .sched-card--active {
-    opacity: 1;
-    cursor: pointer;
-    transition: background 0.12s, border-color 0.12s;
+
+  .sched-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 11px 4px;
+    text-align: left;
+    font-family: inherit;
+    background: none;
+    border: 0;
+    border-bottom: 1px solid var(--border-subtle, #232328);
+    color: var(--text-secondary, #ccc);
   }
-  .sched-card--active:hover { background: var(--bg-hover, #2a2a2a); border-color: var(--gold, #8cabcf); }
-  .sched-card-icon { color: var(--text-muted, #888); }
-  .sched-card-body { display: flex; flex-direction: column; gap: 3px; flex: 1; }
-  .sched-card-title { font-size: 0.85rem; font-weight: 600; }
-  .sched-card-desc  { font-size: 0.75rem; color: var(--text-muted, #888); }
-  .sched-card-badge {
-    font-size: 0.65rem; padding: 2px 6px; border-radius: 0;
-    background: var(--bg-surface, #1a1a1a); color: var(--text-muted, #888);
-    align-self: flex-start;
+
+  .sched-row--active { cursor: pointer; transition: background 0.12s, color 0.12s; }
+  .sched-row--active:hover { background: var(--bg-hover, #2a2a2a); color: var(--text-primary, #eee); }
+  .sched-row--active:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+
+  /* Rows for tools that do not exist yet stay legible rather than greyed to
+     the edge of readable — the label is the useful part of a "not yet". */
+  .sched-row:disabled { color: var(--text-muted, #888); }
+
+  .sched-row-icon  { display: inline-flex; flex: 0 0 auto; color: var(--text-muted, #888); }
+  .sched-row-title { font-size: 0.85rem; font-weight: 600; flex: 0 0 auto; min-width: 168px; }
+  .sched-row-desc  { font-size: 0.75rem; color: var(--text-muted, #888); flex: 1 1 auto; }
+  .sched-row-go    { font-size: 1rem; color: var(--text-muted, #888); flex: 0 0 auto; padding-right: 4px; }
+  .sched-row-soon  {
+    font-size: 0.65rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-muted, #888);
+    flex: 0 0 auto;
   }
-  .sched-card-badge--ready { background: var(--gold, #8cabcf); color: #000; }
 
   /* Prep layout */
   .prep-layout  { display: flex; gap: 24px; align-items: flex-start; }
