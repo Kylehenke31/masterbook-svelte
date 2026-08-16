@@ -97,8 +97,22 @@
    * would sit on screen looking accepted while the state behind it disagreed.
    */
   function onLast4Input(e) {
-    const clean = e.currentTarget.value.replace(/\D/g, '').slice(0, 4);
-    e.currentTarget.value = clean;
+    const el    = e.currentTarget;
+    const clean = el.value.replace(/\D/g, '').slice(0, 4);
+
+    // Only touch the element when something was actually rejected. Assigning
+    // .value unconditionally moves the caret to the end on every keystroke,
+    // which breaks the ordinary repair: type 134, notice the missing 2, click
+    // between the 1 and the 3, and the digit lands at the end instead. On the
+    // rejecting path the caret is put back where the surviving text leaves it,
+    // rather than at the end, so fixing a typo mid-field does not throw you to
+    // the far side of it.
+    if (el.value !== clean) {
+      const caret = el.selectionStart - (el.value.length - clean.length);
+      el.value = clean;
+      el.setSelectionRange(Math.max(0, caret), Math.max(0, caret));
+    }
+
     fLast4 = clean;
     last4Error = false;
   }
