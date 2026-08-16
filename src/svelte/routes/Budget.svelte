@@ -1,6 +1,6 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
-  import { renderBudget, renderBudgetOverview, renderHotCosts } from '../../budget.js';
+  import { renderBudget, renderBudgetOverview, renderHotCosts, disposeBudgetOverview } from '../../budget.js';
   import { ensureActiveLoaded } from '../lib/budgetVersions.js';
   import BudgetVersionBar from '../components/BudgetVersionBar.svelte';
 
@@ -14,6 +14,7 @@
 
   function renderCurrentView() {
     if (!container) return;
+    disposeBudgetOverview();   // switching views re-renders; drop the old handlers first
     // First time this project's Budget page is ever opened (no live data
     // yet), load the active draft. No-ops once anything has been
     // edited, so it never clobbers live work.
@@ -30,6 +31,9 @@
   onMount(renderCurrentView);
 
   onDestroy(() => {
+    // The overview binds document-level listeners to close its toolbar menus;
+    // without this they outlive the markup they were closing.
+    disposeBudgetOverview();
     if (container) container.innerHTML = '';
   });
 </script>

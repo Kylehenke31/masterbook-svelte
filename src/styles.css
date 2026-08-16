@@ -7232,3 +7232,104 @@ tr:hover .cse-row-del { opacity: 0.6; }
   transition: opacity var(--transition);
 }
 .pm-back:hover { opacity: 1; }
+
+/* ── Budget toolbar menus ──
+   The print and draft buttons each open a small menu. Anchored to their button
+   rather than placed in the page, so the toolbar can wrap without the menu
+   parting company with what opened it. */
+.bud-menu-wrap { position: relative; display: inline-flex; }
+
+.bud-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 8px;
+}
+.bud-caret { font-size: 9px; line-height: 1; opacity: 0.75; }
+
+.bud-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 400;
+  min-width: 170px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+  padding: 4px 0;
+}
+/* The draft menu sits at the right edge, so it opens leftward rather than off
+   the side of the window. */
+.bud-menu--right { left: auto; right: 0; }
+
+.bud-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: 7px 14px;
+  font-family: inherit;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.bud-menu-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+/* Pushes the draft controls to the right of the toolbar, whatever sits left. */
+.bud-toolbar-right {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ── Select Sections dialog ── */
+.bsp-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1200;
+  padding: 24px;
+}
+.bsp-modal {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  width: 100%;
+  max-width: 420px;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 18px 20px 16px;
+}
+.bsp-title { font-size: 15px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px; }
+.bsp-hint  { font-size: 12px; color: var(--text-muted); margin-bottom: 12px; line-height: 1.45; }
+.bsp-actions-top { display: flex; gap: 6px; margin-bottom: 8px; }
+
+/* The list scrolls, not the dialog — the buttons stay put however many
+   sections a template carries. */
+.bsp-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  border: 1px solid var(--border-subtle);
+  padding: 4px 0;
+}
+.bsp-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 5px 12px;
+  cursor: pointer;
+  font-size: 0.83rem;
+  color: var(--text-secondary);
+}
+.bsp-row:hover { background: var(--bg-hover); color: var(--text-primary); }
+.bsp-row input { accent-color: var(--accent); cursor: pointer; flex: 0 0 auto; }
+.bsp-id   { font-weight: 700; width: 16px; flex: 0 0 auto; color: var(--text-primary); }
+.bsp-name { flex: 1 1 auto; }
+
+.bsp-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }

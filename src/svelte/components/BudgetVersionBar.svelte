@@ -1,4 +1,5 @@
 <script>
+  import { onMount } from 'svelte';
   import {
     getActiveVersionId, getActiveVersionName, hasUncommittedChanges, suggestedDraftName,
     createNamedDraft, forkLiveAsNewDraft, commitToActiveDraft, createFreshBudget,
@@ -121,6 +122,20 @@
     };
   }
 
+  /* The toolbar is an HTML string built inside budget.js, so it cannot call
+     these directly. It asks by event; this is the only listener, and it is
+     removed with the component so a remount does not leave two. */
+  onMount(() => {
+    const onAction = (e) => {
+      const a = e?.detail?.action;
+      if (a === 'new-budget')  actionNewBudget();
+      else if (a === 'save-draft') actionSaveAsNewDraft();
+      else if (a === 'commit')     actionCommit();
+    };
+    window.addEventListener('masterbook-budget-action', onAction);
+    return () => window.removeEventListener('masterbook-budget-action', onAction);
+  });
+
   function goToDrafts() {
     // Just navigating doesn't touch the live budget or which draft is
     // active, so there's nothing to guard here — Mark as Active on the
@@ -129,37 +144,12 @@
   }
 </script>
 
-<div class="bvb-wrap">
-  <span class="bvb-label">Editing:</span>
-  <span class="bvb-name">{activeName}</span>
-
-  <div class="bvb-actions">
-    <button class="btn btn--ghost btn--sm" onclick={goToDrafts}>Manage Drafts</button>
-    <button class="btn btn--ghost btn--sm" onclick={actionNewBudget}>+ New Budget</button>
-    <button class="btn btn--ghost btn--sm" onclick={actionSaveAsNewDraft}>Save as New Draft</button>
-    <button class="btn btn--primary btn--sm" onclick={actionCommit}>Commit Changes</button>
-  </div>
-</div>
-
+<!-- No bar of its own any more. This row said "Editing: <name>" above a
+     toolbar that could hold the same buttons, and the name it spent a row on
+     now titles the summary panel below. The component remains because it owns
+     these actions, their modals and the uncommitted-changes guard; the buttons
+     that trigger them live in the toolbar that budget.js renders, which reaches
+     them through the event below. -->
 <VersionActionModal bind:modal bind:inputValue={modalInput} />
 
-<style>
-  .bvb-wrap {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 10px;
-    margin: 10px 16px 0;
-    padding-bottom: 10px;
-    border-bottom: 1px solid var(--border, #2c2c35);
-  }
 
-  .bvb-label { color: var(--text-muted, #888); font-size: 0.8rem; }
-  .bvb-name  { font-weight: 700; color: var(--text-primary, #eee); font-size: 0.8rem; margin-right: auto; }
-
-  .bvb-actions {
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-  }
-</style>

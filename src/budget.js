@@ -16,6 +16,7 @@
 import { addPurchase, getPurchases } from './data.js';
 import { todayLocal } from './svelte/lib/format.js';
 import { crewDirector, crewProducer } from './svelte/lib/crewLookup.js';
+import { getActiveVersionName } from './svelte/lib/budgetVersions.js';
 
 const BUDGET_KEY = 'movie-ledger-budget';
 const LOCK_KEY   = 'movie-ledger-budget-lock';
@@ -2473,6 +2474,90 @@ function _openTopSheetPrint(info, sections, budget) {
 
   const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
+  const topSheetPage = !topSheet ? '' : `<!-- ════════ PAGE 1: TOP SHEET ════════ -->
+<div class="ts-page">
+  <div class="top-right-block">
+    <div class="tr-date">${today}</div>
+    <div class="tr-project">${naTS(info.productionName)}</div>
+  </div>
+
+  <h1>Production Cost Summary</h1>
+  <div class="h1-subtitle">${naTS(info.productionName)}</div>
+
+  <div class="logo-bar">
+    ${logoImg('logoProdCo','Production Co.')}
+    ${logoImg('logoClient','Client')}
+    ${logoImg('logoAgency','Agency')}
+  </div>
+
+  <div class="top-grid">
+    <div class="info-box">
+      <div class="box-title">Production Company</div>
+      <div class="info-row"><span class="lbl">Name:</span><span class="val val--bold">${naTS(info.prodCoName)}</span></div>
+      <div class="info-row"><span class="lbl">Address:</span><span class="val">${fmtAddr(info.prodCoAddr, info.prodCoCity)}</span></div>
+      <div class="info-row"><span class="lbl">Phone:</span><span class="val">${fmtPhone(info.prodCoPhone)}</span></div>
+      <div class="info-row"><span class="lbl">Director:</span><span class="val">${naTS(info.director)}</span></div>
+      <div class="info-row"><span class="lbl">Producer:</span><span class="val">${naTS(info.producer)}</span></div>
+      <div class="info-row"><span class="lbl">Bid Title:</span><span class="val">${naTS(info.productionName)}</span></div>
+      <div class="info-row"><span class="lbl">Job #:</span><span class="val">${naTS(info.jobNumber)}</span></div>
+      <div class="sub-header">Shoot Days</div>
+      <div class="info-row days-row"><span class="lbl">Build/Strike:</span><span class="val-sm">${info.buildStrikeDays || 0}</span><span class="lbl" style="margin-left:6px;">Hrs:</span><span class="val-sm">${info.buildStrikeHours || 0}</span></div>
+      <div class="info-row days-row"><span class="lbl">Prelight:</span><span class="val-sm">${info.prelightDays || 0}</span><span class="lbl" style="margin-left:6px;">Hrs:</span><span class="val-sm">${info.prelightHours || 0}</span></div>
+      <div class="info-row days-row"><span class="lbl">Studio:</span><span class="val-sm">${info.studioDays || 0}</span><span class="lbl" style="margin-left:6px;">Hrs:</span><span class="val-sm">${info.studioHours || 0}</span></div>
+      <div class="info-row days-row"><span class="lbl">Location:</span><span class="val-sm">${info.locationDays || 0}</span><span class="lbl" style="margin-left:6px;">Loc(s):</span><span class="val-sm">${info.locations || 0}</span></div>
+    </div>
+    <div class="info-box">
+      <div class="box-title">Client</div>
+      <div class="info-row"><span class="lbl">Name:</span><span class="val val--bold">${naTS(info.clientName)}</span></div>
+      <div class="info-row"><span class="lbl">Address:</span><span class="val">${fmtAddr(info.clientAddr, info.clientCity)}</span></div>
+      <div class="info-row"><span class="lbl">Phone:</span><span class="val">${fmtPhone(info.clientPhone)}</span></div>
+      <div class="sub-header">AGENCY</div>
+      <div class="info-row"><span class="lbl">Name:</span><span class="val val--bold">${naTS(info.agencyName)}</span></div>
+      <div class="info-row"><span class="lbl">Address:</span><span class="val">${fmtAddr(info.agencyAddr, info.agencyCity)}</span></div>
+      <div class="info-row"><span class="lbl">Phone:</span><span class="val">${fmtPhone(info.otherPhone)}</span></div>
+    </div>
+  </div>
+
+  <div class="details-strip">
+    <div class="info-row"><span class="lbl">Date Prepared:</span><span class="val">${today}</span></div>
+    <div class="info-row"><span class="lbl">Shooting Format:</span><span class="val">${info.shootingFormat || 'N/A'}</span></div>
+    <div class="info-row"><span class="lbl">Delivery Format:</span><span class="val">${info.deliveryFormat || 'N/A'}</span></div>
+    <div class="info-row"><span class="lbl">Delivery Date:</span><span class="val">${info.deliveryDate || 'N/A'}</span></div>
+    <div class="info-row"><span class="lbl">Shoot Dates:</span><span class="val">${info.shootDates || 'N/A'}</span></div>
+    <div class="info-row"><span class="lbl">OT Based On:</span><span class="val">${info.otBasedOn || '1.5'}</span></div>
+    <div class="info-row"><span class="lbl">Job Name:</span><span class="val">${info.jobName || ''}</span></div>
+  </div>
+
+  <table class="cs">
+    <thead>
+      <tr>
+        <th class="left" colspan="2" style="width:60%;">Estimated Cost Summary</th>
+        <th style="width:38px;">Sheet:</th>
+        <th>Bid Total:</th>
+        <th>Bid Actual:</th>
+        <th>Variance:</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${sectionRows}
+      ${qrRows}
+    </tbody>
+    <tfoot>
+      <tr class="total-row">
+        <td colspan="3" style="text-align:right;padding-right:8px;">TOTAL:</td>
+        <td>${fmtM(grandBid)}</td>
+        <td>${hasAny ? fmtM(grandActual) : ''}</td>
+        <td>${hasAny ? fmtM(grandActual - grandBid) : ''}</td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <div class="notes-label">Notes:</div>
+  <div class="notes-box">${info.notes || ''}</div>
+</div>
+
+`;
+
   const html = `<!DOCTYPE html>
 <html><head><meta charset="UTF-8">
 <title>Production Cost Summary</title>
@@ -2607,8 +2692,93 @@ function _openTopSheetPrint(info, sections, budget) {
   if (w) { w.document.write(html); w.document.close(); }
 }
 
-/* ── Full Budget Print Window ── */
-function _openFullBudgetPrint() {
+
+/* ── Overview toolbar plumbing ───────────────────────────────────
+   The draft actions still live in BudgetVersionBar, which owns the modals and
+   the uncommitted-changes guard. The toolbar is built as an HTML string inside
+   this module, so it asks for them by event rather than importing them — this
+   file has no component to call into, and duplicating the guard here is how
+   two versions of "are you sure" end up disagreeing. */
+let _overviewCleanup = null;
+
+export function disposeBudgetOverview() {
+  if (_overviewCleanup) { _overviewCleanup(); _overviewCleanup = null; }
+}
+
+function _fireBudgetAction(action) {
+  window.dispatchEvent(new CustomEvent('masterbook-budget-action', { detail: { action } }));
+}
+
+/* ── Select Sections ──
+   A PDF of chosen sections and nothing else: no top sheet, no grand total.
+   The case is handing one department its own pages without also handing over
+   the production's contacts, schedule and what the whole job costs. */
+function _openSectionPicker() {
+  const existing = document.getElementById('bud-sec-picker');
+  if (existing) existing.remove();
+
+  const rows = _sections.map(def => `
+    <label class="bsp-row">
+      <input type="checkbox" value="${def.id}" checked />
+      <span class="bsp-id">${def.id}</span>
+      <span class="bsp-name">${String(_getSectionName(def) ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;')}</span>
+    </label>`).join('');
+
+  const wrap = document.createElement('div');
+  wrap.id = 'bud-sec-picker';
+  wrap.className = 'bsp-backdrop';
+  wrap.innerHTML = `
+    <div class="bsp-modal" role="dialog" aria-modal="true" aria-labelledby="bsp-title">
+      <h3 class="bsp-title" id="bsp-title">Select Sections</h3>
+      <p class="bsp-hint">The PDF carries these sections' line items only — no top sheet, and no grand total.</p>
+      <div class="bsp-actions-top">
+        <button type="button" class="btn btn--ghost btn--xs" id="bsp-all">Select all</button>
+        <button type="button" class="btn btn--ghost btn--xs" id="bsp-none">Clear</button>
+      </div>
+      <div class="bsp-list">${rows}</div>
+      <div class="bsp-actions">
+        <button type="button" class="btn btn--ghost btn--sm" id="bsp-cancel">Cancel</button>
+        <button type="button" class="btn btn--primary btn--sm" id="bsp-make">Create PDF</button>
+      </div>
+    </div>`;
+  document.body.appendChild(wrap);
+
+  const boxes = () => [...wrap.querySelectorAll('.bsp-list input')];
+  const make  = wrap.querySelector('#bsp-make');
+  const sync  = () => { make.disabled = boxes().every(b => !b.checked); };
+
+  boxes().forEach(b => b.addEventListener('change', sync));
+  wrap.querySelector('#bsp-all').addEventListener('click', () => { boxes().forEach(b => b.checked = true); sync(); });
+  wrap.querySelector('#bsp-none').addEventListener('click', () => { boxes().forEach(b => b.checked = false); sync(); });
+
+  const close = () => { document.removeEventListener('keydown', onKey); wrap.remove(); };
+  const onKey = e => { if (e.key === 'Escape') close(); };
+  document.addEventListener('keydown', onKey);
+  wrap.querySelector('#bsp-cancel').addEventListener('click', close);
+  wrap.addEventListener('click', e => { if (e.target === wrap) close(); });
+
+  make.addEventListener('click', () => {
+    const only = new Set(boxes().filter(b => b.checked).map(b => b.value));
+    if (!only.size) return;
+    close();
+    _openFullBudgetPrint({ only, topSheet: false });
+  });
+
+  sync();
+}
+
+/* ── Full Budget Print Window ──
+   opts.only  — a Set of section ids to include. Omit for the whole budget.
+   opts.topSheet — false to leave the cover page out.
+
+   The two together are what "Select Sections" produces: the detail pages for
+   the sections somebody actually needs, without the top sheet, which carries
+   the production's contacts, schedule and grand totals. That is the point of
+   it — handing a vendor the art department's pages should not hand them the
+   whole picture of what the job costs. */
+function _openFullBudgetPrint(opts = {}) {
+  const only     = opts.only instanceof Set && opts.only.size ? opts.only : null;
+  const topSheet = opts.topSheet !== false;
   const info = _loadProdInfo();
   const na   = v => (v && String(v).trim()) ? String(v).trim() : '';
   const naTS = v => (v && String(v).trim()) ? String(v).trim() : 'N/A'; // Top Sheet uses N/A fallback
@@ -2684,6 +2854,7 @@ function _openFullBudgetPrint() {
   const ranges = _buildSectionRanges();
 
   _sections.forEach(def => {
+    if (only && !only.has(def.id)) return;
     const isLabor = def.type === 'labor';
     const sec     = _budget[def.id];
     const rows    = sec?.rows || [];
@@ -2802,82 +2973,7 @@ function _openFullBudgetPrint() {
   });
 
   /* ── Assemble full document ── */
-  const html = `<!DOCTYPE html>
-<html><head><meta charset="UTF-8">
-<title>Full Budget — ${na(info.productionName) || 'Budget'}</title>
-<style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: Arial, Helvetica, sans-serif; font-size: 10px; color: #000; background: #fff; padding: 20px 24px; position: relative; }
-
-  /* ── Top Sheet (Page 1) ── */
-  .ts-page { position: relative; }
-  .ts-page h1 { font-size: 22px; font-weight: 700; margin-bottom: 2px; }
-  .ts-page .h1-subtitle { font-size: 22px; font-weight: 400; margin-bottom: 10px; }
-  .ts-page .top-right-block { position: absolute; top: 0; right: 0; text-align: right; font-size: 11px; }
-  .ts-page .top-right-block .tr-date { font-weight: 600; }
-  .ts-page .top-right-block .tr-project { margin-top: 2px; }
-  .ts-page .top-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
-  .ts-page .details-strip { border: 1px solid #888; padding: 5px 8px; margin-bottom: 8px; display: flex; flex-wrap: wrap; gap: 4px 20px; }
-  .ts-page .details-strip .info-row { flex: 0 0 auto; margin-bottom: 0; }
-  .ts-page .sub-header { margin-top: 8px; font-size: 9px; font-weight: 700; color: #666; border-top: 1px dashed #ccc; padding-top: 5px; margin-bottom: 3px; }
-  .ts-page .info-box { border: 1px solid #888; padding: 6px 8px; min-height: 130px; }
-  .ts-page .info-row { display: flex; align-items: baseline; margin-bottom: 3px; gap: 4px; }
-  .ts-page .info-row .lbl { min-width: 72px; text-align: right; padding-right: 5px; font-size: 9.5px; color: #444; flex-shrink: 0; }
-  .ts-page .info-row .val { flex: 1; min-height: 13px; font-size: 11px; padding-bottom: 1px; }
-  .ts-page .info-row.days-row { align-items: center; }
-  .ts-page .info-row .val-sm { width: 36px; text-align: center; font-size: 11px; padding: 0 2px; }
-  .ts-page .val--bold { font-weight: 700; }
-  .ts-page .logo-bar { display: flex; align-items: flex-end; gap: 12px; margin-bottom: 6px; }
-  .ts-page .box-title { font-size:9px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:5px;color:#444;border-bottom:1px solid #ccc;padding-bottom:3px; }
-  .ts-page table.cs { width: 100%; border-collapse: collapse; margin-bottom: 8px; font-size: 11px; }
-  .ts-page table.cs th { background: #d8d8d8; border: 1px solid #999; padding: 3px 6px; font-weight: 700; text-align: center; }
-  .ts-page table.cs th.left { text-align: left; }
-  .ts-page table.cs .total-row td { border: 1px solid #999; padding: 4px 6px; font-weight: 700; background: #efefef; text-align: right; }
-  .ts-page table.cs .total-row td:first-child { text-align: right; }
-  .ts-page .notes-label { font-size: 10px; font-weight: 700; margin-bottom: 3px; }
-  .ts-page .notes-box { border: 1px solid #888; min-height: 90px; padding: 4px; }
-
-  /* ── Line-Item Pages ── */
-  .fb-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
-  .fb-header-left h1 { font-size: 16px; font-weight: 700; margin-bottom: 2px; }
-  .fb-header-left .fb-subtitle { font-size: 12px; font-weight: 400; color: #333; }
-  .fb-header-right { text-align: right; font-size: 10px; }
-  .fb-header-right .fb-date { font-weight: 600; }
-  .fb-header-right .fb-project { margin-top: 2px; }
-  .fb-section { margin-bottom: 12px; page-break-inside: avoid; }
-  .fb-sec-header { font-size: 11px; font-weight: 700; background: #e8e8e8; padding: 3px 6px; border: 1px solid #aaa; border-bottom: none; }
-  .fb-table { width: 100%; border-collapse: collapse; font-size: 9px; }
-  .fb-th { background: #f4f4f4; border: 1px solid #bbb; padding: 2px 4px; font-weight: 700; font-size: 7.5px; text-transform: uppercase; letter-spacing: 0.03em; }
-  .fb-th--linenum { width: 24px; text-align: center; }
-  .fb-th--desc { text-align: left; }
-  .fb-th--num { text-align: right; width: 62px; }
-  .fb-th--ot { width: 30px; text-align: center; }
-  .fb-td { border: 1px solid #ddd; padding: 1px 4px; vertical-align: top; font-size: 9px; }
-  .fb-td--linenum { text-align: center; color: #888; font-size: 8px; }
-  .fb-td--desc { text-align: left; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .fb-td--num { text-align: right; }
-  .fb-td--bid { font-weight: 600; }
-  .fb-row:nth-child(even) { background: #fafafa; }
-  .fb-sub-row { background: #f7f7f0; }
-  .fb-sub-cell { font-size: 8px; color: #555; }
-  .fb-foot-row td { border: none; border-top: 1px solid #ccc; padding: 2px 4px; }
-  .fb-foot-label { text-align: right; font-size: 8px; color: #555; padding-right: 8px; }
-  .fb-foot-num { font-weight: 600; border-left: 1px solid #ccc; }
-  .fb-foot-total td { border-top: 2px solid #888; }
-  .fb-foot-total .fb-foot-label { font-weight: 700; color: #000; font-size: 9px; }
-  .fb-foot-total .fb-foot-num { font-weight: 700; font-size: 9px; }
-  .fb-grand { margin-top: 10px; text-align: right; font-size: 13px; font-weight: 700; border-top: 3px double #000; padding-top: 5px; }
-
-  @media print {
-    @page { size: letter portrait; margin: 0.45in 0.4in; }
-    body { padding: 0; }
-    .ts-page { page-break-after: always; }
-    .fb-section { page-break-inside: avoid; }
-  }
-</style>
-</head><body>
-
-<!-- ════════ PAGE 1: TOP SHEET ════════ -->
+  const topSheetPage = !topSheet ? '' : `<!-- ════════ PAGE 1: TOP SHEET ════════ -->
 <div class="ts-page">
   <div class="top-right-block">
     <div class="tr-date">${today}</div>
@@ -2959,10 +3055,89 @@ function _openFullBudgetPrint() {
   <div class="notes-box">${info.notes || ''}</div>
 </div>
 
+`;
+
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<title>Full Budget — ${na(info.productionName) || 'Budget'}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 10px; color: #000; background: #fff; padding: 20px 24px; position: relative; }
+
+  /* ── Top Sheet (Page 1) ── */
+  .ts-page { position: relative; }
+  .ts-page h1 { font-size: 22px; font-weight: 700; margin-bottom: 2px; }
+  .ts-page .h1-subtitle { font-size: 22px; font-weight: 400; margin-bottom: 10px; }
+  .ts-page .top-right-block { position: absolute; top: 0; right: 0; text-align: right; font-size: 11px; }
+  .ts-page .top-right-block .tr-date { font-weight: 600; }
+  .ts-page .top-right-block .tr-project { margin-top: 2px; }
+  .ts-page .top-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+  .ts-page .details-strip { border: 1px solid #888; padding: 5px 8px; margin-bottom: 8px; display: flex; flex-wrap: wrap; gap: 4px 20px; }
+  .ts-page .details-strip .info-row { flex: 0 0 auto; margin-bottom: 0; }
+  .ts-page .sub-header { margin-top: 8px; font-size: 9px; font-weight: 700; color: #666; border-top: 1px dashed #ccc; padding-top: 5px; margin-bottom: 3px; }
+  .ts-page .info-box { border: 1px solid #888; padding: 6px 8px; min-height: 130px; }
+  .ts-page .info-row { display: flex; align-items: baseline; margin-bottom: 3px; gap: 4px; }
+  .ts-page .info-row .lbl { min-width: 72px; text-align: right; padding-right: 5px; font-size: 9.5px; color: #444; flex-shrink: 0; }
+  .ts-page .info-row .val { flex: 1; min-height: 13px; font-size: 11px; padding-bottom: 1px; }
+  .ts-page .info-row.days-row { align-items: center; }
+  .ts-page .info-row .val-sm { width: 36px; text-align: center; font-size: 11px; padding: 0 2px; }
+  .ts-page .val--bold { font-weight: 700; }
+  .ts-page .logo-bar { display: flex; align-items: flex-end; gap: 12px; margin-bottom: 6px; }
+  .ts-page .box-title { font-size:9px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:5px;color:#444;border-bottom:1px solid #ccc;padding-bottom:3px; }
+  .ts-page table.cs { width: 100%; border-collapse: collapse; margin-bottom: 8px; font-size: 11px; }
+  .ts-page table.cs th { background: #d8d8d8; border: 1px solid #999; padding: 3px 6px; font-weight: 700; text-align: center; }
+  .ts-page table.cs th.left { text-align: left; }
+  .ts-page table.cs .total-row td { border: 1px solid #999; padding: 4px 6px; font-weight: 700; background: #efefef; text-align: right; }
+  .ts-page table.cs .total-row td:first-child { text-align: right; }
+  .ts-page .notes-label { font-size: 10px; font-weight: 700; margin-bottom: 3px; }
+  .ts-page .notes-box { border: 1px solid #888; min-height: 90px; padding: 4px; }
+
+  /* ── Line-Item Pages ── */
+  .fb-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+  .fb-header-left h1 { font-size: 16px; font-weight: 700; margin-bottom: 2px; }
+  .fb-header-left .fb-subtitle { font-size: 12px; font-weight: 400; color: #333; }
+  .fb-header-right { text-align: right; font-size: 10px; }
+  .fb-header-right .fb-date { font-weight: 600; }
+  .fb-header-right .fb-project { margin-top: 2px; }
+  .fb-section { margin-bottom: 12px; page-break-inside: avoid; }
+  .fb-sec-header { font-size: 11px; font-weight: 700; background: #e8e8e8; padding: 3px 6px; border: 1px solid #aaa; border-bottom: none; }
+  .fb-table { width: 100%; border-collapse: collapse; font-size: 9px; }
+  .fb-th { background: #f4f4f4; border: 1px solid #bbb; padding: 2px 4px; font-weight: 700; font-size: 7.5px; text-transform: uppercase; letter-spacing: 0.03em; }
+  .fb-th--linenum { width: 24px; text-align: center; }
+  .fb-th--desc { text-align: left; }
+  .fb-th--num { text-align: right; width: 62px; }
+  .fb-th--ot { width: 30px; text-align: center; }
+  .fb-td { border: 1px solid #ddd; padding: 1px 4px; vertical-align: top; font-size: 9px; }
+  .fb-td--linenum { text-align: center; color: #888; font-size: 8px; }
+  .fb-td--desc { text-align: left; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .fb-td--num { text-align: right; }
+  .fb-td--bid { font-weight: 600; }
+  .fb-row:nth-child(even) { background: #fafafa; }
+  .fb-sub-row { background: #f7f7f0; }
+  .fb-sub-cell { font-size: 8px; color: #555; }
+  .fb-foot-row td { border: none; border-top: 1px solid #ccc; padding: 2px 4px; }
+  .fb-foot-label { text-align: right; font-size: 8px; color: #555; padding-right: 8px; }
+  .fb-foot-num { font-weight: 600; border-left: 1px solid #ccc; }
+  .fb-foot-total td { border-top: 2px solid #888; }
+  .fb-foot-total .fb-foot-label { font-weight: 700; color: #000; font-size: 9px; }
+  .fb-foot-total .fb-foot-num { font-weight: 700; font-size: 9px; }
+  .fb-grand { margin-top: 10px; text-align: right; font-size: 13px; font-weight: 700; border-top: 3px double #000; padding-top: 5px; }
+
+  @media print {
+    @page { size: letter portrait; margin: 0.45in 0.4in; }
+    body { padding: 0; }
+    .ts-page { page-break-after: always; }
+    .fb-section { page-break-inside: avoid; }
+  }
+</style>
+</head><body>
+
+${topSheetPage}
+
 <!-- ════════ LINE-ITEM PAGES ════════ -->
 <div class="fb-header">
   <div class="fb-header-left">
-    <h1>Production Budget — Line Items</h1>
+    <h1>Production Budget — ${only ? 'Selected Sections' : 'Line Items'}</h1>
     <div class="fb-subtitle">${na(info.productionName)}</div>
   </div>
   <div class="fb-header-right">
@@ -2973,7 +3148,7 @@ function _openFullBudgetPrint() {
 
 ${sectionsHTML}
 
-<div class="fb-grand">GRAND TOTAL: ${fmtM(grandBid)}</div>
+${only ? '' : `<div class="fb-grand">GRAND TOTAL: ${fmtM(grandBid)}</div>`}
 
 <script>window.onload = () => { window.print(); }<\/script>
 </body></html>`;
@@ -3083,13 +3258,54 @@ export function renderBudgetOverview(container) {
 
   container.innerHTML = `
     <div class="bud-overview-shell">
-      <!-- Toolbar -->
+      <!-- Toolbar. One row: the draft's own controls used to sit on a second
+           bar above this one saying "Editing: <name>", which spent a whole row
+           naming something now titling the panel below. -->
       <div class="bud-overview-toolbar">
-        <h2>Production Budget</h2>
         <button class="btn btn--primary btn--sm" id="ov-to-lines">Open Line Items →</button>
-        <button class="btn btn--ghost btn--sm" id="ov-print-top">🖨 Print Top Sheet</button>
-        <button class="btn btn--ghost btn--sm" id="ov-print-full">🖨 Print Full Budget</button>
+
+        <!-- Two print buttons became one. Both produced a PDF; which one was a
+             choice made after pressing, not before. -->
+        <div class="bud-menu-wrap">
+          <button class="btn btn--ghost btn--sm bud-icon-btn" id="ov-print" title="Print" aria-haspopup="menu" aria-expanded="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+              stroke-linecap="round" stroke-linejoin="round" width="15" height="15" aria-hidden="true">
+              <polyline points="6 9 6 2 18 2 18 9"/>
+              <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+              <rect x="6" y="14" width="12" height="8"/>
+            </svg>
+            <span class="bud-caret" aria-hidden="true">▾</span>
+          </button>
+          <div class="bud-menu hidden" id="ov-print-menu" role="menu">
+            <button class="bud-menu-item" role="menuitem" id="ov-print-top">Top Sheet</button>
+            <button class="bud-menu-item" role="menuitem" id="ov-print-full">Full Budget</button>
+            <button class="bud-menu-item" role="menuitem" id="ov-print-pick">Select Sections…</button>
+          </div>
+        </div>
+
         <button class="btn btn--ghost btn--sm" id="ov-hot-costs" title="Hot Costs">🌡 Hot Costs</button>
+
+        <!-- Draft controls, right-aligned. Everything that changes which draft
+             you are in lives behind the one button; committing stays in the
+             open, because it is the one that writes. -->
+        <div class="bud-toolbar-right">
+          <div class="bud-menu-wrap">
+            <button class="btn btn--ghost btn--sm bud-icon-btn" id="ov-drafts" title="Draft actions" aria-haspopup="menu" aria-expanded="false">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+                stroke-linecap="round" width="15" height="15" aria-hidden="true">
+                <line x1="3" y1="6" x2="21" y2="6"/>
+                <line x1="3" y1="12" x2="21" y2="12"/>
+                <line x1="3" y1="18" x2="21" y2="18"/>
+              </svg>
+            </button>
+            <div class="bud-menu bud-menu--right hidden" id="ov-drafts-menu" role="menu">
+              <button class="bud-menu-item" role="menuitem" id="ov-manage-drafts">Manage Drafts</button>
+              <button class="bud-menu-item" role="menuitem" id="ov-new-budget">New Budget</button>
+              <button class="bud-menu-item" role="menuitem" id="ov-save-draft">Save as New Draft</button>
+            </div>
+          </div>
+          <button class="btn btn--primary btn--sm" id="ov-commit">Commit Changes</button>
+        </div>
       </div>
 
       <!-- Sub-header summary bar -->
@@ -3117,7 +3333,7 @@ export function renderBudgetOverview(container) {
         <!-- Top Sheet (full width) -->
         <div class="bud-topsheet-panel">
           <div class="bud-topsheet-header">
-            <div class="bud-topsheet-title">Production Cost Summary</div>
+            <div class="bud-topsheet-title">${esc2(getActiveVersionName() || 'Untitled Budget')}</div>
             <div class="bud-topsheet-sub">${prodName ? esc2(prodName) + ' · ' : ''}${today}</div>
           </div>
           <div class="bud-topsheet-scroll">
@@ -3167,9 +3383,52 @@ export function renderBudgetOverview(container) {
   const goLines = () => { window.location.hash = '#budget-lines'; };
   container.querySelector('#ov-to-lines').addEventListener('click', goLines);
 
-  // Print top sheet — opens formatted new window
-  container.querySelector('#ov-print-top').addEventListener('click', () => _openTopSheetPrint(info, _sections, _budget));
-  container.querySelector('#ov-print-full').addEventListener('click', () => _openFullBudgetPrint());
+  /* ── Toolbar menus ──
+     One open at a time, closed by a click anywhere else or by Escape. The
+     document listener is registered once per render and removed when the
+     container is torn down, so switching views does not leave listeners behind
+     holding a detached menu. */
+  const menus = [
+    { btn: '#ov-print',  menu: '#ov-print-menu'  },
+    { btn: '#ov-drafts', menu: '#ov-drafts-menu' },
+  ].map(m => ({ btn: container.querySelector(m.btn), menu: container.querySelector(m.menu) }));
+
+  function closeMenus() {
+    menus.forEach(m => {
+      m.menu.classList.add('hidden');
+      m.btn.setAttribute('aria-expanded', 'false');
+    });
+  }
+  menus.forEach(m => {
+    m.btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const wasOpen = !m.menu.classList.contains('hidden');
+      closeMenus();
+      if (!wasOpen) {
+        m.menu.classList.remove('hidden');
+        m.btn.setAttribute('aria-expanded', 'true');
+      }
+    });
+  });
+  const onDocClick = () => closeMenus();
+  const onDocKey   = e => { if (e.key === 'Escape') closeMenus(); };
+  document.addEventListener('click', onDocClick);
+  document.addEventListener('keydown', onDocKey);
+  _overviewCleanup = () => {
+    document.removeEventListener('click', onDocClick);
+    document.removeEventListener('keydown', onDocKey);
+  };
+
+  // Print — opens a formatted new window
+  container.querySelector('#ov-print-top').addEventListener('click', () => { closeMenus(); _openTopSheetPrint(info, _sections, _budget); });
+  container.querySelector('#ov-print-full').addEventListener('click', () => { closeMenus(); _openFullBudgetPrint(); });
+  container.querySelector('#ov-print-pick').addEventListener('click', () => { closeMenus(); _openSectionPicker(); });
+
+  // Draft actions
+  container.querySelector('#ov-manage-drafts').addEventListener('click', () => { closeMenus(); window.location.hash = '#budget-drafts'; });
+  container.querySelector('#ov-new-budget').addEventListener('click',    () => { closeMenus(); _fireBudgetAction('new-budget'); });
+  container.querySelector('#ov-save-draft').addEventListener('click',    () => { closeMenus(); _fireBudgetAction('save-draft'); });
+  container.querySelector('#ov-commit').addEventListener('click',        () => { closeMenus(); _fireBudgetAction('commit'); });
 
   // Hot Costs
   container.querySelector('#ov-hot-costs').addEventListener('click', () => { window.location.hash = '#hot-costs'; });
