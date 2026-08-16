@@ -60,12 +60,46 @@ Thank you,
   let savedMsg      = $state('');
   let emailSavedMsg = $state('');
   let emailCopiedMsg = $state('');
+  /* Which saved sheet the preview is showing. Null means none picked, which is
+     also the state on arrival — the pane then shows a blank form, so the right
+     half is never an empty rectangle waiting to be earned. */
+  let previewDate   = $state(null);
 
   /* ── Derived ── */
   let activeSheet  = $derived(activeDate ? sheets[activeDate] : null);
   let savedDates   = $derived(Object.keys(sheets).sort().reverse());
   let groupedCrew  = $derived(activeDate ? _groupCrewBySection(sheets[activeDate]?.crew || []) : []);
   let emailPreview = $derived(_resolveTokens(emailTemplate, activeDate));
+
+  /* The preview document. A picked sheet if there is one, otherwise a blank
+     form built for the date in the picker — so the pane shows the shape of the
+     thing you are about to generate, not a placeholder describing it. */
+  let previewHTML = $derived(
+    previewDate && sheets[previewDate]
+      ? _buildSheetHTML(sheets[previewDate])
+      : _buildSheetHTML(_buildDefaultSheet(dateInput || _todayStr()))
+  );
+
+  /* Everyone the call sheet would go to. A placeholder for sending, so it is
+     built from the sheet on screen rather than from a mailing list that does
+     not exist yet: crew as position and name, cast as their number, character
+     and name — which is how a first AD reads a cast list. */
+  let distribution = $derived((() => {
+    const s = (previewDate && sheets[previewDate]) || _buildDefaultSheet(dateInput || _todayStr());
+    const crew = (s.crew || [])
+      .filter(c => (c.name || '').trim())
+      .map(c => ({ kind: 'Crew', label: `${(c.position || '—').trim()} - ${c.name.trim()}`, email: c.email || '' }));
+    const cast = (s.talentContacts || [])
+      .filter(c => (c.legalName || c.stageName || '').trim())
+      .map(c => {
+        const who = (c.legalName || c.stageName || '').trim();
+        const num = String(c.castNum ?? '').trim();
+        const chr = (c.characterName || '').trim();
+        const head = [num, chr].filter(Boolean).join('.');
+        return { kind: 'Cast', label: head ? `${head} - ${who}` : who, email: c.email || '' };
+      });
+    return { crew, cast, total: crew.length + cast.length };
+  })());
 
   /* ── Persist on change ── */
   $effect(() => {
@@ -553,8 +587,18 @@ Thank you,
      PRINT VIEW (unchanged)
   ══════════════════════════════════ */
   function _openPrintView(dateStr) {
-    const s = sheets[dateStr];
-    if (!s) return;
+    const html = _buildSheetHTML(sheets[dateStr]);
+    if (!html) return;
+    const win = window.open('', '_blank');
+    win.document.write(html);
+    win.document.close();
+  }
+
+  /* The printed document, as a string. Split out of _openPrintView so the
+     preview pane shows the same thing that comes out of the printer rather
+     than a second rendering that drifts from it. */
+  function _buildSheetHTML(s) {
+    if (!s) return '';
     const e  = v => esc(v || '');
     const pi = _getProdInfo();
     const hasClient = !!(pi.clientName || pi.clientAddr || pi.clientCity || pi.clientPhone);
@@ -611,7 +655,7 @@ Thank you,
     const reportLeft  = `1ST AM SHOT: ${e(s.report1stAM)}\n1ST PM SHOT: ${e(s.report1stPM)}\nCAMERA WRAP: ${e(s.reportCameraWrap)}`;
     const reportRight = `LUNCH: ${e(s.reportLunch)}\n2ND MEAL: ${e(s.report2ndMeal)}\nCREW WRAP: ${e(s.reportCrewWrap)}`;
 
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Call Sheet — ${_formatDate(dateStr)}</title>
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Call Sheet — ${_formatDate(s.date)}</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:Arial,Helvetica,sans-serif;font-size:9px;line-height:1.3;color:#000}
@@ -669,7 +713,7 @@ table.crew{width:100%;border-collapse:collapse}
   <div class="topbar">
     <div class="topbar-sd">${shootDayLbl}</div>
     <div class="topbar-title">${pi.titleLogo?`<img src="${e(pi.titleLogo)}" class="title-logo" alt="Title" />`:'CALL SHEET'}</div>
-    <div class="topbar-dt">${_formatDate(dateStr)}</div>
+    <div class="topbar-dt">${_formatDate(s.date)}</div>
   </div>
   <div class="hdr-l">${leftHTML}</div>
   <div class="hdr-c">
@@ -710,9 +754,7 @@ ${s.notes?`<div class="notes"><span class="notes-l">NOTES</span><br>${e(s.notes)
 <script>(function(){var pg=document.querySelector('.pg');var h=pg.scrollHeight;var lMax=10.5*96-0.6*96;var s=document.createElement('style');s.textContent=h<=lMax?'@page{size:letter}':'@page{size:legal}';document.head.appendChild(s);})();<\/script>
 </body></html>`;
 
-    const win = window.open('', '_blank');
-    win.document.write(html);
-    win.document.close();
+    return html;
   }
 
   /* ── Right rows helper for print (read-only, no inputs) ── */
@@ -761,24 +803,49 @@ ${s.notes?`<div class="notes"><span class="notes-l">NOTES</span><br>${e(s.notes)
       </div>
     </div>
 
-    {#if savedDates.length}
-      <div class="cs-saved">
-        <h3 class="cs-saved-title">Saved Call Sheets</h3>
-        <div class="cs-saved-list">
-          {#each savedDates as d}
-            {@const s = sheets[d]}
-            <div class="cs-saved-item">
-              <span class="cs-saved-date">{_formatDate(d)}{s?.shootDay ? ` — Shoot Day ${s.shootDay}` : ''}</span>
-              <div class="cs-saved-actions">
-                <button class="btn btn--ghost btn--sm" onclick={() => openEditor(d)}>Edit</button>
-                <button class="btn btn--ghost btn--sm" onclick={() => _openPrintView(d)}>Print / PDF</button>
-                <button class="btn btn--ghost btn--sm btn--danger-text" onclick={() => deleteSheet(d)}>Delete</button>
+    <div class="cs-split">
+      <div class="cs-split-left">
+        {#if savedDates.length}
+          <h3 class="cs-saved-title">Saved Call Sheets</h3>
+          <div class="cs-saved-list">
+            {#each savedDates as d}
+              {@const s = sheets[d]}
+              <!-- Selecting and opening are separate on purpose: clicking the
+                   row shows it on the right, and Edit is what takes you into
+                   it. Before, the only way to see a sheet was to open it,
+                   which meant entering an editor to answer "is this the one". -->
+              <div class="cs-saved-item{previewDate === d ? ' cs-saved-item--picked' : ''}">
+                <button type="button" class="cs-saved-pick"
+                  aria-pressed={previewDate === d}
+                  onclick={() => { previewDate = d; }}>
+                  <span class="cs-saved-date">{_formatDate(d)}{s?.shootDay ? ` — Shoot Day ${s.shootDay}` : ''}</span>
+                </button>
+                <div class="cs-saved-actions">
+                  <button class="btn btn--ghost btn--sm" onclick={() => openEditor(d)}>Edit</button>
+                  <button class="btn btn--ghost btn--sm" onclick={() => _openPrintView(d)}>Print / PDF</button>
+                  <button class="btn btn--ghost btn--sm btn--danger-text" onclick={() => deleteSheet(d)}>Delete</button>
+                </div>
               </div>
-            </div>
-          {/each}
-        </div>
+            {/each}
+          </div>
+        {:else}
+          <p class="cs-empty-note">No call sheets yet. The preview shows the blank form you will get.</p>
+        {/if}
       </div>
-    {/if}
+
+      <div class="cs-split-right">
+        <div class="cs-preview-head">
+          <span class="cs-preview-title">Preview</span>
+          <span class="cs-preview-sub">
+            {previewDate && sheets[previewDate] ? _formatDate(previewDate) : 'Blank form'}
+          </span>
+        </div>
+        <!-- An iframe because the document carries its own print stylesheet;
+             dropping that markup into this page would have its styles and the
+             app's fighting over the same class names. -->
+        <iframe class="cs-preview-frame" title="Call sheet preview" srcdoc={previewHTML}></iframe>
+      </div>
+    </div>
   </section>
 
 <!-- ══════════════════════ EDITOR VIEW ══════════════════════ -->
@@ -1184,6 +1251,29 @@ ${s.notes?`<div class="notes"><span class="notes-l">NOTES</span><br>${e(s.notes)
         style="font-size:11px;padding:4px 10px;background:var(--bg-elevated);color:var(--text-secondary);border:1px solid var(--border);margin-top:4px;">← Back</button>
     </div>
 
+    <!-- Distribution. Nothing is sent from here yet — this lists who the
+         email would go to, so the list can be checked against the crew and
+         cast now rather than after a send feature exists to get it wrong. -->
+    <div class="cse-dist-bar">
+      <label class="cse-dist-label" for="cse-dist">Distribution</label>
+      <select class="cse-dist-select" id="cse-dist">
+        <option value="">
+          {distribution.total} recipient{distribution.total === 1 ? '' : 's'} — {distribution.crew.length} crew, {distribution.cast.length} cast
+        </option>
+        {#if distribution.crew.length}
+          <optgroup label="Crew">
+            {#each distribution.crew as r}<option>{r.label}</option>{/each}
+          </optgroup>
+        {/if}
+        {#if distribution.cast.length}
+          <optgroup label="Cast">
+            {#each distribution.cast as r}<option>{r.label}</option>{/each}
+          </optgroup>
+        {/if}
+      </select>
+      <span class="cse-dist-note">Sending is not wired up yet.</span>
+    </div>
+
     <div class="cse-token-bar">
       <span class="cse-token-label">Insert Token:</span>
       {#each EMAIL_TOKENS as t}
@@ -1221,5 +1311,102 @@ ${s.notes?`<div class="notes"><span class="notes-l">NOTES</span><br>${e(s.notes)
 {/if}
 
 <style>
-  :global(body) { }
+  /* ── Main view: list beside a live preview ── */
+  .cs-split {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+    margin-top: 18px;
+  }
+  .cs-split-left  { flex: 0 0 420px; min-width: 0; }
+  .cs-split-right { flex: 1 1 auto; min-width: 0; }
+
+  .cs-empty-note {
+    font-size: 0.8rem;
+    color: var(--text-muted, #888);
+    line-height: 1.5;
+  }
+
+  /* The row splits into a select-for-preview button and the actions, so the
+     large easy target is the harmless one. */
+  .cs-saved-item { display: flex; align-items: center; gap: 8px; }
+
+  .cs-saved-pick {
+    flex: 1 1 auto;
+    text-align: left;
+    background: none;
+    border: 0;
+    padding: 8px 10px;
+    font-family: inherit;
+    font-size: 0.85rem;
+    color: var(--text-secondary, #ccc);
+    cursor: pointer;
+    border-left: 2px solid transparent;
+    transition: background 0.12s, color 0.12s, border-color 0.12s;
+  }
+  .cs-saved-pick:hover { background: var(--bg-hover, #2a2a2a); color: var(--text-primary, #eee); }
+  .cs-saved-item--picked .cs-saved-pick {
+    border-left-color: var(--accent);
+    color: var(--text-primary, #eee);
+    background: var(--bg-hover, #2a2a2a);
+  }
+
+  .cs-preview-head {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+  .cs-preview-title {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--text-muted, #888);
+  }
+  .cs-preview-sub { font-size: 0.75rem; color: var(--text-muted, #888); }
+
+  /* White because the document inside is a printed page; letting the app's
+     dark ground show through the margins made it read as a broken panel. */
+  .cs-preview-frame {
+    width: 100%;
+    height: 720px;
+    border: 1px solid var(--border, #333);
+    background: #fff;
+    display: block;
+  }
+
+  /* ── Email view: distribution ── */
+  .cse-dist-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+  .cse-dist-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted, #888);
+  }
+  .cse-dist-select {
+    min-width: 320px;
+    max-width: 100%;
+    padding: 5px 8px;
+    font-family: inherit;
+    font-size: 0.82rem;
+    color: var(--text-primary, #eee);
+    background: var(--bg-elevated, #1e1e1e);
+    border: 1px solid var(--border, #333);
+    border-radius: 0;
+  }
+  .cse-dist-note { font-size: 0.72rem; color: var(--text-muted, #888); }
+
+  @media (max-width: 1100px) {
+    .cs-split { flex-direction: column; }
+    .cs-split-left { flex: 1 1 auto; width: 100%; }
+    .cs-preview-frame { height: 560px; }
+  }
 </style>
