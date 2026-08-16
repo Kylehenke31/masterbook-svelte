@@ -61,9 +61,34 @@ export async function cloudInsertProject(project) {
 export async function cloudSaveProject(project) {
   const user = await getUser();
   if (!user) return;
-  const { error } = await supabase
+
+  const attempt = () => supabase
     .from('projects')
     .upsert({ id: project.id, owner_id: user.id, data: project });
+
+  let { error } = await attempt();
+
+  /* Refused once is not refused for good.
+   *
+   * This upsert is INSERT ... ON CONFLICT DO UPDATE, so Postgres judges it
+   * against projects_admin_update as well — which demands admin on the
+   * project. Two ordinary situations fail that test through no fault of the
+   * caller: a save that fires while the admin claim on sign-in is still in
+   * flight, and a project whose creating trigger never ran, so no admin row
+   * was ever written.
+   *
+   * Both are fixed by the same call, and it is already here. Claiming needs
+   * only ownership, grants admin to the owner asking for itself, and is
+   * idempotent — so try it once and repeat the save rather than reporting a
+   * failure the app is holding the remedy for. If the project genuinely
+   * belongs to somebody else the claim refuses, nothing is retried, and the
+   * original error is reported as before.
+   */
+  if (error) {
+    const claim = await claimProjectAdmin(project.id);
+    if (claim.ok) ({ error } = await attempt());
+  }
+
   if (!error) return { ok: true };
   // Reported, not just logged, and the outcome is returned rather than
   // discarded. A project that never reaches the cloud has no row, so the
