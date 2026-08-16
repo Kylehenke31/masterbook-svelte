@@ -6,6 +6,9 @@
 /* ── CSS Custom Properties ── */
 :root {
   --font-sans: Arial, sans-serif;
+  /* The top menu only — see the block by the project menu styles. Arial is
+     still the app's working face; this is the face it opens with. */
+  --font-display: 'Rethink Sans Variable', 'Rethink Sans', Arial, sans-serif;
   --radius: 0;
   --radius-sm: 0;
   --transition: 0.2s ease;
@@ -6909,6 +6912,30 @@ tr:hover .cse-row-del { opacity: 0.6; }
    it is a statement of fact about older records, not an error to act on. */
 .doc-missing { display: block; font-size: 0.7rem; color: var(--amber); margin-top: 3px; }
 
+
+/* ── Top menu typeface ──
+   Rethink Sans, scoped to the screen you arrive on and nothing else. The rest
+   of the app is a ledger read for hours at a time and stays on Arial; this is
+   the one screen that is a front door rather than a tool.
+
+   Sign-in is included because it is the same screen — the card sits where the
+   project list will be once there is someone to list them for — and it would
+   read as a different place in a different face.
+
+   Buttons, inputs and selects are named individually on purpose: form controls
+   take the platform font from the user agent rather than inheriting it, so a
+   rule on the container alone would restyle the labels and leave every field
+   and every button behind. */
+.pm-welcome,
+.pm-section,
+.pm-section button,
+.pm-section input,
+.pm-section select,
+.login-wrap,
+.login-wrap button,
+.login-wrap input {
+  font-family: var(--font-display);
+}
 
 /* ── Project menu list ── */
 .pm-menu {
