@@ -22,7 +22,6 @@
   let company        = $state(p.productionCompany || '');
   let startDate      = $state(p.startDate      || '');
   let wrapDate       = $state(p.wrapDate       || '');
-  let fiscalYear     = $state(p.fiscalYear     || '');
   let dropboxPath    = $state(p.dropboxPath    || '');
   let apiKey         = $state(localStorage.getItem('anthropic-api-key') ? '••••••••••••••••' : '');
 
@@ -76,7 +75,6 @@
       productionNumber: prodNumber.trim(),
       productionCompany: company.trim(),
       startDate, wrapDate,
-      fiscalYear: fiscalYear.trim(),
       dropboxPath: dropboxPath.trim(),
     };
     saveProject(data);
@@ -134,7 +132,7 @@
 
           <div class="field field--full">
             <label for="sp-title">Project Title <span class="req">*</span></label>
-            <input type="text" id="sp-title" bind:value={title} placeholder="Production title"
+            <input type="text" id="sp-title" bind:value={title}
               maxlength="100" class:invalid={titleError} oninput={() => titleError = false} />
             {#if titleError}<span class="field-error">Project title is required.</span>{/if}
           </div>
@@ -157,12 +155,12 @@
 
           <div class="field">
             <label for="sp-number">Production Number</label>
-            <input type="text" id="sp-number" bind:value={prodNumber} placeholder="Production number or code" maxlength="30" />
+            <input type="text" id="sp-number" bind:value={prodNumber} maxlength="30" />
           </div>
 
           <div class="field">
             <label for="sp-company">Production Company</label>
-            <input type="text" id="sp-company" bind:value={company} placeholder="LLC or company name" maxlength="80" />
+            <input type="text" id="sp-company" bind:value={company} maxlength="80" />
           </div>
 
         </div>
@@ -189,10 +187,6 @@
           <div class="field">
             <label for="sp-wrap">Estimated Wrap Date</label>
             <input type="date" id="sp-wrap" bind:value={wrapDate} />
-          </div>
-          <div class="field">
-            <label for="sp-fiscal-year">Fiscal Year</label>
-            <input type="text" id="sp-fiscal-year" bind:value={fiscalYear} placeholder="Fiscal year range" maxlength="20" />
           </div>
         </div>
       </div>
@@ -221,12 +215,12 @@
               </svg>
               Dropbox Folder Path
             </label>
-            <input type="text" id="sp-dropbox" bind:value={dropboxPath} placeholder="Local Dropbox path for receipt folders" maxlength="300" />
+            <input type="text" id="sp-dropbox" bind:value={dropboxPath} maxlength="300" />
             <span class="setup-hint">Local Dropbox path where receipt folders are stored. Used as a reference — no cloud connection is made.</span>
           </div>
           <div class="field field--full">
             <label for="sp-api-key">Anthropic API Key</label>
-            <input type="password" id="sp-api-key" bind:value={apiKey} placeholder="sk-ant-…" maxlength="200" autocomplete="off" />
+            <input type="password" id="sp-api-key" bind:value={apiKey} maxlength="200" autocomplete="off" />
             <span class="setup-hint">Required for AI-powered receipt autofill. Stored locally in your browser only.</span>
           </div>
         </div>

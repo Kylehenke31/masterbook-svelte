@@ -1,4 +1,6 @@
 <script>
+  import { crewDirector, crewProducer } from '../lib/crewLookup.js';
+
   /* ── Storage Keys ── */
   const CREW_KEY      = 'movie-ledger-crew';
   const CAST_KEY      = 'movie-ledger-cast';
@@ -246,7 +248,7 @@ Thank you,
       hospitalName: '', hospitalAddr: '', hospitalAddr2: '',
       clientName: project.productionCompany || '', clientAddr: '',
       agencyName: '', agencyAddr: '',
-      director: project.director || '', producer: project.producer || '', productionCo: project.productionCompany || '',
+      director: crewDirector() || project.director || '', producer: crewProducer() || project.producer || '', productionCo: project.productionCompany || '',
       schedule: Array.from({length:8}, emptyRow),
       crew: crewEntries, clientContacts, agencyContacts,
       talentContacts: _getCastForDate(dateStr), vendors: [],

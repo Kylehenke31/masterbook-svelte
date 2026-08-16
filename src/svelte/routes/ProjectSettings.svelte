@@ -117,7 +117,7 @@
               </div>
               <div class="field">
                 <label for="ps-company">Production Company</label>
-                <input type="text" id="ps-company" name="productionCompany" value="${v('productionCompany')}" placeholder="LLC or company name" maxlength="80" />
+                <input type="text" id="ps-company" name="productionCompany" value="${v('productionCompany')}" maxlength="80" />
               </div>
             </div>
           </div>
@@ -134,16 +134,6 @@
                 <label for="ps-wrap">Estimated Wrap Date</label>
                 <input type="date" id="ps-wrap" name="wrapDate" value="${v('wrapDate')}" />
               </div>
-              <div class="field">
-                <label for="ps-fiscal">Fiscal Year</label>
-                <input type="text" id="ps-fiscal" name="fiscalYear" value="${v('fiscalYear')}" placeholder="Fiscal year range" maxlength="20" />
-              </div>
-              <div class="field field--full">
-                <label for="ps-office-address">Production Office Address</label>
-                <input type="text" id="ps-office-address" name="officeAddress" value="${v('officeAddress')}"
-                  placeholder="123 Main St, Suite 100, Los Angeles, CA 90001" maxlength="200" />
-                <span class="setup-hint">Used in Prep Calendar, Call Sheets, and other documents.</span>
-              </div>
             </div>
           </div>
         </details>
@@ -151,6 +141,13 @@
           <!-- ── Top Sheet Info ── -->
           ${sec('prodinfo', 'Top Sheet Info')}
             <p class="setup-hint" style="margin-bottom:12px">Used by the Budget Top Sheet, Hot Costs, and Call Sheets.</p>
+            <div class="form-grid" style="margin-bottom:14px">
+              <div class="field field--full">
+                <label for="ps-office-address">Production Office Address</label>
+                <input type="text" id="ps-office-address" name="officeAddress" value="${v('officeAddress')}" maxlength="200" />
+                <span class="setup-hint">Used in Prep Calendar, Call Sheets, and other documents.</span>
+              </div>
+            </div>
             <div id="ps-prod-info-fields"></div>
           </div>
         </details>
@@ -178,8 +175,7 @@
             <div class="form-grid">
               <div class="field field--full">
                 <label for="ps-dropbox">Dropbox Folder Path</label>
-                <input type="text" id="ps-dropbox" name="dropboxPath" value="${v('dropboxPath')}"
-                  placeholder="Local Dropbox path for receipt folders" maxlength="300" />
+                <input type="text" id="ps-dropbox" name="dropboxPath" value="${v('dropboxPath')}" maxlength="300" />
                 <span class="setup-hint">Local Dropbox path where receipt folders are stored. Used as a reference only.</span>
               </div>
               <div class="field field--full">
@@ -204,8 +200,7 @@
               <div class="field field--full">
                 <label for="ps-api-key">Anthropic API Key</label>
                 <input type="password" id="ps-api-key" name="anthropicApiKey"
-                  value="${localStorage.getItem('anthropic-api-key') ? '••••••••••••••••' : ''}"
-                  placeholder="sk-ant-…" maxlength="200" autocomplete="off" />
+                  value="${localStorage.getItem('anthropic-api-key') ? '••••••••••••••••' : ''}" maxlength="200" autocomplete="off" />
                 <span class="setup-hint">Required for AI-powered receipt autofill. Stored locally in your browser only.</span>
               </div>
             </div>
@@ -232,8 +227,11 @@
   }
 
   function _buildProdInfoFields(c, prodInfo, pv) {
-    const piF = (key, label, ph = '', type = 'text') =>
-      `<div class="field"><label>${label}</label><input type="${type}" data-pi-key="${key}" value="${pv(key)}" placeholder="${ph}" /></div>`;
+    // No placeholder. A grey example inside an empty box reads as a filled
+    // field at a glance, and on a form of mostly-empty cells that is the whole
+    // page lying about its own state.
+    const piF = (key, label, type = 'text') =>
+      `<div class="field"><label>${label}</label><input type="${type}" data-pi-key="${key}" value="${pv(key)}" /></div>`;
 
     const piSection = (heading, fields) =>
       `<div style="margin-bottom:14px;">
@@ -262,44 +260,43 @@
         </div>
       `)}
       ${piSection('Production Company', `
-        ${piF('prodCoName', 'Company Name', 'Company name')}
-        ${piF('prodCoAddr', 'Address', 'Street address')}
-        ${piF('prodCoCity', 'City, State ZIP', 'City, ST 00000')}
-        ${piF('prodCoPhone', 'Phone', '(000) 000-0000')}
+        ${piF('prodCoName', 'Company Name')}
+        ${piF('prodCoAddr', 'Address')}
+        ${piF('prodCoCity', 'City, State ZIP')}
+        ${piF('prodCoPhone', 'Phone')}
       `)}
       ${piSection('Client', `
-        ${piF('clientName', 'Name', 'Client name')}
-        ${piF('clientAddr', 'Address', 'Street address')}
-        ${piF('clientCity', 'City, State ZIP', 'City, ST 00000')}
-        ${piF('clientPhone', 'Phone', '(000) 000-0000')}
-        ${piF('clientFax', 'Fax', '(000) 000-0000')}
+        ${piF('clientName', 'Name')}
+        ${piF('clientAddr', 'Address')}
+        ${piF('clientCity', 'City, State ZIP')}
+        ${piF('clientPhone', 'Phone')}
       `)}
       ${piSection('Agency', `
-        ${piF('agencyName', 'Name', 'Agency name')}
-        ${piF('agencyAddr', 'Address', 'Street address')}
-        ${piF('agencyCity', 'City, State ZIP', 'City, ST 00000')}
-        ${piF('otherPhone', 'Other Phone', '(000) 000-0000')}
+        ${piF('agencyName', 'Name')}
+        ${piF('agencyAddr', 'Address')}
+        ${piF('agencyCity', 'City, State ZIP')}
+        ${piF('otherPhone', 'Other Phone')}
       `)}
       ${piSection('Production Schedule', `
-        ${piF('shootDates', 'Shoot Dates', 'e.g. Jan 10–14, 2025')}
-        ${piF('deliveryDate', 'Delivery Date', 'e.g. Feb 1, 2025')}
-        ${piF('shootingFormat', 'Shooting Format', 'e.g. Arri Alexa')}
-        ${piF('deliveryFormat', 'Delivery Format', 'e.g. DCP, ProRes')}
-        ${piF('otBasedOn', 'OT Based On', '1.5')}
+        ${piF('shootDates', 'Shoot Dates')}
+        ${piF('deliveryDate', 'Delivery Date')}
+        ${piF('shootingFormat', 'Shooting Format')}
+        ${piF('deliveryFormat', 'Delivery Format')}
+        ${piF('otBasedOn', 'OT Based On')}
       `)}
       ${piSection('Shoot Days', `
-        ${piF('buildStrikeDays', 'Build/Strike Days', '0', 'number')}
-        ${piF('buildStrikeHours', 'Build/Strike Hrs', '0', 'number')}
-        ${piF('prelightDays', 'Prelight Days', '0', 'number')}
-        ${piF('prelightHours', 'Prelight Hrs', '0', 'number')}
-        ${piF('studioDays', 'Studio Days', '0', 'number')}
-        ${piF('studioHours', 'Studio Hrs', '0', 'number')}
-        ${piF('locationDays', 'Location Days', '0', 'number')}
-        ${piF('locations', 'Location(s)', '0', 'number')}
+        ${piF('buildStrikeDays', 'Build/Strike Days', 'number')}
+        ${piF('buildStrikeHours', 'Build/Strike Hrs', 'number')}
+        ${piF('prelightDays', 'Prelight Days', 'number')}
+        ${piF('prelightHours', 'Prelight Hrs', 'number')}
+        ${piF('studioDays', 'Studio Days', 'number')}
+        ${piF('studioHours', 'Studio Hrs', 'number')}
+        ${piF('locationDays', 'Location Days', 'number')}
+        ${piF('locations', 'Location(s)', 'number')}
       `)}
       ${piSection('Top Sheet Notes', `
         <div class="field field--full">
-          <textarea data-pi-key="notes" rows="3" placeholder="Production notes for top sheet…">${pv('notes')}</textarea>
+          <textarea data-pi-key="notes" rows="3">${pv('notes')}</textarea>
         </div>
       `)}
     `;
@@ -540,10 +537,15 @@
     font-size: 0.875rem;
   }
 
+  /* One row, always. These are four slots of a fixed 80px, and they were
+     wrapping Production Co. onto a line of its own — not because there was no
+     space, but because the label under it is the longest of the four and
+     flex-wrap measures the whole slot. Nothing here needs to wrap: four
+     fixed-width thumbnails fit any width this form is usable at. */
   :global(.pi-logos-row) {
     display: flex;
+    flex-wrap: nowrap;
     gap: 16px;
-    flex-wrap: wrap;
     padding: 8px 0;
   }
 

@@ -15,6 +15,7 @@
 // asking here. Keep every data.js import in this project bare.
 import { addPurchase, getPurchases } from './data.js';
 import { todayLocal } from './svelte/lib/format.js';
+import { crewDirector, crewProducer } from './svelte/lib/crewLookup.js';
 
 const BUDGET_KEY = 'movie-ledger-budget';
 const LOCK_KEY   = 'movie-ledger-budget-lock';
@@ -49,8 +50,11 @@ function _loadProdInfo() {
   //
   // Director and Producer are here for the opposite reason: the top sheet has
   // always asked this object for them, and this object has never had them.
-  // Those rows printed blank on every budget ever exported. They live on the
-  // project, so that is where they now come from.
+  // Those rows printed blank on every budget ever exported. They now come from
+  // the Crew List, which is the roster — a name typed into settings went stale
+  // the moment the crew list was corrected, and only the crew list is kept up
+  // to date. A value already stored still wins, then the crew list, then
+  // whatever an older project had on it.
   //
   // Anything already stored wins. A project that filled these in before keeps
   // exactly what it had rather than being quietly overwritten by the identity.
@@ -64,8 +68,8 @@ function _loadProdInfo() {
     productionName: info.productionName || proj.title            || '',
     jobName:        info.jobName        || proj.title            || '',
     jobNumber:      info.jobNumber      || proj.productionNumber || '',
-    director:       info.director       || proj.director         || '',
-    producer:       info.producer       || proj.producer         || '',
+    director:       info.director       || crewDirector() || proj.director  || '',
+    producer:       info.producer       || crewProducer() || proj.producer  || '',
   };
 }
 function _saveProdInfo(data) {
@@ -3507,8 +3511,9 @@ function _openHotCostSummary(filters = { approved: true, inReview: true, quotes:
   const prodNum      = proj.productionNumber || '';
   const tplLabel     = proj.budgetTemplate === 'feature' ? 'Feature/Episodic' : 'Commercial';
   const company      = proj.productionCompany || '';
-  const director     = proj.director || '';
-  const producer     = proj.producer || '';
+  // Same order as the top sheet — see _loadProdInfo.
+  const director     = crewDirector() || proj.director || '';
+  const producer     = crewProducer() || proj.producer || '';
   const prodAcct     = proj.defaultSubmitter || '';
 
   /* ── Budget totals ── */
