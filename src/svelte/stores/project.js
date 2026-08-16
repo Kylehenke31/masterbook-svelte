@@ -128,6 +128,78 @@ export async function ensureProjectInCloud() {
   }
 }
 
+/**
+ * Archive or restore a project, on this device and in the cloud.
+ *
+ * Archiving used to set a flag on the local registry entry and stop there. The
+ * registry is rebuilt from the cloud on every sign-in — `_archived` is read
+ * from the project's own data — so an archived project came back unarchived
+ * the next time you logged in. It only appeared to stick for the project you
+ * had open, because saving that one happens to push its data to the cloud.
+ *
+ * The flag belongs on the project data, which is the thing that syncs. The
+ * registry entry is a copy for the menu to read.
+ */
+export async function setProjectArchived(projectId, archived) {
+  const reg   = getRegistry();
+  const entry = reg.find(r => r.id === projectId);
+  if (entry) {
+    entry._archived = archived;
+    saveRegistry(reg);
+  }
+
+  // The active project's data is in the live keys; any other project's is in
+  // its own snapshot.
+  const isActive = getActiveProjectId() === projectId;
+  const key = `ml-${projectId}-movie-ledger-project`;
+  let data = null;
+  try {
+    data = isActive ? getProject() : JSON.parse(localStorage.getItem(key));
+  } catch { data = null; }
+  if (!data) return { ok: false, reason: 'no local copy of that project' };
+
+  data._archived = archived;
+  if (archived) data._archivedAt = new Date().toISOString();
+  else delete data._archivedAt;
+
+  if (isActive) localStorage.setItem('movie-ledger-project', JSON.stringify(data));
+  localStorage.setItem(key, JSON.stringify(data));
+  if (isActive) projectStore.set(data);
+
+  const res = await cloudSaveProject({ ...data, id: projectId });
+  return res?.ok ? { ok: true } : { ok: false, reason: res?.error || 'the cloud refused the change' };
+}
+
+/**
+ * Delete a project everywhere, or leave it if it belongs to somebody else.
+ *
+ * Deleting used to clear the local snapshot and drop the registry entry. The
+ * row in the cloud was untouched, so the next sign-in pulled the project
+ * straight back — and it came back looking unarchived, because the archive
+ * flag had never reached the cloud either.
+ *
+ * Local removal happens only once the cloud has agreed. Removing first would
+ * put the project back at the next sign-in and make the failure look like a
+ * different bug.
+ */
+export async function deleteProjectEverywhere(projectId) {
+  const { deleteOwnedProject, leaveProject } = await import('../lib/db.js');
+
+  let res = await deleteOwnedProject(projectId);
+  // Not yours to delete — the next best thing is to stop being a member, which
+  // takes it off your list without destroying somebody else's project.
+  if (!res.ok && res.reason === 'not_owner') {
+    const left = await leaveProject(projectId);
+    if (!left.ok) return { ok: false, reason: left.reason || 'could not leave that project' };
+  } else if (!res.ok && res.reason !== 'no_such_project') {
+    return { ok: false, reason: res.reason || 'the cloud refused the delete' };
+  }
+
+  for (const key of PROJECT_DATA_KEYS) localStorage.removeItem(`ml-${projectId}-${key}`);
+  saveRegistry(getRegistry().filter(r => r.id !== projectId));
+  return { ok: true };
+}
+
 /* ── Registry ── */
 export function getRegistry() {
   try { return JSON.parse(localStorage.getItem(REGISTRY_KEY)) || []; } catch { return []; }

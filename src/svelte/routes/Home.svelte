@@ -8,6 +8,7 @@
     registerProject, snapshotProject, restoreProject,
     switchProject, PROJECT_DATA_KEYS,
     refreshProjectStore, ensureProjectInCloud,
+    setProjectArchived, deleteProjectEverywhere,
   } from '../stores/project.js';
 
   // The document-level close handler is bound once, not on every re-render —
@@ -248,7 +249,7 @@
 
     // Archive active or non-active project
     c.querySelectorAll('.pm-btn-archive').forEach(btn => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', async () => {
         const pid     = btn.dataset.pid;
         const isActive = pid === getActiveProjectId();
         const reg     = getRegistry();
@@ -256,16 +257,11 @@
         if (!entry) return;
         if (!confirm(`Archive project "${entry.title}"?\n\nThe project data will be hidden but can be restored later.`)) return;
 
-        if (isActive) {
-          const p = getProject();
-          if (p) {
-            p._archived   = true;
-            p._archivedAt = new Date().toISOString();
-            saveProject(p);
-          }
+        // Cloud first. The registry entry alone does not survive a sign-in.
+        const res = await setProjectArchived(pid, true);
+        if (!res.ok) {
+          alert(`"${entry.title}" was archived on this device, but the change did not reach the cloud — ${res.reason}. It will come back unarchived when you sign in again.`);
         }
-        entry._archived = true;
-        saveRegistry(reg);
 
         if (isActive) {
           snapshotProject(pid);
@@ -302,27 +298,33 @@
 
     // Restore archived project
     c.querySelectorAll('.pm-restore-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', async () => {
         const pid   = btn.dataset.pid;
-        const reg   = getRegistry();
-        const entry = reg.find(r => r.id === pid);
+        const entry = getRegistry().find(r => r.id === pid);
         if (!entry) return;
-        entry._archived = false;
-        saveRegistry(reg);
+        const res = await setProjectArchived(pid, false);
+        if (!res.ok) {
+          alert(`"${entry.title}" was restored on this device, but the change did not reach the cloud — ${res.reason}.`);
+        }
         _render();
       });
     });
 
     // Delete archived project permanently
     c.querySelectorAll('.pm-delete-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', async () => {
         const pid   = btn.dataset.pid;
-        const reg   = getRegistry();
-        const entry = reg.find(r => r.id === pid);
+        const entry = getRegistry().find(r => r.id === pid);
         if (!entry) return;
         if (!confirm(`Permanently delete "${entry.title}"? This cannot be undone.`)) return;
-        for (const key of PROJECT_DATA_KEYS) localStorage.removeItem(`ml-${pid}-${key}`);
-        saveRegistry(reg.filter(r => r.id !== pid));
+
+        // Nothing is removed locally until the cloud has agreed. Removing first
+        // is what made deleted projects reappear at the next sign-in.
+        const res = await deleteProjectEverywhere(pid);
+        if (!res.ok) {
+          alert(`"${entry.title}" was not deleted — ${res.reason}. Nothing has been removed.`);
+          return;
+        }
         _render();
       });
     });
