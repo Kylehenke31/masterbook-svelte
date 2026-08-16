@@ -1425,6 +1425,59 @@ a:hover {
   border-bottom: 1px solid var(--border-subtle);
 }
 
+/* ── Collapsible settings sections ──
+   Project Settings has nine of these, and reaching the ninth meant scrolling
+   past eight every time. Built on <details>, so the header is a real
+   disclosure control — keyboard-operable and announced as expanded or
+   collapsed — rather than a div listening for clicks.
+
+   Only .ps-collapse is affected. Project Setup uses the same .setup-card for
+   an h3 that is not a control, and must keep the border and spacing the plain
+   .setup-card__title gives it. */
+.setup-card.ps-collapse { padding: 0; }
+
+.setup-card.ps-collapse > .ps-summary {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 13px 18px;
+  cursor: pointer;
+  user-select: none;
+  /* The plain title is a heading with a rule under it. Here the rule belongs
+     between the header and the body, so it appears only when there is a body
+     to divide from. */
+  margin-bottom: 0;
+  padding-bottom: 13px;
+  border-bottom: 1px solid transparent;
+  transition: color var(--transition), background var(--transition);
+}
+
+/* The disclosure triangle the browser supplies is inconsistent between
+   engines and points the wrong way for this layout; ours is the caret. */
+.setup-card.ps-collapse > .ps-summary { list-style: none; }
+.setup-card.ps-collapse > .ps-summary::-webkit-details-marker { display: none; }
+.setup-card.ps-collapse > .ps-summary::marker { content: ''; }
+
+.setup-card.ps-collapse > .ps-summary:hover { color: var(--text-primary); }
+.setup-card.ps-collapse > .ps-summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.setup-card.ps-collapse[open] > .ps-summary {
+  border-bottom-color: var(--border-subtle);
+  color: var(--text-primary);
+}
+
+.ps-caret {
+  display: inline-flex;
+  flex: 0 0 auto;
+  transition: transform var(--transition);
+}
+.setup-card.ps-collapse[open] > .ps-summary .ps-caret { transform: rotate(90deg); }
+
+.ps-card-body { padding: 14px 18px 16px; }
+
 .setup-hint {
   font-size: 11px;
   color: var(--text-muted);

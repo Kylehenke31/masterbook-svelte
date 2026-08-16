@@ -7,6 +7,37 @@
 
   const PROD_INFO_KEY = 'movie-ledger-prod-info';
 
+  /* ── Collapsible sections ──────────────────────────────────────
+     Which sections are expanded, remembered between visits. This is a
+     preference about the screen rather than data about the production, so it
+     is stored under its own key and deliberately not in the project — it is
+     not worth syncing, and it should not differ per project when the person
+     using it is the same.
+
+     _render() rebuilds the whole page from a string on several occasions,
+     which is why the state has to live outside the DOM at all: without this,
+     removing a logo would silently close every section you had opened. */
+  const OPEN_KEY = 'movie-ledger-ps-open-sections';
+
+  /* Project Identity alone on a first visit. A new project lands on this
+     screen straight from creation, so opening nothing would present a
+     brand-new production as nine closed drawers with no hint of what to fill
+     in; opening everything would be the scrolling this is meant to end. */
+  const DEFAULT_OPEN = ['identity'];
+
+  function _openSections() {
+    try {
+      const raw = localStorage.getItem(OPEN_KEY);
+      if (raw === null) return DEFAULT_OPEN;
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : DEFAULT_OPEN;
+    } catch { return DEFAULT_OPEN; }
+  }
+
+  function _saveOpenSections(keys) {
+    try { localStorage.setItem(OPEN_KEY, JSON.stringify(keys)); } catch { /* private mode */ }
+  }
+
   function _esc(str) {
     return String(str ?? '')
       .replace(/&/g, '&amp;')
@@ -42,6 +73,20 @@
 
     const theme = document.documentElement.dataset.theme || 'dark';
 
+    // Emits the open attribute for a section, and the header that toggles it.
+    const open = new Set(_openSections());
+    const sec  = (key, title) =>
+      `<details class="setup-card ps-collapse" data-ps-sec="${key}"${open.has(key) ? ' open' : ''}>
+        <summary class="setup-card__title ps-summary">
+          <span class="ps-caret" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="11" height="11">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
+          </span>
+          ${title}
+        </summary>
+        <div class="ps-card-body">`;
+
     container.innerHTML = `
       <section class="setup-section">
         <div class="setup-header">
@@ -54,8 +99,7 @@
         <form id="settings-form" novalidate autocomplete="off">
 
           <!-- ── Project Identity ── -->
-          <div class="setup-card">
-            <h3 class="setup-card__title">Project Identity</h3>
+          ${sec('identity', 'Project Identity')}
             <div class="form-grid">
               <div class="field field--full">
                 <label>Project Title <span class="ps-lock-badge">LOCKED</span></label>
@@ -87,10 +131,10 @@
               </div>
             </div>
           </div>
+        </details>
 
           <!-- ── Schedule ── -->
-          <div class="setup-card">
-            <h3 class="setup-card__title">Schedule</h3>
+          ${sec('schedule', 'Schedule')}
             <div class="form-grid">
               <div class="field">
                 <label for="ps-start">Principal Photography Start</label>
@@ -112,21 +156,21 @@
               </div>
             </div>
           </div>
+        </details>
 
           <!-- ── Production Info ── -->
-          <div class="setup-card">
-            <h3 class="setup-card__title">Production Info</h3>
+          ${sec('prodinfo', 'Production Info')}
             <p class="setup-hint" style="margin-bottom:12px">Used by the Budget Top Sheet, Hot Costs, and Call Sheets.</p>
             <div id="ps-prod-info-fields"></div>
           </div>
+        </details>
 
           <!-- ── Project Access ──
                Distinct from Staff Members below: that is a contact list which
                feeds the Crew List, this is who holds a login. Most crew never
                need an account, and everyone who does needs a permission
                decision, so they are not the same form. -->
-          <div class="setup-card">
-            <h3 class="setup-card__title">Project Access</h3>
+          ${sec('access', 'Project Access')}
             <p class="setup-hint" style="margin-bottom:12px">
               Who can sign in to this production, and what each person can reach.
               Separate from the Crew List — invite only the people who need an account.
@@ -135,10 +179,10 @@
               Manage Access →
             </button>
           </div>
+        </details>
 
           <!-- ── Staff Members ── -->
-          <div class="setup-card">
-            <h3 class="setup-card__title">Staff Members</h3>
+          ${sec('staff', 'Staff Members')}
             <p class="setup-hint" style="margin-bottom:12px">Staff added here will be auto-imported into the Crew List. This does not give them a login.</p>
             <div class="staff-list" id="ps-staff-list">${staffHTML}</div>
             <button type="button" class="btn btn--ghost btn--sm" id="ps-btn-add-staff" style="margin-top:10px">
@@ -169,10 +213,10 @@
               </div>
             </div>
           </div>
+        </details>
 
           <!-- ── Submission Defaults ── -->
-          <div class="setup-card">
-            <h3 class="setup-card__title">Submission Defaults</h3>
+          ${sec('submission', 'Submission Defaults')}
             <div class="form-grid">
               <div class="field">
                 <label for="ps-submitter">Default Submitter Name</label>
@@ -196,10 +240,10 @@
               </div>
             </div>
           </div>
+        </details>
 
           <!-- ── File Storage ── -->
-          <div class="setup-card">
-            <h3 class="setup-card__title">File Storage</h3>
+          ${sec('storage', 'File Storage')}
             <div class="form-grid">
               <div class="field field--full">
                 <label for="ps-dropbox">Dropbox Folder Path</label>
@@ -226,10 +270,10 @@
               </div>
             </div>
           </div>
+        </details>
 
           <!-- ── Notes ── -->
-          <div class="setup-card">
-            <h3 class="setup-card__title">Project Notes</h3>
+          ${sec('notes', 'Project Notes')}
             <div class="form-grid">
               <div class="field field--full">
                 <label for="ps-notes">Notes</label>
@@ -238,10 +282,10 @@
               </div>
             </div>
           </div>
+        </details>
 
           <!-- ── Appearance ── -->
-          <div class="setup-card">
-            <h3 class="setup-card__title">Appearance</h3>
+          ${sec('appearance', 'Appearance')}
             <div style="display:flex;align-items:center;gap:12px;padding:4px 0;">
               <button type="button" id="ps-theme-toggle" class="btn btn--ghost btn--sm ps-theme-btn">
                 <span class="ps-theme-icon">${theme === 'dark' ? '☽' : '☀'}</span>
@@ -250,6 +294,7 @@
               <span class="setup-hint" style="margin:0;">Click to switch between light and dark mode.</span>
             </div>
           </div>
+        </details>
 
           <!-- ── Actions ── -->
           <div class="form-actions setup-actions">
@@ -487,6 +532,20 @@
     });
 
     _wireStaffRemove(c);
+
+    // Remember which sections are open. Read from the DOM on every toggle
+    // rather than tracking a running list, so the stored state is whatever is
+    // actually on screen — including any section opened by the browser itself
+    // to reveal a search hit or a focused field.
+    c.querySelectorAll('details[data-ps-sec]').forEach(d => {
+      d.addEventListener('toggle', () => {
+        _saveOpenSections(
+          [...c.querySelectorAll('details[data-ps-sec]')]
+            .filter(x => x.open)
+            .map(x => x.dataset.psSec)
+        );
+      });
+    });
 
     // Main form submit
     form?.addEventListener('submit', e => {
