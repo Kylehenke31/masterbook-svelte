@@ -14,7 +14,7 @@
   import { syncAllSectionsFromCloud, pushAllSectionsToCloud, saveSectionToCloud, bumpSectionVersion, setSyncMember } from './lib/sections.js';
   import { handleDropboxRedirect } from './lib/dropbox.js';
   import { setCreativeMember } from './lib/creative.js';
-  import { loadMyProfile, updateMyDisplayName, acceptPendingInvites, loadMyMembership } from './lib/db.js';
+  import { acceptPendingInvites, loadMyMembership } from './lib/db.js';
   import { canAccessRoute } from './lib/features.js';
 
   import Home           from './routes/Home.svelte';
@@ -236,34 +236,14 @@
     syncProblems = [...syncProblems, { id, ...detail }];
   }
 
-  /* ── Profile name ── */
-  let profileName       = $state('');
-  let profileNameSaving = $state(false);
-  let profileNameMsg    = $state('');
-
+  // Editing your name lived here as a labelled field with its own Save button
+  // and its own result message — a form inside a menu, and the second place
+  // that edited one value now that Account Settings is a click away in the
+  // same list. It went there, where the rest of the account lives.
   function openDropdown() {
     dropdownRegistry = getRegistry().filter(r => !r._archived);
     dropdownActiveId = getActiveProjectId();
-    profileNameMsg = '';
-    // Read the stored profile each time the menu opens rather than caching —
-    // it may have been changed from another device.
-    loadMyProfile().then(p => { profileName = p?.display_name || ''; });
     showDropdown = true;
-  }
-
-  async function saveProfileName() {
-    const name = profileName.trim();
-    if (!name || profileNameSaving) return;
-    profileNameSaving = true;
-    profileNameMsg = '';
-    try {
-      await updateMyDisplayName(name);
-      profileNameMsg = 'Saved.';
-    } catch (e) {
-      profileNameMsg = `Could not save: ${e.message}`;
-    } finally {
-      profileNameSaving = false;
-    }
   }
 
   function closeDropdown() { showDropdown = false; }
@@ -692,19 +672,6 @@
           <div class="profile-dropdown" role="menu">
             <div class="pd-user">{_project?.defaultSubmitter || authState?.email || 'User'}</div>
             <div class="pd-email">{authState?.email || ''}</div>
-            <div class="pd-divider"></div>
-            <!-- Your name as other people on a project see it. It also names
-                 any credit card assigned to you, so it wants to be a full
-                 name rather than a first name. -->
-            <div class="pd-label">Your Name</div>
-            <div class="pd-name-row">
-              <input class="pd-name-input" type="text" placeholder="Full name"
-                bind:value={profileName}
-                onkeydown={e => { if (e.key === 'Enter') saveProfileName(); }} />
-              <button class="btn btn--primary btn--xs" onclick={saveProfileName}
-                disabled={profileNameSaving}>{profileNameSaving ? '…' : 'Save'}</button>
-            </div>
-            {#if profileNameMsg}<div class="pd-name-msg">{profileNameMsg}</div>{/if}
             <div class="pd-divider"></div>
             <!-- The heading is the way to the project menu. Creating a project
                  belongs there, beside the ones that already exist, rather than
@@ -1143,32 +1110,6 @@
   .pd-label-btn:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
   .pd-label-arrow { font-size: 0.85rem; line-height: 1; opacity: 0.8; }
 
-  .pd-name-row {
-    display: flex;
-    gap: 6px;
-    padding: 2px 14px 6px;
-    align-items: center;
-  }
-
-  .pd-name-input {
-    flex: 1;
-    min-width: 0;
-    padding: 5px 8px;
-    font-size: 0.8rem;
-    font-family: inherit;
-    color: var(--text-primary);
-    background: var(--input-bg);
-    border: 1px solid var(--input-border);
-    border-radius: 0;
-  }
-
-  .pd-name-input:focus { outline: none; border-color: var(--gold); }
-
-  .pd-name-msg {
-    padding: 0 14px 6px;
-    font-size: 0.7rem;
-    color: var(--text-muted);
-  }
 
   .pd-projects {
     max-height: 200px;
