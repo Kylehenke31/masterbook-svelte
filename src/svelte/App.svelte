@@ -1067,6 +1067,10 @@
   .btn--profile {
     width: 32px;
     height: 32px;
+    /* .btn brings its own padding, which in a 32px box leaves almost no
+       content area — the icon is a flex item and shrank to fit it, ending up
+       10px wide inside a 32px square. */
+    padding: 0;
     border-radius: 0;
     background: var(--bg-elevated, #2a2a2a);
     border: 1px solid var(--border, #333);
@@ -1077,12 +1081,26 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    flex-shrink: 0;
     transition: background 0.15s, border-color 0.15s;
   }
 
+  /* The icon keeps its own size whatever the button does around it. Left to
+     the default flex-shrink it gets squeezed rather than overflowing, which
+     fails silently — the icon just quietly gets smaller. */
+  .btn--profile svg {
+    flex: 0 0 auto;
+    width: 19px;
+    height: 19px;
+  }
+
+  /* Colour is stated explicitly, not inherited. The icon is painted with
+     currentColor, so anything that changes colour on hover changes the icon —
+     which is how it came to vanish under the cursor. */
   .btn--profile:hover {
     background: var(--bg-hover, #3a3a3a);
-    border-color: var(--gold, #8cabcf);
+    border-color: var(--accent);
+    color: var(--text-primary, #eee);
   }
 
   /* Profile dropdown — opens upward from the bottom of the sidebar.
