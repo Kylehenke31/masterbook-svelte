@@ -3688,7 +3688,22 @@ textarea {
   gap: 1px;
   flex: 1;
   padding: 0 8px;
+  /* The nav takes the squeeze, not the controls below it.
+     A flex item will not shrink below its content without min-height: 0, so
+     this column kept its full height on a short window and pushed the account
+     button past the bottom of a panel that does not scroll — the button was
+     simply gone, with no scrollbar to suggest anywhere to look. It happens
+     under about 530px of viewport, which a laptop reaches at 125% browser
+     zoom long before it reaches it by window size. */
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
+
+/* A scrollbar in a 168px column is mostly in the way; the overflow still
+   scrolls by wheel, trackpad and keyboard. */
+.macro-sidebar-items::-webkit-scrollbar { width: 0; height: 0; }
+.macro-sidebar-items { scrollbar-width: none; }
 .macro-sidebar-divider {
   height: 1px;
   background: var(--border);

@@ -16,68 +16,17 @@
   let showPassword = $state(false);
 
   /* ── Human check ───────────────────────────────────────────────
-     Cloudflare Turnstile, because Supabase verifies the token itself: the
-     widget hands us one, we pass it to signUp, and the server rejects the
-     signup if it does not check out. A challenge implemented in this file
-     would be worth nothing — anything the page can validate, a script can
-     skip by calling the API directly.
+     A placeholder, and deliberately labelled as one in the code so nobody
+     later mistakes it for protection. It checks that a person ticked a box in
+     a browser, which stops nothing: a script signing up calls the Supabase API
+     directly and never loads this page at all.
 
-     Inert until VITE_TURNSTILE_SITE_KEY is set, so signup keeps working while
-     the key and the matching Supabase setting are still to be arranged. When
-     it is set, the token becomes required. */
-  const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY || '';
-  const captchaRequired = !!TURNSTILE_SITE_KEY;
-  let captchaToken = $state('');
-  let captchaEl    = $state(null);
-  let captchaError = $state('');
-  let widgetId     = null;
-
-  function loadTurnstile() {
-    if (window.turnstile) return Promise.resolve();
-    if (!window.__turnstileLoading) {
-      window.__turnstileLoading = new Promise((resolve, reject) => {
-        const s = document.createElement('script');
-        s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
-        s.async = true;
-        s.onload = resolve;
-        s.onerror = () => reject(new Error('could not load the human check'));
-        document.head.appendChild(s);
-      });
-    }
-    return window.__turnstileLoading;
-  }
-
-  // Rendered only on the signup tab, and torn down when leaving it — a stale
-  // widget hands back a token tied to a challenge the server has forgotten.
-  $effect(() => {
-    if (!captchaRequired || view !== 'signup' || !captchaEl) return;
-    let cancelled = false;
-    captchaError = '';
-    loadTurnstile()
-      .then(() => {
-        if (cancelled || !captchaEl) return;
-        widgetId = window.turnstile.render(captchaEl, {
-          sitekey: TURNSTILE_SITE_KEY,
-          theme: 'dark',
-          callback: (token) => { captchaToken = token; captchaError = ''; },
-          'expired-callback': () => { captchaToken = ''; },
-          'error-callback': () => {
-            captchaToken = '';
-            captchaError = 'The human check failed to load. Refresh and try again.';
-          },
-        });
-      })
-      .catch(e => { if (!cancelled) captchaError = e.message; });
-
-    return () => {
-      cancelled = true;
-      captchaToken = '';
-      if (widgetId !== null && window.turnstile) {
-        try { window.turnstile.remove(widgetId); } catch { /* already gone */ }
-        widgetId = null;
-      }
-    };
-  });
+     Real verification has to be server-side. Supabase will do it natively with
+     hCaptcha or Cloudflare Turnstile — enabled in its auth settings, with the
+     widget's token passed to signUp, which is already plumbed through
+     auth.js's captchaToken argument. Until that decision is made, this holds
+     the place in the form so the layout does not shift when it arrives. */
+  let humanChecked = $state(false);
 
   /* An invite link lands here as /?invite=<address>.
      It is not a token and grants nothing on its own — accept_project_invites()
@@ -112,27 +61,18 @@
       // is where a typed-twice-wrong password otherwise surfaces: locked out
       // of an account you just made, with no idea which of the two took.
       if (password !== confirm) { error = 'The two passwords do not match.'; return; }
-      if (captchaRequired && !captchaToken) {
-        error = 'Please complete the human check below.';
-        return;
-      }
+      if (!humanChecked) { error = 'Please confirm you are a human.'; return; }
     }
     busy = true;
     try {
       if (view === 'signin') {
         await signIn(email.trim(), password);
       } else {
-        await signUp(email.trim(), password, name.trim(), captchaToken || undefined);
+        await signUp(email.trim(), password, name.trim());
       }
       onSuccess();
     } catch (e) {
       error = e.message || 'Something went wrong. Please try again.';
-      // A token is single-use: whatever went wrong, the one we hold is spent,
-      // so the widget has to issue another before they can try again.
-      if (captchaRequired && widgetId !== null && window.turnstile) {
-        captchaToken = '';
-        try { window.turnstile.reset(widgetId); } catch { /* nothing to reset */ }
-      }
     } finally {
       busy = false;
     }
@@ -142,6 +82,7 @@
     view = v;
     error = '';
     confirm = '';
+    humanChecked = false;
     showPassword = false;
   }
 </script>
@@ -215,38 +156,77 @@
       </div>
 
       <div class="login-field">
-        <!-- One toggle drives both boxes. The input's type is switched rather
-             than the masking faked in CSS, so a password manager still sees a
-             password field. -->
-        <div class="login-field-head">
-          <label for="login-password">Password</label>
-          <button type="button" class="login-reveal"
-            onclick={() => { showPassword = !showPassword; }}
-            aria-pressed={showPassword} disabled={busy}>
-            {showPassword ? 'Hide' : 'Show'}
-          </button>
+        <label for="login-password">Password</label>
+        <!-- One toggle drives both boxes: revealing one and not the other
+             defeats the second box, whose whole job is letting you see that
+             they agree. The input's type is switched rather than the masking
+             faked in CSS, so a password manager still sees a password field
+             and the characters never sit in the DOM as plain text. -->
+        <div class="login-input-wrap">
+          <input
+            id="login-password"
+            type={showPassword ? 'text' : 'password'}
+            placeholder="••••••••"
+            bind:value={password}
+            autocomplete={view === 'signin' ? 'current-password' : 'new-password'}
+            disabled={busy}
+          />
+          <button type="button" class="login-eye"
+              onclick={() => { showPassword = !showPassword; }}
+              aria-pressed={showPassword} disabled={busy}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              title={showPassword ? 'Hide password' : 'Show password'}>
+              {#if showPassword}
+                  <!-- The icon reports the state, not the action: an open eye while
+                       the password is on screen, struck through while it is hidden. -->
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+                  stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+                {:else}
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+                  stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true">
+                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                  <line x1="1" y1="1" x2="23" y2="23"/>
+                </svg>
+                {/if}
+            </button>
         </div>
-        <input
-          id="login-password"
-          type={showPassword ? 'text' : 'password'}
-          placeholder="••••••••"
-          bind:value={password}
-          autocomplete={view === 'signin' ? 'current-password' : 'new-password'}
-          disabled={busy}
-        />
       </div>
 
       {#if view === 'signup'}
         <div class="login-field">
           <label for="login-confirm">Confirm Password</label>
-          <input
-            id="login-confirm"
-            type={showPassword ? 'text' : 'password'}
-            placeholder="••••••••"
-            bind:value={confirm}
-            autocomplete="new-password"
-            disabled={busy}
-          />
+          <div class="login-input-wrap">
+            <input
+              id="login-confirm"
+              type={showPassword ? 'text' : 'password'}
+              placeholder="••••••••"
+              bind:value={confirm}
+              autocomplete="new-password"
+              disabled={busy}
+            />
+            <button type="button" class="login-eye"
+                onclick={() => { showPassword = !showPassword; }}
+                aria-pressed={showPassword} disabled={busy}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                title={showPassword ? 'Hide password' : 'Show password'}>
+                {#if showPassword}
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+                    stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                  </svg>
+                {:else}
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+                    stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                    <line x1="1" y1="1" x2="23" y2="23"/>
+                  </svg>
+                {/if}
+              </button>
+          </div>
           <!-- Only once they have diverged and something is actually typed.
                Flagging a mismatch on the first keystroke of the second box is
                telling someone they are wrong while they are still typing. -->
@@ -255,12 +235,10 @@
           {/if}
         </div>
 
-        {#if captchaRequired}
-          <div class="login-field">
-            <div bind:this={captchaEl} class="login-captcha"></div>
-            {#if captchaError}<span class="login-warn">{captchaError}</span>{/if}
-          </div>
-        {/if}
+        <label class="login-human">
+          <input type="checkbox" bind:checked={humanChecked} disabled={busy} />
+          <span>I am a human</span>
+        </label>
       {/if}
 
       {#if error}
@@ -388,38 +366,58 @@
     gap: 6px;
   }
 
-  /* Label on the left, reveal on the right, sharing the label's line so the
-     toggle costs no vertical space of its own. */
-  .login-field-head {
+  /* The eye sits inside the box, so the field keeps one outline and the
+     control is where the text it hides is. The input is padded on the right by
+     the eye's width so a long password runs behind the label, not under it. */
+  .login-input-wrap {
+    position: relative;
     display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 8px;
+    align-items: center;
+  }
+  /* Scoped through .login-field so this beats the plain `.login-field input`
+     rule further down, which is the same specificity and wins on order. */
+  .login-field .login-input-wrap input {
+    padding-right: 38px;
   }
 
-  .login-reveal {
+  .login-eye {
+    position: absolute;
+    right: 1px;
+    top: 1px;
+    bottom: 1px;
+    width: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     background: none;
     border: 0;
     padding: 0;
-    font-family: inherit;
-    font-size: 0.7rem;
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
     color: var(--text-muted, #888);
     cursor: pointer;
     transition: color 0.15s;
   }
-  .login-reveal:hover:not(:disabled),
-  .login-reveal:focus-visible { color: var(--accent); }
-  .login-reveal:disabled { opacity: 0.5; cursor: default; }
+  .login-eye:hover:not(:disabled),
+  .login-eye:focus-visible { color: var(--accent); }
+  .login-eye:focus-visible { outline: 1px solid var(--accent); outline-offset: -2px; }
+  .login-eye:disabled { opacity: 0.4; cursor: default; }
 
-  /* Turnstile renders a fixed-width iframe; centring it keeps it from sitting
-     off to one side of a 340px card. */
-  .login-captcha {
+  /* Placeholder human check — see the note in the script. */
+  .login-human {
     display: flex;
-    justify-content: center;
-    min-height: 65px;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8rem;
+    color: var(--text-secondary, #ccc);
+    cursor: pointer;
+    user-select: none;
+    padding: 2px 0;
+  }
+  .login-human input {
+    width: 15px;
+    height: 15px;
+    accent-color: var(--accent);
+    cursor: pointer;
+    flex: 0 0 auto;
   }
 
   .login-field label {
