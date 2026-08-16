@@ -286,10 +286,19 @@
                   <small class="field-hint" id="cc-select-hint"></small>
                 </div>
 
-                <!-- Linked Folder (Return only) -->
-                <div class="field field--conditional" id="field-linked-folder">
-                  <label for="f-linked-folder">Linked Folder # (original)</label>
-                  <input type="text" id="f-linked-folder" name="linkedFolder" placeholder="e.g. 0002" />
+                <!-- Original purchase (Return only). A picker rather than a
+                     typed folder number: the number was something you had to
+                     go and look up, and a return filed against a folder that
+                     does not exist files itself somewhere nobody looks. The
+                     value stays the folder number, because assignFolder uses
+                     it as the return's own folder — the purchase it came from
+                     is recorded alongside it as linkedPurchaseId. -->
+                <div class="field field--conditional field--mid" id="field-linked-folder">
+                  <label for="f-linked-folder">Original Purchase</label>
+                  <select id="f-linked-folder" name="linkedFolder">
+                    <option value="">Select the purchase being returned…</option>
+                  </select>
+                  <small class="field-hint" id="linked-folder-hint"></small>
                   <span class="field-error" id="err-linked-folder"></span>
                 </div>
 
@@ -425,6 +434,42 @@
   }
 
   /* ── Conditional Fields ── */
+  /* The purchases this person could be returning: their own submissions,
+     newest first. Returns are left out — a return against a return is not a
+     thing — as are drafts, which have no folder to file into yet. */
+  function myReturnablePurchases() {
+    const me = get(authUser);
+    const mine = (DB.purchases || []).filter(p => {
+      if (!p.folder) return false;
+      if (p.method === 'Return' || p.isReturn) return false;
+      if (DRAFT_STATUSES.includes(p.status)) return false;
+      return me ? p.submittedByUserId === me.id : true;
+    });
+    return mine.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+  }
+
+  function fillLinkedPurchaseOptions(c) {
+    const sel = c.querySelector('#f-linked-folder');
+    if (!sel) return;
+    const keep = sel.value;
+    const rows = myReturnablePurchases();
+    sel.innerHTML = '<option value="">Select the purchase being returned…</option>' +
+      rows.map(p => {
+        const amt  = '$' + formatCurrency(Math.abs(Number(p.amount) || 0));
+        const when = p.date ? String(p.date).slice(0, 10) : '';
+        const label = [p.folder, p.vendor || 'Unknown vendor', amt, when].filter(Boolean).join('  ·  ');
+        return `<option value="${esc(p.folder)}" data-purchase-id="${esc(p.id)}">${esc(label)}</option>`;
+      }).join('');
+    if (keep) sel.value = keep;
+
+    const hint = c.querySelector('#linked-folder-hint');
+    if (hint) {
+      hint.textContent = rows.length
+        ? 'The return files into this purchase\u2019s folder.'
+        : 'Nothing in your book to return against yet.';
+    }
+  }
+
   function updateConditionalFields(c) {
     const type      = getType(c);
     const method    = TYPE_METHOD_MAP[type] || '';
@@ -434,8 +479,11 @@
     c.querySelector('#field-cc-select').classList.toggle('visible',
       type === 'Production Credit Card');
 
-    c.querySelector('#field-linked-folder').classList.toggle('visible',
-      type === 'Return');
+    const isReturn = type === 'Return';
+    c.querySelector('#field-linked-folder').classList.toggle('visible', isReturn);
+    // Rebuilt each time it is shown — the book changes while this form is open,
+    // and a list built once at mount goes stale the moment anything is filed.
+    if (isReturn) fillLinkedPurchaseOptions(c);
 
     c.querySelector('#field-petty-cash-envelope').classList.toggle('visible',
       type === 'Petty Cash');
@@ -1202,6 +1250,19 @@ Rules:
     }
     updateConditionalFields(c);
 
+    // After updateConditionalFields, which is what builds the options — a
+    // value set before they exist selects nothing. Resuming a return used to
+    // drop its link entirely; it was never restored here at all.
+    if (rec.linkedFolder) {
+      const linkedSel = c.querySelector('#f-linked-folder');
+      if (linkedSel) {
+        const byId = rec.linkedPurchaseId &&
+          [...linkedSel.options].find(o => o.dataset.purchaseId === rec.linkedPurchaseId);
+        if (byId) linkedSel.value = byId.value;
+        else linkedSel.value = rec.linkedFolder;
+      }
+    }
+
     setOcrStatus(c.querySelector('#ocr-status'),
       `Resuming draft ${rec.folder || ''} — submitting will update it, not create a second record.`, 'success');
   }
@@ -1426,6 +1487,14 @@ Rules:
     data.ccLast4          = cardInfo?.last4 || '';
 
     data.pettyCashEnvelopeId = resolveEnvelope(c);
+
+    // The folder number is what filing needs; the id is what makes this a link
+    // rather than a coincidence of matching strings. Folder numbers are reused
+    // by design — every return carries its original's number — so the id is
+    // the only thing that says which record this came from.
+    const linkedSel = c.querySelector('#f-linked-folder');
+    const linkedOpt = linkedSel?.selectedOptions?.[0];
+    data.linkedPurchaseId = linkedOpt?.dataset?.purchaseId || '';
 
     data.w9Attached           = (form.querySelector('#f-w9')?.files?.length ?? 0) > 0;
     data.payMethodDocAttached = (form.querySelector('#f-pay-doc')?.files?.length ?? 0) > 0;

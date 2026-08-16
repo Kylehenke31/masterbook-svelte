@@ -31,7 +31,12 @@
     chargeType       : string         (e.g. "Equipment Rental", "Catering", etc.)
     w9Attached       : boolean
     payMethodDocAttached : boolean
-    linkedFolder     : string | null  (for Returns, the original folder)
+    linkedFolder     : string | null  (for Returns, the original folder — also
+                                       becomes the return's own folder number)
+    linkedPurchaseId : string | null  (for Returns, the id of the purchase being
+                                       returned. Folder numbers are shared by a
+                                       return and its original, so the id is the
+                                       only thing that identifies which record)
     receiptUrl       : string | null
     notes            : string
     isReturn         : boolean
