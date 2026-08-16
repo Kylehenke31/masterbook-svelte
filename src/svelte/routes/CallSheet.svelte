@@ -65,6 +65,19 @@ Thank you,
      half is never an empty rectangle waiting to be earned. */
   let previewDate   = $state(null);
 
+  /* The preview is the printed document itself, not a second rendering of the
+     data — so it has to be shown at the width it was laid out for. The sheet
+     is 8.5in of 8.5px type; squeezed into a 490px pane the columns compress
+     while the type does not, and it reads as broken. It is rendered at page
+     width and scaled down instead, which is a true miniature of the page.
+     PAGE_W is 8.5in at 96dpi. */
+  const PAGE_W = 816;
+  const PAGE_H = 1056;  // 11in at 96dpi — a page is at least this tall
+  let previewStage  = $state(null);
+  let previewFrame  = $state(null);
+  let previewScale  = $state(1);
+  let previewPageH  = $state(PAGE_H);   // grows if the sheet runs past a page
+
   /* ── Derived ── */
   let activeSheet  = $derived(activeDate ? sheets[activeDate] : null);
   let savedDates   = $derived(Object.keys(sheets).sort().reverse());
@@ -79,6 +92,33 @@ Thank you,
       ? _buildSheetHTML(sheets[previewDate])
       : _buildSheetHTML(_buildDefaultSheet(dateInput || _todayStr()))
   );
+
+  /* Scale to whatever room the pane has, never above 1:1 — blowing a page up
+     past full size would show nothing more and only soften it. */
+  $effect(() => {
+    if (!previewStage) return;
+    const ro = new ResizeObserver(([entry]) => {
+      previewScale = Math.min(1, entry.contentRect.width / PAGE_W);
+    });
+    ro.observe(previewStage);
+    return () => ro.disconnect();
+  });
+
+  /* The document decides its own length — letter or legal, depending on how
+     much is on it — so the stage is sized from what actually rendered rather
+     than from an assumed page. */
+  function onPreviewLoad() {
+    try {
+      const doc = previewFrame?.contentDocument;
+      if (!doc) return;
+      // body.scrollHeight only. documentElement.scrollHeight reports the
+      // iframe's own height back, which is the height this sets — so it could
+      // only ever grow, and a long sheet followed by a short one would leave
+      // the short one padded out to the long one's length.
+      const content = doc.body?.scrollHeight || 0;
+      previewPageH = Math.max(PAGE_H, content);
+    } catch { /* same-origin srcdoc, but never let a preview break the page */ }
+  }
 
   /* Everyone the call sheet would go to. A placeholder for sending, so it is
      built from the sheet on screen rather than from a mailing list that does
@@ -843,7 +883,15 @@ ${s.notes?`<div class="notes"><span class="notes-l">NOTES</span><br>${e(s.notes)
         <!-- An iframe because the document carries its own print stylesheet;
              dropping that markup into this page would have its styles and the
              app's fighting over the same class names. -->
-        <iframe class="cs-preview-frame" title="Call sheet preview" srcdoc={previewHTML}></iframe>
+        <div class="cs-preview-stage" bind:this={previewStage}
+             style="height:{Math.round(previewPageH * previewScale)}px">
+          <iframe class="cs-preview-frame" title="Call sheet preview"
+            bind:this={previewFrame}
+            onload={onPreviewLoad}
+            srcdoc={previewHTML}
+            style="width:{PAGE_W}px; height:{previewPageH}px; transform:scale({previewScale});"
+          ></iframe>
+        </div>
       </div>
     </div>
   </section>
@@ -1366,14 +1414,21 @@ ${s.notes?`<div class="notes"><span class="notes-l">NOTES</span><br>${e(s.notes)
   }
   .cs-preview-sub { font-size: 0.75rem; color: var(--text-muted, #888); }
 
-  /* White because the document inside is a printed page; letting the app's
-     dark ground show through the margins made it read as a broken panel. */
-  .cs-preview-frame {
+  /* The stage is the sheet of paper: white, page-shaped, and clipping the
+     frame that is scaled inside it. */
+  .cs-preview-stage {
+    position: relative;
     width: 100%;
-    height: 720px;
-    border: 1px solid var(--border, #333);
+    overflow: hidden;
     background: #fff;
+    border: 1px solid var(--border, #333);
+  }
+
+  .cs-preview-frame {
+    border: 0;
     display: block;
+    background: #fff;
+    transform-origin: top left;
   }
 
   /* ── Email view: distribution ── */
@@ -1407,6 +1462,6 @@ ${s.notes?`<div class="notes"><span class="notes-l">NOTES</span><br>${e(s.notes)
   @media (max-width: 1100px) {
     .cs-split { flex-direction: column; }
     .cs-split-left { flex: 1 1 auto; width: 100%; }
-    .cs-preview-frame { height: 560px; }
+    /* The stage sizes itself from the page and the scale, so nothing to set. */
   }
 </style>
