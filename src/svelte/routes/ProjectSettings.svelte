@@ -1,7 +1,8 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
   import { getProject, saveProject, refreshProjectStore } from '../stores/project.js';
-  import { startDropboxAuth, disconnectDropbox, isDropboxConnected, provisionProjectFolders } from '../lib/dropbox.js';
+  import { startDropboxAuth, disconnectDropbox, isDropboxConnected, provisionProjectFolders,
+           dropboxOriginSupported, DROPBOX_CANONICAL_ORIGIN } from '../lib/dropbox.js';
 
   let container;
 
@@ -338,6 +339,21 @@
     const recreateBtn   = c.querySelector('#ps-dropbox-recreate');
     const disconnectBtn = c.querySelector('#ps-dropbox-disconnect');
     if (!statusEl) return;
+
+    /* Say it before the click, not after. Dropbox refuses any origin that is
+       not registered against the app, and Vercel gives every deployment its
+       own URL — so opening a build from the dashboard and pressing Connect
+       used to end on a Dropbox error page naming a host you never typed. */
+    if (!dropboxOriginSupported()) {
+      statusEl.textContent =
+        `Connect from ${DROPBOX_CANONICAL_ORIGIN} — Dropbox refuses this address (${window.location.origin}).`;
+      statusEl.classList.remove('dropbox-status--connected');
+      connectBtn?.classList.add('hidden');
+      recreateBtn?.classList.add('hidden');
+      disconnectBtn?.classList.add('hidden');
+      return;
+    }
+
     try {
       const connected = await isDropboxConnected();
       statusEl.textContent = connected ? '✔ Connected' : 'Not connected';
@@ -366,7 +382,15 @@
     });
 
     // Dropbox connection
-    c.querySelector('#ps-dropbox-connect')?.addEventListener('click', () => { startDropboxAuth(); });
+    c.querySelector('#ps-dropbox-connect')?.addEventListener('click', async () => {
+      try {
+        await startDropboxAuth();
+      } catch (e) {
+        const statusEl = c.querySelector('#ps-dropbox-status');
+        if (statusEl) statusEl.textContent = e.message;
+        else alert(e.message);
+      }
+    });
     c.querySelector('#ps-dropbox-recreate')?.addEventListener('click', async () => {
       const btn = c.querySelector('#ps-dropbox-recreate');
       const statusEl = c.querySelector('#ps-dropbox-status');

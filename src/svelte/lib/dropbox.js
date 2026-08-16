@@ -13,6 +13,28 @@
 
 const APP_KEY       = import.meta.env.VITE_DROPBOX_APP_KEY;
 const REDIRECT_URI  = window.location.origin;
+
+/* The origins registered on the Dropbox app, mirrored here so the app can say
+   why a connection will fail before sending anyone to Dropbox to find out.
+   Dropbox matches redirect_uri exactly, and this is built from
+   window.location.origin — so every host the app is reachable on has to be in
+   both lists.
+   Vercel mints a unique URL for every deployment, which is what you land on
+   from the dashboard. Those can never be registered: there is a new one each
+   deploy. Connecting from one used to hand you a Dropbox error page about a
+   redirect_uri you had never seen, which reads as the app being broken. */
+const DROPBOX_REGISTERED_ORIGINS = [
+  'https://masterbook.net',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+];
+
+export const DROPBOX_CANONICAL_ORIGIN = 'https://masterbook.net';
+
+/** Whether Dropbox will accept a connection started from this host. */
+export function dropboxOriginSupported() {
+  return DROPBOX_REGISTERED_ORIGINS.includes(window.location.origin);
+}
 const VERIFIER_KEY  = 'masterbook-dropbox-pkce-verifier';
 
 function base64url(buffer) {
@@ -33,6 +55,21 @@ async function challengeFromVerifier(verifier) {
 
 /** Kick off the connect flow — redirects the browser to Dropbox. */
 export async function startDropboxAuth() {
+  // Refuse here rather than letting Dropbox refuse. The error it returns names
+  // a redirect_uri the person never typed and offers nothing to do about it.
+  if (!dropboxOriginSupported()) {
+    throw new Error(
+      `Dropbox can only be connected from ${DROPBOX_CANONICAL_ORIGIN}. ` +
+      `This page is on ${window.location.origin}, which Dropbox will refuse — ` +
+      `open the app at ${DROPBOX_CANONICAL_ORIGIN} and connect from there.`
+    );
+  }
+  if (!APP_KEY) {
+    throw new Error(
+      'Dropbox is not configured for this deployment — VITE_DROPBOX_APP_KEY is missing. ' +
+      'Set it in the hosting environment and redeploy.'
+    );
+  }
   const verifier = randomVerifier();
   sessionStorage.setItem(VERIFIER_KEY, verifier);
   const challenge = await challengeFromVerifier(verifier);
