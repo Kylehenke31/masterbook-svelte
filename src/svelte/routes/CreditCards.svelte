@@ -82,8 +82,26 @@
 
   function onAssigneeChange() { assigneeError = false; }
 
-  /** Display name of the currently-picked person, for the folder-name preview. */
-  let assigneeName = $derived(members.find(m => m.userId === fUserId)?.displayName || '');
+  /**
+   * Last 4: digits only, four at most, enforced as it is typed.
+   *
+   * maxlength caps the length but accepts any character inside it, and
+   * inputmode is a hint to the on-screen keyboard rather than a rule — a
+   * pasted "visa" satisfied both. type="number" would reject letters but
+   * brings a spinner, accepts "e" and a leading "-", and drops a leading zero
+   * from a card ending 0412.
+   *
+   * The element's own value is written back rather than left to the binding.
+   * A rejected keystroke leaves the state exactly as it was, so there is no
+   * change for Svelte to react to and nothing to re-render — the character
+   * would sit on screen looking accepted while the state behind it disagreed.
+   */
+  function onLast4Input(e) {
+    const clean = e.currentTarget.value.replace(/\D/g, '').slice(0, 4);
+    e.currentTarget.value = clean;
+    fLast4 = clean;
+    last4Error = false;
+  }
 
   /** True when we can offer a real person picker rather than a text field. */
   let canPickMember = $derived(membersLoaded && members.length > 0);
@@ -106,6 +124,9 @@
 
     if (canPickMember && !fUserId) { assigneeError = true; ok = false; }
     if (!name) { nameError = true; ok = false; }
+    // Kept even though the field now rejects anything else as you type. This
+    // is what catches an empty or half-typed box, and it is the only check
+    // standing if the field is ever restored from saved data or reworked.
     if (!/^\d{4}$/.test(fLast4.trim())) { last4Error = true; ok = false; }
     if (!ok) return;
 
@@ -352,9 +373,7 @@
           </select>
           {#if assigneeError}<span class="cc-field-error">Choose who this card belongs to</span>{/if}
           <span class="cc-field-hint">
-            Names this card's Dropbox folder as
-            <strong>{fCardType} {fLast4 || '####'}_{assigneeName || '…'}</strong>.
-            To change the spelling, edit that person's name in their profile.
+            Assigns card to existing user, and associates the Dropbox folder to their name.
           </span>
         </div>
       {:else}
@@ -379,9 +398,10 @@
       </div>
       <div class="cc-field">
         <label for="cc-last4">Last 4 Digits</label>
+        <!-- value= rather than bind:value= on purpose — see onLast4Input. -->
         <input id="cc-last4" class="cc-input" class:cc-input--error={last4Error} type="text"
-          inputmode="numeric" maxlength="4" bind:value={fLast4} placeholder="9773"
-          oninput={() => last4Error = false} />
+          inputmode="numeric" autocomplete="off" maxlength="4" value={fLast4} placeholder="xxxx"
+          oninput={onLast4Input} />
         {#if last4Error}<span class="cc-field-error">Enter exactly 4 digits</span>{/if}
       </div>
 
