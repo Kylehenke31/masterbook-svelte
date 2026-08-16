@@ -196,6 +196,16 @@
                   </div>
                 </div>
 
+                <!-- Line Item. Directly under Vendor: the budget line a
+                     charge lands on is usually decided with the vendor in
+                     mind, and it was previously sitting past the type and the
+                     description with nothing near it. -->
+                <div class="field">
+                  <label for="f-line-item">Line Item</label>
+                  <input type="text" id="f-line-item" name="lineItem"
+                         placeholder="If known" />
+                </div>
+
                 <!-- Amount -->
                 <div class="field field--short">
                   <label for="f-amount">Amount ($) <span class="req">*</span></label>
@@ -329,36 +339,6 @@
                   <label for="f-description">Description</label>
                   <input type="text" id="f-description" name="description"
                          placeholder="Brief description (autofilled from receipt)" maxlength="120" />
-                </div>
-
-                <!-- Charge Type -->
-                <div class="field">
-                  <label for="f-charge-type">Charge Type</label>
-                  <select id="f-charge-type" name="chargeType">
-                    <option value="">Select…</option>
-                    <option>Camera Equipment</option>
-                    <option>Grip &amp; Electric</option>
-                    <option>Lab Processing</option>
-                    <option>Catering</option>
-                    <option>Props</option>
-                    <option>Wardrobe &amp; Costumes</option>
-                    <option>Art Department</option>
-                    <option>Set Construction</option>
-                    <option>Transportation</option>
-                    <option>Fuel</option>
-                    <option>Post Production</option>
-                    <option>Sound</option>
-                    <option>Locations</option>
-                    <option>Office &amp; Admin</option>
-                    <option>Other</option>
-                  </select>
-                </div>
-
-                <!-- Line Item -->
-                <div class="field">
-                  <label for="f-line-item">Line Item</label>
-                  <input type="text" id="f-line-item" name="lineItem"
-                         placeholder="e.g. 5200 – Camera Equipment" />
                 </div>
 
                 <!-- Notes -->
@@ -815,7 +795,6 @@ Extract the following fields and return as a JSON object with EXACTLY these keys
 - amount: The final GRAND TOTAL as a number (no $ sign, no commas), or null
 - method: One of "CC","PO-CC","PO","Check","Debit","ACH","Return", or null
 - ccLast4: Last 4 digits of the credit card as a string, or null
-- chargeType: Category (e.g. "Lab Processing","Camera Equipment"), or null
 - description: A clear 6–10 word summary of the core purchase, or null
 - lineItemSummary: A detailed 2–4 sentence summary of ALL line items/services.
 
@@ -852,7 +831,7 @@ Rules:
 
   /* ── OCR via Regex Fallback ── */
   function ocrViaRegex(text) {
-    const parsed = { vendor: null, date: null, amount: null, method: null, ccLast4: null, chargeType: null, description: null, lineItemSummary: null };
+    const parsed = { vendor: null, date: null, amount: null, method: null, ccLast4: null, description: null, lineItemSummary: null };
     if (!text) return parsed;
 
     const amtMatches = [...text.matchAll(/\$\s*([\d,]+(?:\.\d{2})?)/g)]
@@ -952,7 +931,7 @@ Rules:
   }
 
   function clearOcrFields(c) {
-    ['f-date','f-amount','f-description','f-charge-type','f-notes'].forEach(id => {
+    ['f-date','f-amount','f-description','f-notes'].forEach(id => {
       const el = c.querySelector('#' + id);
       if (!el) return;
       el.value = '';
@@ -989,7 +968,6 @@ Rules:
     applyVendorFromOcr(parsed.vendor, c);
     fill('f-date',        parsed.date);
     fill('f-amount',      parsed.amount);
-    fill('f-charge-type', parsed.chargeType);
     fill('f-description', parsed.description);
     fill('f-notes',       parsed.lineItemSummary);
     const guessedType = parsed.method && METHOD_TYPE_MAP[parsed.method];
@@ -1196,7 +1174,6 @@ Rules:
     set('#f-date', rec.date);
     set('#f-amount', rec.amount != null ? Math.abs(Number(rec.amount)) : '');
     set('#f-description', rec.description);
-    set('#f-charge-type', rec.chargeType);
     set('#f-line-item', rec.lineItem);
     set('#f-notes', rec.notes);
     set('#f-salesperson', rec.salesperson);
