@@ -20,26 +20,37 @@
   let csTemplate     = $state(p.callSheetTemplate || 'commercial');
   let prodNumber     = $state(p.productionNumber || '');
   let company        = $state(p.productionCompany || '');
-  let director       = $state(p.director       || '');
-  let producer       = $state(p.producer       || '');
   let startDate      = $state(p.startDate      || '');
   let wrapDate       = $state(p.wrapDate       || '');
   let fiscalYear     = $state(p.fiscalYear     || '');
-  let defaultSubmitter = $state(p.defaultSubmitter || '');
-  let defaultCcLast4   = $state(p.defaultCcLast4   || '');
-  let defaultMethod    = $state(p.defaultMethod    || 'CC');
   let dropboxPath    = $state(p.dropboxPath    || '');
   let apiKey         = $state(localStorage.getItem('anthropic-api-key') ? '••••••••••••••••' : '');
-  let notes          = $state(p.notes          || '');
-  let staff          = $state(p.staff          || []);
 
-  // ── Staff form ──────────────────────────────────────────────
-  let showStaffForm = $state(false);
-  let sfTitle = $state('');
-  let sfName  = $state('');
-  let sfEmail = $state('');
-  let sfPhone = $state('');
-  let sfNameError = $state(false);
+  /* Sections open on the appearance switch's own terms — see Project
+     Settings, which this mirrors. Setup is a form somebody is filling in for
+     the first time, so its identity section starts open. */
+  const OPEN_KEY = 'movie-ledger-psetup-open-sections';
+  let openSections = $state((() => {
+    try {
+      const raw = localStorage.getItem(OPEN_KEY);
+      const parsed = raw === null ? null : JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : ['identity'];
+    } catch { return ['identity']; }
+  })());
+
+  function onSectionToggle(key, isOpen) {
+    openSections = isOpen
+      ? [...new Set([...openSections, key])]
+      : openSections.filter(k => k !== key);
+    try { localStorage.setItem(OPEN_KEY, JSON.stringify(openSections)); } catch { /* private mode */ }
+  }
+
+  let theme = $state(document.documentElement.dataset.theme || 'dark');
+  function onThemeChange(e) {
+    theme = e.currentTarget.checked ? 'dark' : 'light';
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem('movie-ledger-theme', theme);
+  }
 
   // ── Validation / save status ────────────────────────────────
   let titleError  = $state(false);
@@ -51,22 +62,22 @@
     if (!title.trim()) { titleError = true; return; }
     titleError = false;
 
+    // Spread the stored project first. This object used to be built from the
+    // form alone and written over the top, which is fine while every field has
+    // a box and destructive the moment one does not: director, producer, the
+    // submission defaults, notes and staff no longer appear on this screen,
+    // and rebuilding without them would erase whatever a project already had
+    // the first time somebody saved an unrelated change.
     const data = {
+      ...loadProject(),
       title: title.trim(),
       budgetTemplate,
       callSheetTemplate: csTemplate,
       productionNumber: prodNumber.trim(),
       productionCompany: company.trim(),
-      director: director.trim(),
-      producer: producer.trim(),
       startDate, wrapDate,
       fiscalYear: fiscalYear.trim(),
-      defaultSubmitter: defaultSubmitter.trim(),
-      defaultCcLast4: defaultCcLast4.trim(),
-      defaultMethod,
       dropboxPath: dropboxPath.trim(),
-      notes: notes.trim(),
-      staff,
     };
     saveProject(data);
 
@@ -87,23 +98,6 @@
     window.location.reload();
   }
 
-  // ── Staff add ────────────────────────────────────────────────
-  function addStaff() {
-    if (!sfName.trim()) { sfNameError = true; return; }
-    staff = [...staff, { id: crypto.randomUUID(), title: sfTitle.trim(), name: sfName.trim(), email: sfEmail.trim(), phone: sfPhone.trim() }];
-    sfTitle = ''; sfName = ''; sfEmail = ''; sfPhone = '';
-    sfNameError = false;
-    showStaffForm = false;
-    // Persist staff immediately
-    const current = loadProject();
-    saveProject({ ...current, staff });
-  }
-
-  function removeStaff(id) {
-    staff = staff.filter(s => s.id !== id);
-    const current = loadProject();
-    saveProject({ ...current, staff });
-  }
 </script>
 
 <section class="setup-section">
@@ -112,185 +106,132 @@
       <h2>Project Setup</h2>
       <p class="setup-subtitle">Configure your production details. All settings are stored locally on this device.</p>
     </div>
+
+    <label class="ps-theme-switch" title="Switch between light and dark mode">
+      <span class="ps-theme-switch__icon" aria-hidden="true">☀</span>
+      <input type="checkbox" checked={theme === 'dark'} onchange={onThemeChange} />
+      <span class="ps-theme-switch__track"><span class="ps-theme-switch__knob"></span></span>
+      <span class="ps-theme-switch__icon" aria-hidden="true">☽</span>
+      <span class="ps-visually-hidden">Dark mode</span>
+    </label>
   </div>
 
   <form onsubmit={e => { e.preventDefault(); handleSave(); }} novalidate autocomplete="off">
 
     <!-- ── Project Identity ── -->
-    <div class="setup-card">
-      <h3 class="setup-card__title">Project Identity</h3>
-      <div class="form-grid">
+    <details class="setup-card ps-collapse" open={openSections.includes('identity')}
+      ontoggle={e => onSectionToggle('identity', e.currentTarget.open)}>
+      <summary class="setup-card__title ps-summary">
+        <span class="ps-caret" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="11" height="11">
+            <polyline points="9 18 15 12 9 6"/>
+          </svg>
+        </span>
+        Project Identity
+      </summary>
+      <div class="ps-card-body">
+        <div class="form-grid">
 
-        <div class="field field--full">
-          <label for="sp-title">Project Title <span class="req">*</span></label>
-          <input type="text" id="sp-title" bind:value={title} placeholder="Production title"
-            maxlength="100" class:invalid={titleError} oninput={() => titleError = false} />
-          {#if titleError}<span class="field-error">Project title is required.</span>{/if}
-        </div>
-
-        <div class="field">
-          <label for="sp-budget-template">Budget Type</label>
-          <select id="sp-budget-template" bind:value={budgetTemplate}>
-            <option value="commercial">Commercial</option>
-            <option value="feature">Feature/TV (coming soon)</option>
-          </select>
-        </div>
-
-        <div class="field">
-          <label for="sp-cs-template">Call Sheet Type</label>
-          <select id="sp-cs-template" bind:value={csTemplate}>
-            <option value="commercial">Commercial</option>
-            <option value="feature">Feature/TV (coming soon)</option>
-          </select>
-        </div>
-
-        <div class="field">
-          <label for="sp-number">Production Number</label>
-          <input type="text" id="sp-number" bind:value={prodNumber} placeholder="Production number or code" maxlength="30" />
-        </div>
-
-        <div class="field">
-          <label for="sp-company">Production Company</label>
-          <input type="text" id="sp-company" bind:value={company} placeholder="LLC or company name" maxlength="80" />
-        </div>
-
-        <div class="field">
-          <label for="sp-director">Director</label>
-          <input type="text" id="sp-director" bind:value={director} placeholder="Director full name" maxlength="80" />
-        </div>
-
-        <div class="field">
-          <label for="sp-producer">Producer</label>
-          <input type="text" id="sp-producer" bind:value={producer} placeholder="Producer full name" maxlength="80" />
-        </div>
-
-      </div>
-    </div>
-
-    <!-- ── Schedule ── -->
-    <div class="setup-card">
-      <h3 class="setup-card__title">Schedule</h3>
-      <div class="form-grid">
-        <div class="field">
-          <label for="sp-start">Principal Photography Start</label>
-          <input type="date" id="sp-start" bind:value={startDate} />
-        </div>
-        <div class="field">
-          <label for="sp-wrap">Estimated Wrap Date</label>
-          <input type="date" id="sp-wrap" bind:value={wrapDate} />
-        </div>
-        <div class="field">
-          <label for="sp-fiscal-year">Fiscal Year</label>
-          <input type="text" id="sp-fiscal-year" bind:value={fiscalYear} placeholder="Fiscal year range" maxlength="20" />
-        </div>
-      </div>
-    </div>
-
-    <!-- ── Staff Members ── -->
-    <div class="setup-card">
-      <h3 class="setup-card__title">Staff Members</h3>
-      <p class="setup-hint" style="margin-bottom:12px">Staff added here will be auto-imported into the Crew List.</p>
-
-      <div class="staff-list">
-        {#if staff.length === 0 && !showStaffForm}
-          <p class="staff-empty">No staff members added yet.</p>
-        {/if}
-        {#each staff as s (s.id)}
-          <div class="staff-card">
-            <div class="staff-card__info">
-              <span class="staff-card__name">{s.name || '—'}</span>
-              <span class="staff-card__title-text">{s.title || ''}</span>
-              <span class="staff-card__contact">{[s.email, s.phone].filter(Boolean).join(' · ')}</span>
-            </div>
-            <button type="button" class="btn btn--ghost btn--sm" onclick={() => removeStaff(s.id)}>Remove</button>
+          <div class="field field--full">
+            <label for="sp-title">Project Title <span class="req">*</span></label>
+            <input type="text" id="sp-title" bind:value={title} placeholder="Production title"
+              maxlength="100" class:invalid={titleError} oninput={() => titleError = false} />
+            {#if titleError}<span class="field-error">Project title is required.</span>{/if}
           </div>
-        {/each}
-      </div>
 
-      {#if !showStaffForm}
-        <button type="button" class="btn btn--ghost btn--sm" style="margin-top:10px"
-          onclick={() => showStaffForm = true}>+ Add Staff Member</button>
-      {:else}
-        <div class="staff-add-form">
-          <div class="form-grid" style="margin-top:12px">
-            <div class="field">
-              <label for="sf-title">Title / Role</label>
-              <input type="text" id="sf-title" bind:value={sfTitle} placeholder="Title or role" maxlength="80" />
-            </div>
-            <div class="field">
-              <label for="sf-name">Full Name <span class="req">*</span></label>
-              <input type="text" id="sf-name" bind:value={sfName} placeholder="Full name" maxlength="80"
-                class:invalid={sfNameError} oninput={() => sfNameError = false} />
-              {#if sfNameError}<span class="field-error">Name is required.</span>{/if}
-            </div>
-            <div class="field">
-              <label for="sf-email">Email Address</label>
-              <input type="email" id="sf-email" bind:value={sfEmail} placeholder="Email address" maxlength="120" />
-            </div>
-            <div class="field">
-              <label for="sf-phone">Phone Number</label>
-              <input type="tel" id="sf-phone" bind:value={sfPhone} placeholder="Phone number" maxlength="30" />
-            </div>
+          <div class="field">
+            <label for="sp-budget-template">Budget Type</label>
+            <select id="sp-budget-template" bind:value={budgetTemplate}>
+              <option value="commercial">Commercial</option>
+              <option value="feature">Feature/TV (coming soon)</option>
+            </select>
           </div>
-          <div class="staff-add-actions">
-            <button type="button" class="btn btn--primary btn--sm" onclick={addStaff}>Add to Staff</button>
-            <button type="button" class="btn btn--ghost btn--sm"
-              onclick={() => { showStaffForm = false; sfTitle=''; sfName=''; sfEmail=''; sfPhone=''; sfNameError=false; }}>Cancel</button>
+
+          <div class="field">
+            <label for="sp-cs-template">Call Sheet Type</label>
+            <select id="sp-cs-template" bind:value={csTemplate}>
+              <option value="commercial">Commercial</option>
+              <option value="feature">Feature/TV (coming soon)</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="sp-number">Production Number</label>
+            <input type="text" id="sp-number" bind:value={prodNumber} placeholder="Production number or code" maxlength="30" />
+          </div>
+
+          <div class="field">
+            <label for="sp-company">Production Company</label>
+            <input type="text" id="sp-company" bind:value={company} placeholder="LLC or company name" maxlength="80" />
+          </div>
+
+        </div>
+      </div>
+    </details>
+
+    <!-- ── Calendar Admin ── -->
+    <details class="setup-card ps-collapse" open={openSections.includes('schedule')}
+      ontoggle={e => onSectionToggle('schedule', e.currentTarget.open)}>
+      <summary class="setup-card__title ps-summary">
+        <span class="ps-caret" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="11" height="11">
+            <polyline points="9 18 15 12 9 6"/>
+          </svg>
+        </span>
+        Calendar Admin
+      </summary>
+      <div class="ps-card-body">
+        <div class="form-grid">
+          <div class="field">
+            <label for="sp-start">Principal Photography Start</label>
+            <input type="date" id="sp-start" bind:value={startDate} />
+          </div>
+          <div class="field">
+            <label for="sp-wrap">Estimated Wrap Date</label>
+            <input type="date" id="sp-wrap" bind:value={wrapDate} />
+          </div>
+          <div class="field">
+            <label for="sp-fiscal-year">Fiscal Year</label>
+            <input type="text" id="sp-fiscal-year" bind:value={fiscalYear} placeholder="Fiscal year range" maxlength="20" />
           </div>
         </div>
-      {/if}
-    </div>
-
-    <!-- ── Submission Defaults ── -->
-    <div class="setup-card">
-      <h3 class="setup-card__title">Submission Defaults</h3>
-      <div class="form-grid">
-        <div class="field">
-          <label for="sp-submitter">Default Submitter Name</label>
-          <input type="text" id="sp-submitter" bind:value={defaultSubmitter} placeholder="Your full name" maxlength="80" />
-          <span class="setup-hint">Used as your name on submissions and in the profile button.</span>
-        </div>
-        <div class="field">
-          <label for="sp-cc-last4">Default CC Last 4 Digits</label>
-          <input type="text" id="sp-cc-last4" bind:value={defaultCcLast4} maxlength="4" placeholder="Last 4 digits" inputmode="numeric" />
-          <span class="setup-hint">Pre-fills CC Last 4 on new submissions.</span>
-        </div>
-        <div class="field">
-          <label for="sp-default-method">Default Payment Method</label>
-          <select id="sp-default-method" bind:value={defaultMethod}>
-            {#each METHODS as m}<option value={m}>{m}</option>{/each}
-          </select>
-        </div>
       </div>
-    </div>
+    </details>
 
     <!-- ── File Storage ── -->
-    <div class="setup-card">
-      <h3 class="setup-card__title">File Storage</h3>
-      <div class="form-grid">
-        <div class="field field--full">
-          <label for="sp-dropbox">Dropbox Folder Path</label>
-          <input type="text" id="sp-dropbox" bind:value={dropboxPath} placeholder="Local Dropbox path for receipt folders" maxlength="300" />
-          <span class="setup-hint">Local Dropbox path where receipt folders are stored. Used as a reference — no cloud connection is made.</span>
-        </div>
-        <div class="field field--full">
-          <label for="sp-api-key">Anthropic API Key</label>
-          <input type="password" id="sp-api-key" bind:value={apiKey} placeholder="sk-ant-…" maxlength="200" autocomplete="off" />
-          <span class="setup-hint">Required for AI-powered receipt autofill. Stored locally in your browser only.</span>
+    <details class="setup-card ps-collapse" open={openSections.includes('storage')}
+      ontoggle={e => onSectionToggle('storage', e.currentTarget.open)}>
+      <summary class="setup-card__title ps-summary">
+        <span class="ps-caret" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="11" height="11">
+            <polyline points="9 18 15 12 9 6"/>
+          </svg>
+        </span>
+        File Storage
+      </summary>
+      <div class="ps-card-body">
+        <div class="form-grid">
+          <div class="field field--full">
+            <!-- Same mark as Project Settings. Drawn inline rather than
+                 fetched: one less request that has to succeed on the screen
+                 people open when filing is not working. -->
+            <label class="ps-label-with-mark" for="sp-dropbox">
+              <svg class="ps-dropbox-mark" viewBox="0 0 32 32" width="14" height="14" aria-hidden="true" focusable="false">
+                <path fill="#0061FF" d="M8 2 0 7.2l8 5.2 8-5.2L8 2Zm16 0-8 5.2 8 5.2 8-5.2L24 2ZM0 17.6l8 5.2 8-5.2-8-5.2-8 5.2Zm24-5.2-8 5.2 8 5.2 8-5.2-8-5.2ZM8 24.5l8 5.2 8-5.2-8-5.2-8 5.2Z"/>
+              </svg>
+              Dropbox Folder Path
+            </label>
+            <input type="text" id="sp-dropbox" bind:value={dropboxPath} placeholder="Local Dropbox path for receipt folders" maxlength="300" />
+            <span class="setup-hint">Local Dropbox path where receipt folders are stored. Used as a reference — no cloud connection is made.</span>
+          </div>
+          <div class="field field--full">
+            <label for="sp-api-key">Anthropic API Key</label>
+            <input type="password" id="sp-api-key" bind:value={apiKey} placeholder="sk-ant-…" maxlength="200" autocomplete="off" />
+            <span class="setup-hint">Required for AI-powered receipt autofill. Stored locally in your browser only.</span>
+          </div>
         </div>
       </div>
-    </div>
-
-    <!-- ── Notes ── -->
-    <div class="setup-card">
-      <h3 class="setup-card__title">Project Notes</h3>
-      <div class="form-grid">
-        <div class="field field--full">
-          <label for="sp-notes">Notes</label>
-          <textarea id="sp-notes" bind:value={notes} rows="4" placeholder="Additional notes or production reminders…"></textarea>
-        </div>
-      </div>
-    </div>
+    </details>
 
     <!-- ── Actions ── -->
     <div class="form-actions setup-actions">
@@ -307,26 +248,17 @@
 <style>
   .setup-section { max-width: 860px; }
 
-  .setup-header  { margin-bottom: 24px; }
+  /* .setup-header itself is left to styles.css — it is already flex with
+     space-between there, which is what puts the appearance switch in the
+     corner. Overriding it here with a plain block put the switch under the
+     subtitle. */
   .setup-header h2 { font-size: 1.25rem; margin-bottom: 4px; }
   .setup-subtitle  { font-size: 0.85rem; color: var(--text-muted, #888); }
 
-  .setup-card {
-    background: var(--bg-surface, #161616);
-    border: 1px solid var(--border, #2a2a2a);
-    border-radius: 0;
-    padding: 20px;
-    margin-bottom: 16px;
-  }
-
-  .setup-card__title {
-    font-size: 0.8rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--text-muted, #888);
-    margin-bottom: 16px;
-  }
+  /* .setup-card and .setup-card__title come from styles.css, along with the
+     .ps-collapse rules that strip the scrim and turn the title into a
+     disclosure header. Redeclaring them here matched that specificity and
+     left which one won down to stylesheet order. */
 
   .setup-hint {
     font-size: 0.75rem;
@@ -355,8 +287,7 @@
   .req { color: var(--earth-red, #b84f4f); }
 
   .field input,
-  .field select,
-  .field textarea {
+  .field select {
     background: var(--bg-elevated, #1e1e1e);
     border: 1px solid var(--border, #333);
     border-radius: 0;
@@ -368,37 +299,14 @@
   }
 
   .field input:focus,
-  .field select:focus,
-  .field textarea:focus { outline: none; border-color: var(--gold, #6a8a6a); }
+  .field select:focus { outline: none; border-color: var(--accent); }
 
-  .field input.invalid,
-  .field select.invalid { border-color: var(--earth-red, #b84f4f); }
+  .field input.invalid { border-color: var(--earth-red, #b84f4f); }
 
   .field-error { font-size: 0.75rem; color: var(--earth-red, #b84f4f); }
 
-  .field textarea { resize: vertical; }
 
   /* Staff */
-  .staff-list    { display: flex; flex-direction: column; gap: 8px; }
-  .staff-empty   { font-size: 0.85rem; color: var(--text-muted, #888); }
-
-  .staff-card {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background: var(--bg-elevated, #1e1e1e);
-    border: 1px solid var(--border, #2a2a2a);
-    border-radius: 0;
-    padding: 10px 12px;
-  }
-
-  .staff-card__info  { display: flex; flex-direction: column; gap: 2px; }
-  .staff-card__name  { font-size: 0.875rem; font-weight: 500; }
-  .staff-card__title-text { font-size: 0.8rem; color: var(--text-muted, #888); }
-  .staff-card__contact    { font-size: 0.75rem; color: var(--text-muted, #666); }
-
-  .staff-add-form { margin-top: 12px; }
-  .staff-add-actions { display: flex; gap: 8px; margin-top: 12px; }
 
   /* Actions */
   .form-actions {
@@ -409,5 +317,5 @@
   }
 
   .setup-save-group { display: flex; align-items: center; gap: 12px; }
-  .setup-save-status { font-size: 0.85rem; color: var(--gold, #6a8a6a); }
+  .setup-save-status { font-size: 0.85rem; color: var(--accent); }
 </style>

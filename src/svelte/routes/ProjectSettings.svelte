@@ -155,12 +155,12 @@
           </div>
         </details>
 
-          <!-- ── Project Access ──
+          <!-- ── Invites & Permissions ──
                The only people-list left on this screen. A Staff Members
                section used to sit below it holding a second, loginless roster
                that fed the Crew List — two forms for "who is on this job",
                neither of which was the Crew List itself. -->
-          ${sec('access', 'Project Access')}
+          ${sec('access', 'Invites & Permissions')}
             <p class="setup-hint" style="margin-bottom:12px">
               Who can sign in to this production, and what each person can reach.
               Separate from the Crew List — invite only the people who need an account.
