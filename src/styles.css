@@ -7152,14 +7152,15 @@ tr:hover .cse-row-del { opacity: 0.6; }
 
 .pm-row-caret { opacity: 0.75; }
 
-/* The open project's caret, in the gold the app used before the accent moved
-   to blue. It is the one thing on this menu that is not a destination but a
-   statement of where you already are, so it is deliberately not the accent —
-   a blue caret among blue accents says nothing. Literal rather than a token:
-   naming a colour for its hue is what made the last change tedious, and this
-   is the only place it is used. */
+/* The open project's caret, in the red from the mark at the top of this
+   screen — sampled from the logo itself rather than guessed at.
+   Deliberately not the accent: this is the one item on the menu that is not a
+   destination but a statement of where you already are, and a blue caret
+   among blue accents says nothing. The gold that was here first sat at the
+   same mid lightness as the sky behind it and disappeared into it; this is
+   dark against a bright photograph, which is what makes it legible. */
 .pm-open-project .pm-row-caret {
-  color: #c9a84c;
+  color: #672121;
   opacity: 1;
 }
 
