@@ -7337,3 +7337,15 @@ tr:hover .cse-row-del { opacity: 0.6; }
 .bsp-name { flex: 1 1 auto; }
 
 .bsp-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+
+/* A textarea that starts at one line and grows with its content.
+   Scoped through .field so it beats `.field textarea { min-height: 80px }`
+   above, which is the same specificity and would otherwise win on order —
+   that rule is what pinned this to 80px whatever the content. resize stays
+   on: the cap is a starting point, not a rule about how much room anyone is
+   allowed. */
+.field textarea.field-autogrow {
+  min-height: 34px;
+  max-height: 220px;
+  overflow-y: auto;
+}

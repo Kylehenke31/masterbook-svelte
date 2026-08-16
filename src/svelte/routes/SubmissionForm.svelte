@@ -61,6 +61,15 @@
     return getType(c) === 'Purchase Order' && !!c.querySelector('#f-is-quote')?.checked;
   }
 
+  /* Grow a one-line textarea to whatever is in it. Called on typing and after
+     every programmatic write — the scan fills Notes in, and a box that stayed
+     one line would hide most of what it had just been given. */
+  function autogrow(el) {
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = el.scrollHeight + 'px';
+  }
+
   function esc(s) {
     return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
   }
@@ -355,8 +364,12 @@
                 <!-- Notes -->
                 <div class="field field--full">
                   <label for="f-notes">Notes</label>
-                  <textarea id="f-notes" name="notes" rows="3"
-                            placeholder="Autofilled with line-item summary from receipt…"></textarea>
+                  <!-- One line to start. It is usually empty or a sentence, and
+                       three rows of dark box was the largest thing on the form
+                       reserved for the least-used field. It grows to fit as
+                       soon as there is more than a line in it — including when
+                       the receipt scan fills it in. -->
+                  <textarea id="f-notes" name="notes" rows="1" class="field-autogrow"></textarea>
                 </div>
 
                 <!-- Supporting Documents -->
@@ -944,6 +957,7 @@ Rules:
       if (!el) return;
       el.value = '';
       el.classList.remove('ocr-filled','invalid');
+      if (el.classList.contains('field-autogrow')) autogrow(el);
     });
     // Reset vendor picker
     const vendorSel = c.querySelector('#f-vendor-select');
@@ -970,6 +984,7 @@ Rules:
       if (!el) return;
       el.value = (id === 'f-amount') ? Number(value).toFixed(2) : String(value);
       el.classList.add('ocr-filled');
+      if (el.classList.contains('field-autogrow')) autogrow(el);
     }
     applyVendorFromOcr(parsed.vendor, c);
     fill('f-date',        parsed.date);
@@ -1172,7 +1187,12 @@ Rules:
     }
     resumingId = id;
 
-    const set = (sel, val) => { const el = c.querySelector(sel); if (el && val != null) el.value = val; };
+    const set = (sel, val) => {
+      const el = c.querySelector(sel);
+      if (!el || val == null) return;
+      el.value = val;
+      if (el.classList.contains('field-autogrow')) autogrow(el);
+    };
     set('#f-date', rec.date);
     set('#f-amount', rec.amount != null ? Math.abs(Number(rec.amount)) : '');
     set('#f-description', rec.description);
@@ -1580,6 +1600,11 @@ Rules:
     const form     = c.querySelector('#sub-form');
     const fileInput = c.querySelector('#f-receipt');
     const vendorSel = c.querySelector('#f-vendor-select');
+
+    c.querySelectorAll('.field-autogrow').forEach(el => {
+      autogrow(el);
+      el.addEventListener('input', () => autogrow(el));
+    });
 
     fileInput.addEventListener('change', () => handleFile(fileInput, c));
     c.querySelectorAll('input[name="type"]').forEach(r =>
