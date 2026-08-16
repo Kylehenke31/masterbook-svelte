@@ -163,9 +163,11 @@
 
   /* ── Ledgers dropdown ── */
   let showLedgersDropdown = $state(false);
+  // My Book and the expense log used to live in here. Both are places people
+  // go constantly — one is your own book, the other is every expense on the
+  // production — and putting them behind a disclosure meant two clicks for the
+  // two most-visited screens. They are rows of their own now.
   const LEDGERS_ROUTES = [
-    { id: 'my-book',       label: 'My Book' },
-    { id: 'log',           label: 'All Expenses' },
     { id: 'po-log',        label: 'Purchase Orders' },
     { id: 'credit-cards',  label: 'Credit Cards' },
     { id: 'petty-cash',    label: 'Petty Cash' },
@@ -359,7 +361,7 @@
     if (['schedules','breakdowns','one-liner','script-order','shooting-schedule',
          'elements-report','day-out-of-days'].includes(r)) return 'schedules';
     if (['budget','budget-lines','hot-costs','budget-drafts'].includes(r)) return 'budget';
-    if (['log','po-log','credit-cards','petty-cash'].includes(r)) return 'ledgers';
+    if (['po-log','credit-cards','petty-cash'].includes(r)) return 'ledgers';
     if (r.startsWith('creative')) return 'creative';
     if (r === 'call-sheet') return 'callsheet';
     if (r === 'vendors') return 'vendors';
@@ -586,6 +588,13 @@
     <div class="macro-sidebar-divider"></div>
 
     <!-- Second section: plain-text "folder" list, no icons -->
+    {#if mayAccess('log')}
+    <button class="macro-btn macro-btn--text" class:macro-active={route === 'log'}
+      onclick={() => { window.location.hash = '#log'; }}>
+      <span class="macro-label">Expense Log</span>
+    </button>
+    {/if}
+
     <div class="ledgers-wrap">
       {#if showLedgersDropdown}
         <div class="ledgers-dropdown" role="menu">
@@ -620,6 +629,16 @@
       onclick={() => { window.location.hash = '#vendors'; }}>
       <span class="macro-label">Vendors</span>
     </button>
+
+    <!-- Your own book, kept apart from the production-wide lists above it.
+         Everything else on this sidebar is the whole job; this one is yours. -->
+    {#if mayAccess('my-book')}
+    <div class="macro-sidebar-divider"></div>
+    <button class="macro-btn macro-btn--text" class:macro-active={route === 'my-book'}
+      onclick={() => { window.location.hash = '#my-book'; }}>
+      <span class="macro-label">My Book</span>
+    </button>
+    {/if}
 
   </div>
 
@@ -743,6 +762,24 @@
         </button>
       </div>
 
+      <!-- Project settings. This was the project's full name spelled across
+           the bottom of the sidebar, which set the width of the whole column
+           for the sake of a label nobody needed to read — the name is already
+           on the screen you land on, and in the menu above. As an icon it
+           sits with the other two things you reach for rather than under
+           them. Hidden on the project menu, where there is no project to
+           configure. -->
+      {#if !onProjectMenu}
+        <button class="sidebar-icon-btn" aria-label={_headerTitle()} title={_headerTitle()}
+          onclick={() => { window.location.hash = _headerTarget(); }}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+        </button>
+      {/if}
+
       <!-- Chat trigger (panel rendered by <Chat> below, outside the aside) -->
       {#if _hasProject()}
         <button class="chat-trigger-btn" aria-label="Project chat" title="Project Chat"
@@ -757,16 +794,6 @@
       {/if}
     </div>
 
-    <!-- Project title → settings or initial setup. Hidden on the project menu,
-         where there is no project yet to name or configure. -->
-    {#if !onProjectMenu}
-    <button
-      class="header-project-title"
-      class:has-project={_hasProject()}
-      title={_headerTitle()}
-      onclick={() => { window.location.hash = _headerTarget(); }}
-    >{_headerTitle()}</button>
-    {/if}
   </div>
   {/if}
 </aside>
@@ -894,7 +921,7 @@
     display: flex;
     flex-direction: column;
     min-height: 100vh;
-    margin-left: 200px;
+    margin-left: 168px;
     transition: margin-left 0.16s ease;
   }
 
@@ -981,30 +1008,26 @@
     line-height: 1;
   }
 
-  /* Project title / settings button */
-  .header-project-title {
-    width: calc(100% - 16px);
-    margin: 0 8px;
-    font-size: 0.72rem;
-    color: var(--text-muted, #888);
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 6px 4px;
+  /* Settings gear — same 32px square as the profile and chat buttons beside
+     it, so the three read as one row of controls rather than three sizes. */
+  .sidebar-icon-btn {
+    width: 32px;
+    height: 32px;
     border-radius: 0;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    text-align: center;
-    transition: color 0.15s, background 0.15s;
-  }
-
-  .header-project-title:hover {
     background: var(--bg-elevated, #2a2a2a);
+    border: 1px solid var(--border, #333);
+    color: var(--text-primary, #eee);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: background 0.15s, border-color 0.15s;
   }
 
-  .header-project-title.has-project {
-    color: var(--text-primary, #eee);
+  .sidebar-icon-btn:hover {
+    background: var(--bg-hover, #333);
+    border-color: var(--accent);
   }
 
   /* Profile wrap + button */

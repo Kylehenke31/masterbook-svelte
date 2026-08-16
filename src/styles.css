@@ -3637,7 +3637,10 @@ textarea {
   left: 0;
   top: 0;
   bottom: 0;
-  width: 200px;
+  /* 168px, down from 200. The widest thing in this column used to be the
+     project's full name spelled across the bottom; that is a gear now, and
+     nothing left in here needs the extra 32px. */
+  width: 168px;
   background: var(--bg-surface);
   border-right: 1px solid var(--border);
   display: flex;
