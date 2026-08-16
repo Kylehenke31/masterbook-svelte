@@ -641,9 +641,16 @@
     {/if}
 
   </div>
+  {/if}
 
-  <!-- Bottom of sidebar: profile + chat trigger, then project settings -->
-  <div class="macro-sidebar-bottom">
+  <!-- Always rendered, outside the gate above. The account button is how you
+       reach your account, the project list and sign-out, and it used to
+       disappear in the two places people most need it: on the project menu,
+       where the sidebar is stripped to leave the photograph alone, and
+       whenever the sidebar was collapsed. The gear and chat inside it are
+       still hidden on the menu — there is no project there to configure or
+       talk about — so what remains is the account button on its own. -->
+  <div class="macro-sidebar-bottom" class:macro-sidebar-bottom--bare={onProjectMenu}>
     {#if cloudSyncing}
       <span class="cloud-sync-indicator" title="Syncing with cloud…">
         <svg class="spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
@@ -780,8 +787,10 @@
         </button>
       {/if}
 
-      <!-- Chat trigger (panel rendered by <Chat> below, outside the aside) -->
-      {#if _hasProject()}
+      <!-- Chat trigger (panel rendered by <Chat> below, outside the aside).
+           Not on the project menu: the chat belongs to a project, and you are
+           between projects there even when one is still open behind you. -->
+      {#if _hasProject() && !onProjectMenu}
         <button class="chat-trigger-btn" aria-label="Project chat" title="Project Chat"
           onclick={() => { chatOpen = !chatOpen; }}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="16" height="16">
@@ -795,7 +804,6 @@
     </div>
 
   </div>
-  {/if}
 </aside>
 
 <div class="app-shell"
@@ -959,6 +967,20 @@
     width: 100%;
     padding-top: 8px;
     border-top: 1px solid var(--border, #333);
+    /* Holds the foot of the column. It used to be the last thing after a
+       nav list that filled the space; now that it renders on its own — with
+       the sidebar collapsed, and on the project menu — nothing pushes it
+       down, and it rode up under the logo. */
+    margin-top: auto;
+  }
+
+  /* On the project menu there is no sidebar to sit at the foot of — the panel
+     is transparent and bottom-anchored so this floats over the photograph.
+     A rule across the top of it would be a line drawn on the picture. */
+  .macro-sidebar-bottom--bare {
+    border-top: none;
+    padding: 12px;
+    width: auto;
   }
 
   .sidebar-bottom-row {
@@ -966,6 +988,12 @@
     align-items: center;
     justify-content: center;
     gap: 8px;
+  }
+
+  /* Three 32px buttons need ~112px; the collapsed column is 44px, so they
+     stack instead of running off the edge of it. */
+  .macro-sidebar--collapsed .sidebar-bottom-row {
+    flex-direction: column;
   }
 
   /* Chat trigger button — square, sits next to the profile button */
