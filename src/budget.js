@@ -38,7 +38,35 @@ function _addHotEntry(entry) {
 }
 
 function _loadProdInfo() {
-  try { return JSON.parse(localStorage.getItem(PROD_INFO_KEY)) || {}; } catch { return {}; }
+  let info = {};
+  try { info = JSON.parse(localStorage.getItem(PROD_INFO_KEY)) || {}; } catch { info = {}; }
+
+  // Production Name, Job Name and Job Number were typed again here, next to a
+  // Project Identity already holding the same two facts, and nothing kept the
+  // two copies agreeing. The duplicates are gone from the form; the documents
+  // built from this read the identity instead, so a top sheet still prints a
+  // title and a number without anyone entering them twice.
+  //
+  // Director and Producer are here for the opposite reason: the top sheet has
+  // always asked this object for them, and this object has never had them.
+  // Those rows printed blank on every budget ever exported. They live on the
+  // project, so that is where they now come from.
+  //
+  // Anything already stored wins. A project that filled these in before keeps
+  // exactly what it had rather than being quietly overwritten by the identity.
+  // The result is not written back — this is a read-time fallback, so nothing
+  // here turns into saved data.
+  let proj = {};
+  try { proj = JSON.parse(localStorage.getItem('movie-ledger-project')) || {}; } catch { proj = {}; }
+
+  return {
+    ...info,
+    productionName: info.productionName || proj.title            || '',
+    jobName:        info.jobName        || proj.title            || '',
+    jobNumber:      info.jobNumber      || proj.productionNumber || '',
+    director:       info.director       || proj.director         || '',
+    producer:       info.producer       || proj.producer         || '',
+  };
 }
 function _saveProdInfo(data) {
   localStorage.setItem(PROD_INFO_KEY, JSON.stringify(data));

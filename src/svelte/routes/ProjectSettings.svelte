@@ -46,17 +46,6 @@
       .replace(/"/g, '&quot;');
   }
 
-  function _settingsStaffCard(s) {
-    return `
-      <div class="staff-card" data-staff-id="${_esc(s.id)}">
-        <div class="staff-card__info">
-          <span class="staff-card__name">${_esc(s.name || '—')}</span>
-          <span class="staff-card__title">${_esc(s.title || '')}</span>
-          <span class="staff-card__contact">${[s.email, s.phone].filter(Boolean).map(_esc).join(' · ')}</span>
-        </div>
-        <button type="button" class="btn btn--ghost btn--sm staff-remove-btn" data-staff-id="${_esc(s.id)}">Remove</button>
-      </div>`;
-  }
 
   function _render() {
     if (!container) return;
@@ -66,11 +55,6 @@
 
     const v  = (key, fb = '') => _esc(project[key] ?? fb);
     const pv = (key, fb = '') => _esc(prodInfo[key] ?? fb);
-    const staff = project.staff ?? [];
-    const staffHTML = staff.length > 0
-      ? staff.map(s => _settingsStaffCard(s)).join('')
-      : '<p class="staff-empty">No staff members added yet.</p>';
-
     const theme = document.documentElement.dataset.theme || 'dark';
 
     // Emits the open attribute for a section, and the header that toggles it.
@@ -94,6 +78,20 @@
             <h2>Project Settings</h2>
             <p class="setup-subtitle">Manage your production. Locked fields were set during project creation.</p>
           </div>
+
+          <!-- Appearance was a section of its own for a single switch. It is a
+               preference about the app rather than a setting of the
+               production, so it sits in the corner as a switch instead of
+               taking a ninth of the page. A real checkbox underneath, so it is
+               reachable by keyboard and announced as on or off; the track and
+               knob are drawn from it. -->
+          <label class="ps-theme-switch" title="Switch between light and dark mode">
+            <span class="ps-theme-switch__icon" aria-hidden="true">☀</span>
+            <input type="checkbox" id="ps-theme-toggle" ${theme === 'dark' ? 'checked' : ''} />
+            <span class="ps-theme-switch__track"><span class="ps-theme-switch__knob"></span></span>
+            <span class="ps-theme-switch__icon" aria-hidden="true">☽</span>
+            <span class="ps-visually-hidden">Dark mode</span>
+          </label>
         </div>
 
         <form id="settings-form" novalidate autocomplete="off">
@@ -121,20 +119,12 @@
                 <label for="ps-company">Production Company</label>
                 <input type="text" id="ps-company" name="productionCompany" value="${v('productionCompany')}" placeholder="LLC or company name" maxlength="80" />
               </div>
-              <div class="field">
-                <label for="ps-director">Director</label>
-                <input type="text" id="ps-director" name="director" value="${v('director')}" placeholder="Director full name" maxlength="80" />
-              </div>
-              <div class="field">
-                <label for="ps-producer">Producer</label>
-                <input type="text" id="ps-producer" name="producer" value="${v('producer')}" placeholder="Producer full name" maxlength="80" />
-              </div>
             </div>
           </div>
         </details>
 
-          <!-- ── Schedule ── -->
-          ${sec('schedule', 'Schedule')}
+          <!-- ── Calendar Admin ── -->
+          ${sec('schedule', 'Calendar Admin')}
             <div class="form-grid">
               <div class="field">
                 <label for="ps-start">Principal Photography Start</label>
@@ -158,18 +148,18 @@
           </div>
         </details>
 
-          <!-- ── Production Info ── -->
-          ${sec('prodinfo', 'Production Info')}
+          <!-- ── Top Sheet Info ── -->
+          ${sec('prodinfo', 'Top Sheet Info')}
             <p class="setup-hint" style="margin-bottom:12px">Used by the Budget Top Sheet, Hot Costs, and Call Sheets.</p>
             <div id="ps-prod-info-fields"></div>
           </div>
         </details>
 
           <!-- ── Project Access ──
-               Distinct from Staff Members below: that is a contact list which
-               feeds the Crew List, this is who holds a login. Most crew never
-               need an account, and everyone who does needs a permission
-               decision, so they are not the same form. -->
+               The only people-list left on this screen. A Staff Members
+               section used to sit below it holding a second, loginless roster
+               that fed the Crew List — two forms for "who is on this job",
+               neither of which was the Crew List itself. -->
           ${sec('access', 'Project Access')}
             <p class="setup-hint" style="margin-bottom:12px">
               Who can sign in to this production, and what each person can reach.
@@ -181,67 +171,8 @@
           </div>
         </details>
 
-          <!-- ── Staff Members ── -->
-          ${sec('staff', 'Staff Members')}
-            <p class="setup-hint" style="margin-bottom:12px">Staff added here will be auto-imported into the Crew List. This does not give them a login.</p>
-            <div class="staff-list" id="ps-staff-list">${staffHTML}</div>
-            <button type="button" class="btn btn--ghost btn--sm" id="ps-btn-add-staff" style="margin-top:10px">
-              + Add Staff Member
-            </button>
-            <div class="staff-add-form hidden" id="ps-staff-add-form">
-              <div class="form-grid" style="margin-top:12px">
-                <div class="field">
-                  <label for="ps-sf-title">Title / Role</label>
-                  <input type="text" id="ps-sf-title" placeholder="Title or role" maxlength="80" />
-                </div>
-                <div class="field">
-                  <label for="ps-sf-name">Full Name <span class="req">*</span></label>
-                  <input type="text" id="ps-sf-name" placeholder="Full name" maxlength="80" />
-                </div>
-                <div class="field">
-                  <label for="ps-sf-email">Email Address</label>
-                  <input type="email" id="ps-sf-email" placeholder="Email address" maxlength="120" />
-                </div>
-                <div class="field">
-                  <label for="ps-sf-phone">Phone Number</label>
-                  <input type="tel" id="ps-sf-phone" placeholder="Phone number" maxlength="30" />
-                </div>
-              </div>
-              <div class="staff-add-actions">
-                <button type="button" class="btn btn--primary btn--sm" id="ps-btn-staff-confirm">Add to Staff</button>
-                <button type="button" class="btn btn--ghost btn--sm" id="ps-btn-staff-cancel">Cancel</button>
-              </div>
-            </div>
-          </div>
-        </details>
-
-          <!-- ── Submission Defaults ── -->
-          ${sec('submission', 'Submission Defaults')}
-            <div class="form-grid">
-              <div class="field">
-                <label for="ps-submitter">Default Submitter Name</label>
-                <input type="text" id="ps-submitter" name="defaultSubmitter" value="${v('defaultSubmitter')}"
-                  placeholder="Your full name" maxlength="80" />
-                <span class="setup-hint">Used as your name on submissions and in the profile button.</span>
-              </div>
-              <div class="field">
-                <label for="ps-cc-last4">Default CC Last 4 Digits</label>
-                <input type="text" id="ps-cc-last4" name="defaultCcLast4" value="${v('defaultCcLast4')}"
-                  maxlength="4" pattern="[0-9]{4}" placeholder="Last 4 digits" inputmode="numeric" />
-                <span class="setup-hint">Pre-fills CC Last 4 on new submissions.</span>
-              </div>
-              <div class="field">
-                <label for="ps-default-method">Default Payment Method</label>
-                <select id="ps-default-method" name="defaultMethod">
-                  ${['CC','PO-CC','PO','Check','Debit','ACH','Return'].map(m =>
-                    `<option value="${m}"${project.defaultMethod === m ? ' selected' : ''}>${m}</option>`
-                  ).join('')}
-                </select>
-              </div>
-            </div>
-          </div>
-        </details>
-
+          
+          
           <!-- ── File Storage ── -->
           ${sec('storage', 'File Storage')}
             <div class="form-grid">
@@ -252,7 +183,16 @@
                 <span class="setup-hint">Local Dropbox path where receipt folders are stored. Used as a reference only.</span>
               </div>
               <div class="field field--full">
-                <label>Dropbox Connection</label>
+                <!-- The Dropbox mark, drawn inline rather than fetched: four
+                     parallelograms meeting at a point. An <img> would be one
+                     more request that has to succeed, and this screen is
+                     exactly where someone looks when Dropbox is not working. -->
+                <label class="ps-label-with-mark">
+                  <svg class="ps-dropbox-mark" viewBox="0 0 32 32" width="14" height="14" aria-hidden="true" focusable="false">
+                    <path fill="#0061FF" d="M8 2 0 7.2l8 5.2 8-5.2L8 2Zm16 0-8 5.2 8 5.2 8-5.2L24 2ZM0 17.6l8 5.2 8-5.2-8-5.2-8 5.2Zm24-5.2-8 5.2 8 5.2 8-5.2-8-5.2ZM8 24.5l8 5.2 8-5.2-8-5.2-8 5.2Z"/>
+                  </svg>
+                  Dropbox Connection
+                </label>
                 <div class="dropbox-connect-row">
                   <span id="ps-dropbox-status" class="dropbox-status">Checking connection…</span>
                   <button type="button" id="ps-dropbox-connect" class="btn btn--primary btn--sm hidden">Connect Dropbox</button>
@@ -272,30 +212,8 @@
           </div>
         </details>
 
-          <!-- ── Notes ── -->
-          ${sec('notes', 'Project Notes')}
-            <div class="form-grid">
-              <div class="field field--full">
-                <label for="ps-notes">Notes</label>
-                <textarea id="ps-notes" name="notes" rows="4"
-                  placeholder="Additional notes or production reminders…">${v('notes')}</textarea>
-              </div>
-            </div>
-          </div>
-        </details>
-
-          <!-- ── Appearance ── -->
-          ${sec('appearance', 'Appearance')}
-            <div style="display:flex;align-items:center;gap:12px;padding:4px 0;">
-              <button type="button" id="ps-theme-toggle" class="btn btn--ghost btn--sm ps-theme-btn">
-                <span class="ps-theme-icon">${theme === 'dark' ? '☽' : '☀'}</span>
-                <span class="ps-theme-label">${theme === 'dark' ? 'Dark Mode' : 'Light Mode'}</span>
-              </button>
-              <span class="setup-hint" style="margin:0;">Click to switch between light and dark mode.</span>
-            </div>
-          </div>
-        </details>
-
+          
+          
           <!-- ── Actions ── -->
           <div class="form-actions setup-actions">
             <button type="button" id="ps-btn-back" class="btn btn--ghost">← Back to Project</button>
@@ -342,11 +260,6 @@
           ${piLogoSlot('agencyLogo', 'Agency', 'pi-logo-agency')}
           ${piLogoSlot('prodCoLogo', 'Production Co.', 'pi-logo-prodco')}
         </div>
-      `)}
-      ${piSection('Project', `
-        ${piF('productionName', 'Production Name', 'Enter production name…')}
-        ${piF('jobName', 'Job Name', 'Enter job name…')}
-        ${piF('jobNumber', 'Job Number', 'e.g. 2025-001')}
       `)}
       ${piSection('Production Company', `
         ${piF('prodCoName', 'Company Name', 'Company name')}
@@ -447,18 +360,13 @@
   function _wire(c) {
     const form = c.querySelector('#settings-form');
 
-    // Theme toggle
-    c.querySelector('#ps-theme-toggle')?.addEventListener('click', () => {
-      const html = document.documentElement;
-      const next = html.dataset.theme === 'dark' ? 'light' : 'dark';
-      html.dataset.theme = next;
+    // Theme switch. A checkbox now, so the state is the control's own — the
+    // knob follows :checked in CSS and there is no label to keep in step.
+    // 'change' rather than 'click' so the keyboard reaches it too.
+    c.querySelector('#ps-theme-toggle')?.addEventListener('change', e => {
+      const next = e.currentTarget.checked ? 'dark' : 'light';
+      document.documentElement.dataset.theme = next;
       localStorage.setItem('movie-ledger-theme', next);
-      // Update button label in-place
-      const btn = c.querySelector('#ps-theme-toggle');
-      if (btn) {
-        btn.querySelector('.ps-theme-icon').textContent = next === 'dark' ? '☽' : '☀';
-        btn.querySelector('.ps-theme-label').textContent = next === 'dark' ? 'Dark Mode' : 'Light Mode';
-      }
     });
 
     // Back button
@@ -493,45 +401,9 @@
     });
     _refreshDropboxStatus(c);
 
-    // Staff: show add form
-    c.querySelector('#ps-btn-add-staff')?.addEventListener('click', () => {
-      c.querySelector('#ps-staff-add-form')?.classList.remove('hidden');
-      c.querySelector('#ps-sf-name')?.focus();
-    });
-
-    c.querySelector('#ps-btn-staff-cancel')?.addEventListener('click', () => {
-      _resetStaffForm(c);
-    });
-
     c.querySelector('#ps-btn-access')?.addEventListener('click', () => {
       window.location.hash = '#members';
     });
-
-    c.querySelector('#ps-btn-staff-confirm')?.addEventListener('click', () => {
-      const nameEl = c.querySelector('#ps-sf-name');
-      if (!nameEl?.value.trim()) { nameEl?.focus(); return; }
-
-      const newMember = {
-        id:    crypto.randomUUID(),
-        title: c.querySelector('#ps-sf-title')?.value.trim() || '',
-        name:  nameEl.value.trim(),
-        email: c.querySelector('#ps-sf-email')?.value.trim() || '',
-        phone: c.querySelector('#ps-sf-phone')?.value.trim() || '',
-      };
-
-      const current = getProject() ?? {};
-      current.staff = current.staff ?? [];
-      current.staff.push(newMember);
-      saveProject(current);
-
-      const list = c.querySelector('#ps-staff-list');
-      list?.querySelector('.staff-empty')?.remove();
-      list?.insertAdjacentHTML('beforeend', _settingsStaffCard(newMember));
-      _resetStaffForm(c);
-      _wireStaffRemove(c);
-    });
-
-    _wireStaffRemove(c);
 
     // Remember which sections are open. Read from the DOM on every toggle
     // rather than tracking a running list, so the stored state is whatever is
@@ -566,6 +438,19 @@
       data.callSheetTemplate = current.callSheetTemplate;
       data._createdAt        = current._createdAt;
       data.staff             = current.staff ?? [];
+
+      // Fields that no longer have an input on this screen. This object is
+      // rebuilt from the form on every save, so anything without a field is
+      // dropped — removing the Director box would not just stop you editing
+      // the director, it would erase the one already stored the next time
+      // somebody saved an unrelated setting. They are still set during project
+      // creation, and still read: director and producer print on Hot Costs and
+      // the budget top sheet, and defaultSubmitter is the name and initials on
+      // the profile button.
+      for (const key of ['director', 'producer', 'defaultSubmitter',
+                         'defaultCcLast4', 'defaultMethod', 'notes']) {
+        if (current[key] !== undefined) data[key] = current[key];
+      }
       if (current._archived)   data._archived   = current._archived;
       if (current._archivedAt) data._archivedAt = current._archivedAt;
 
@@ -593,34 +478,9 @@
     });
   }
 
-  function _wireStaffRemove(c) {
-    // De-dupe listeners by replacing nodes first
-    c.querySelectorAll('#ps-staff-list .staff-remove-btn').forEach(btn => {
-      const clone = btn.cloneNode(true);
-      btn.replaceWith(clone);
-    });
-    c.querySelectorAll('#ps-staff-list .staff-remove-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const id      = btn.dataset.staffId;
-        const current = getProject() ?? {};
-        current.staff = (current.staff ?? []).filter(s => s.id !== id);
-        saveProject(current);
-        btn.closest('.staff-card')?.remove();
-        const list = c.querySelector('#ps-staff-list');
-        if (list && !list.querySelector('.staff-card')) {
-          list.insertAdjacentHTML('beforeend', '<p class="staff-empty">No staff members added yet.</p>');
-        }
-      });
-    });
-  }
 
-  function _resetStaffForm(c) {
-    ['#ps-sf-title','#ps-sf-name','#ps-sf-email','#ps-sf-phone'].forEach(sel => {
-      const el = c.querySelector(sel);
-      if (el) el.value = '';
-    });
-    c.querySelector('#ps-staff-add-form')?.classList.add('hidden');
-  }
+
+
 
   onMount(() => {
     _render();

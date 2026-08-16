@@ -367,23 +367,6 @@ a:hover {
   background: var(--bg-elevated);
 }
 
-/* Settings theme toggle */
-.ps-theme-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-}
-.ps-theme-icon {
-  font-size: 18px;
-  line-height: 1;
-  color: var(--text-primary);
-}
-.ps-theme-label {
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
 /* Profile button */
 .btn--profile {
   padding: 0;
@@ -1434,7 +1417,19 @@ a:hover {
    Only .ps-collapse is affected. Project Setup uses the same .setup-card for
    an h3 that is not a control, and must keep the border and spacing the plain
    .setup-card__title gives it. */
-.setup-card.ps-collapse { padding: 0; }
+/* No card behind them. Nine panels each with its own surface and border made
+   a settings page look like a dashboard; without the scrim the headers read as
+   what they are, a list of things you can open. A single rule between rows is
+   all the separation a list needs — the last one has none, so the page ends
+   rather than trailing off into an empty divider. */
+.setup-card.ps-collapse {
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: 0;
+}
+.setup-card.ps-collapse:last-of-type { border-bottom: 0; }
 
 .setup-card.ps-collapse > .ps-summary {
   display: flex;
@@ -1464,10 +1459,10 @@ a:hover {
   outline-offset: -2px;
 }
 
-.setup-card.ps-collapse[open] > .ps-summary {
-  border-bottom-color: var(--border-subtle);
-  color: var(--text-primary);
-}
+/* Open sections keep the colour change but drop the second rule: with the
+   scrim gone there is already a line under every row, and a header rule as
+   well put two hairlines a body's width apart. */
+.setup-card.ps-collapse[open] > .ps-summary { color: var(--text-primary); }
 
 .ps-caret {
   display: inline-flex;
@@ -1476,7 +1471,95 @@ a:hover {
 }
 .setup-card.ps-collapse[open] > .ps-summary .ps-caret { transform: rotate(90deg); }
 
-.ps-card-body { padding: 14px 18px 16px; }
+/* Indented to the caret's text, so an open body reads as belonging to the
+   header above it now that no card encloses the pair. */
+.ps-card-body { padding: 2px 0 18px 28px; }
+
+/* ── Theme switch (Project Settings header) ──
+   A checkbox with the box hidden and a track drawn in its place. The input
+   stays in the document rather than being display:none, so it is focusable,
+   keyboard-operable and announced; :checked drives everything visual, which
+   means there is no second copy of the state to fall out of step. */
+.ps-theme-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  font-size: 11px;
+  user-select: none;
+}
+
+.ps-theme-switch input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  margin: 0;
+}
+
+.ps-theme-switch__track {
+  position: relative;
+  width: 30px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  transition: background var(--transition), border-color var(--transition);
+}
+
+.ps-theme-switch__knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  transition: transform var(--transition), background var(--transition);
+}
+
+.ps-theme-switch input:checked ~ .ps-theme-switch__track {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.ps-theme-switch input:checked ~ .ps-theme-switch__track .ps-theme-switch__knob {
+  transform: translateX(14px);
+  background: #111;
+}
+
+/* The box is invisible, so the focus ring has to be drawn on what replaced
+   it — otherwise tabbing to this control shows nothing at all. */
+.ps-theme-switch input:focus-visible ~ .ps-theme-switch__track {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.ps-theme-switch__icon { font-size: 11px; line-height: 1; }
+
+/* Present to a screen reader, absent to the eye — the sun and moon are
+   decorative, so the switch needs a name that is not one of them. */
+.ps-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* A label carrying a brand mark beside its text. */
+.ps-label-with-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ps-dropbox-mark { flex: 0 0 auto; display: block; }
 
 .setup-hint {
   font-size: 11px;
