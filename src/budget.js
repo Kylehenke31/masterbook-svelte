@@ -517,7 +517,12 @@ function _blankRow(description = '') {
     ot15:      '',
     ot2:       '',
     ot25:      '',
-    baseHours: 8,
+    /* A twelve-hour day is the normal shooting day this is costed against, so
+       a new row starts there. The two places that also say 8 are deliberately
+       left alone: they fill the field in for rows saved before it existed, and
+       8 is the divisor those rows were costed at — changing it would silently
+       re-price every line in every budget that predates the field. */
+    baseHours: 12,
     actual:    '',
     subLines:  [],
     // Estimate scratch columns
@@ -1029,11 +1034,28 @@ function _render() {
         <button class="btn btn--ghost btn--sm" id="bud-back-overview" title="Back to Budget Overview">← Overview</button>
         <h2>Production Budget · Line Items</h2>
         <div class="bud-toolbar-actions">
-          <button class="btn btn--ghost btn--sm${_isBidLocked() ? ' bud-lock-active' : ''}" id="bud-toggle-lock" title="${_isBidLocked() ? 'Unlock bid to allow editing' : 'Lock bid to protect values'}">${_isBidLocked() ? '🔒 Unlock Bid' : '🔓 Lock Bid'}</button>
           <button class="btn btn--ghost btn--sm${_showEst ? ' bud-est-active' : ''}" id="bud-toggle-est">${_showEst ? 'Hide Estimates' : 'Show Estimates'}</button>
           <button class="btn btn--ghost btn--sm" id="bud-act-fringes">Actualize Fringes</button>
           <button class="btn btn--ghost btn--sm" id="bud-expand-all">Expand All</button>
           <button class="btn btn--ghost btn--sm" id="bud-collapse-all">Collapse All</button>
+          <button class="btn btn--primary btn--sm" id="bud-commit">Commit</button>
+          <!-- Lock last, and an icon rather than a label: it is the one control
+               here that changes whether anything else on the page can be
+               edited, so it sits apart from the view toggles instead of
+               reading as another one of them. The shackle is open or shut —
+               the state, not the action. -->
+          <button class="btn btn--ghost btn--sm bud-icon-btn${_isBidLocked() ? ' bud-lock-active' : ''}" id="bud-toggle-lock"
+            aria-pressed="${_isBidLocked() ? 'true' : 'false'}"
+            title="${_isBidLocked() ? 'Bid locked — click to unlock for editing' : 'Bid unlocked — click to lock and protect values'}"
+            aria-label="${_isBidLocked() ? 'Unlock bid' : 'Lock bid'}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+              stroke-linecap="round" stroke-linejoin="round" width="15" height="15" aria-hidden="true">
+              <rect x="4" y="10.5" width="16" height="10.5" rx="1.5"/>
+              ${_isBidLocked()
+                ? '<path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/>'
+                : '<path d="M8 10.5V7a4 4 0 0 1 7.5-2"/>'}
+            </svg>
+          </button>
         </div>
       </div>
 
@@ -1667,6 +1689,7 @@ function _attachListeners(lineMap) {
   _wireQR('#bud-r-rate',   '__r', 'rate');
   _wireQR('#bud-r-actual', '__r', 'actual');
 
+  _container.querySelector('#bud-commit')?.addEventListener('click', () => _fireBudgetAction('commit'));
   _container.querySelector('#bud-toggle-lock')?.addEventListener('click', _toggleLock);
   _container.querySelector('#bud-toggle-est').addEventListener('click', () => {
     _showEst = !_showEst;
