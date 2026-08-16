@@ -2474,6 +2474,66 @@ function _openTopSheetPrint(info, sections, budget) {
 
   const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
+  /* ── Fringes breakdown ──
+     The same P&W-and-fringes summary the overview shows, as its own block. On
+     a full budget it is appended as usual; on a filtered export it is offered
+     as a separate tick, because a department's fringe exposure is often the
+     only figure someone actually needs from a budget. It covers the sections
+     that were chosen, or the whole budget when it was chosen on its own. */
+  const fringeRowsHTML = _sections
+    .filter(def => !only || !only.size || only.has(def.id))
+    .map(def => {
+      const sec   = _budget[def.id];
+      const sub   = _sectionSubTotal(def.id);
+      const bidPw = sub * ((parseFloat(sec?.pwRate) || 0) / 100);
+      const bidFr = sub * ((parseFloat(sec?.fringeRate) || 0) / 100);
+      const actFr = _getFringeActual(def.id);
+      const tot   = bidPw + bidFr;
+      if (tot === 0 && actFr === 0) return '';
+      const hasAct = _hasFringeActual(def.id);
+      return `<tr>
+        <td style="width:28px;text-align:center;border:1px solid #999;padding:2px 4px;font-weight:700;">${def.id}</td>
+        <td style="border:1px solid #999;padding:2px 8px;">${na(_getSectionName(def))}</td>
+        <td style="width:120px;text-align:right;border:1px solid #999;padding:2px 6px;">${fmtM(tot)}</td>
+        <td style="width:120px;text-align:right;border:1px solid #999;padding:2px 6px;">${hasAct ? fmtM(actFr) : ''}</td>
+      </tr>`;
+    }).filter(Boolean).join('');
+
+  // Totalled over the same rows the table prints, not the whole budget — a
+   // partial export whose total exceeded its own rows would be worse than
+   // having no total at all.
+  let fringeBidTotal = 0, fringeActTotal = 0;
+  _sections.filter(def => !only || !only.size || only.has(def.id)).forEach(def => {
+    const sec = _budget[def.id];
+    const sub = _sectionSubTotal(def.id);
+    fringeBidTotal += sub * ((parseFloat(sec?.pwRate) || 0) / 100);
+    fringeBidTotal += sub * ((parseFloat(sec?.fringeRate) || 0) / 100);
+    fringeActTotal += _getFringeActual(def.id);
+  });
+
+  const fringesPage = !fringes || !fringeRowsHTML ? '' : `
+<div class="fb-fringes">
+  <h2 style="font-size:14px;font-weight:700;margin:0 0 6px;">P&amp;W &amp; Fringes Breakdown</h2>
+  <table style="width:100%;border-collapse:collapse;font-size:11px;">
+    <thead>
+      <tr>
+        <th style="background:#d8d8d8;border:1px solid #999;padding:3px 6px;width:28px;">SEC</th>
+        <th style="background:#d8d8d8;border:1px solid #999;padding:3px 6px;text-align:left;">CATEGORY</th>
+        <th style="background:#d8d8d8;border:1px solid #999;padding:3px 6px;width:120px;">BID</th>
+        <th style="background:#d8d8d8;border:1px solid #999;padding:3px 6px;width:120px;">ACTUAL</th>
+      </tr>
+    </thead>
+    <tbody>${fringeRowsHTML}</tbody>
+    <tfoot>
+      <tr>
+        <td colspan="2" style="border:1px solid #999;padding:4px 6px;text-align:right;font-weight:700;background:#efefef;">TOTAL P&amp;W &amp; FRINGES</td>
+        <td style="border:1px solid #999;padding:4px 6px;text-align:right;font-weight:700;background:#efefef;">${fmtM(fringeBidTotal)}</td>
+        <td style="border:1px solid #999;padding:4px 6px;text-align:right;font-weight:700;background:#efefef;">${fringeActTotal ? fmtM(fringeActTotal) : ''}</td>
+      </tr>
+    </tfoot>
+  </table>
+</div>`;
+
   const topSheetPage = !topSheet ? '' : `<!-- ════════ PAGE 1: TOP SHEET ════════ -->
 <div class="ts-page">
   <div class="top-right-block">
@@ -2717,12 +2777,30 @@ function _openSectionPicker() {
   const existing = document.getElementById('bud-sec-picker');
   if (existing) existing.remove();
 
-  const rows = _sections.map(def => `
+  const esc = v => String(v ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;');
+
+  // Top sheet and the fringes summary are not lettered sections, so they carry
+  // their own keys and sit at the ends of the list — the order they print in.
+  // Both start off: the reason to reach for this is to send less than the whole
+  // budget, and the top sheet is the part that says what the whole job costs.
+  const rows = [
+    `<label class="bsp-row bsp-row--extra">
+      <input type="checkbox" value="__top" />
+      <span class="bsp-id">—</span>
+      <span class="bsp-name">Top Sheet</span>
+    </label>`,
+    ..._sections.map(def => `
     <label class="bsp-row">
       <input type="checkbox" value="${def.id}" checked />
       <span class="bsp-id">${def.id}</span>
-      <span class="bsp-name">${String(_getSectionName(def) ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;')}</span>
-    </label>`).join('');
+      <span class="bsp-name">${esc(_getSectionName(def))}</span>
+    </label>`),
+    `<label class="bsp-row bsp-row--extra">
+      <input type="checkbox" value="__fringes" />
+      <span class="bsp-id">—</span>
+      <span class="bsp-name">Fringes Breakdown</span>
+    </label>`,
+  ].join('');
 
   const wrap = document.createElement('div');
   wrap.id = 'bud-sec-picker';
@@ -2730,7 +2808,7 @@ function _openSectionPicker() {
   wrap.innerHTML = `
     <div class="bsp-modal" role="dialog" aria-modal="true" aria-labelledby="bsp-title">
       <h3 class="bsp-title" id="bsp-title">Select Sections</h3>
-      <p class="bsp-hint">The PDF carries these sections' line items only — no top sheet, and no grand total.</p>
+      <p class="bsp-hint">The PDF carries only what you tick here. A grand total is left off unless the top sheet is included.</p>
       <div class="bsp-actions-top">
         <button type="button" class="btn btn--ghost btn--xs" id="bsp-all">Select all</button>
         <button type="button" class="btn btn--ghost btn--xs" id="bsp-none">Clear</button>
@@ -2758,10 +2836,13 @@ function _openSectionPicker() {
   wrap.addEventListener('click', e => { if (e.target === wrap) close(); });
 
   make.addEventListener('click', () => {
-    const only = new Set(boxes().filter(b => b.checked).map(b => b.value));
-    if (!only.size) return;
+    const picked   = boxes().filter(b => b.checked).map(b => b.value);
+    if (!picked.length) return;
+    const topSheet = picked.includes('__top');
+    const fringes  = picked.includes('__fringes');
+    const only     = new Set(picked.filter(v => v !== '__top' && v !== '__fringes'));
     close();
-    _openFullBudgetPrint({ only, topSheet: false });
+    _openFullBudgetPrint({ filtered: true, only, topSheet, fringes });
   });
 
   sync();
@@ -2777,8 +2858,14 @@ function _openSectionPicker() {
    it — handing a vendor the art department's pages should not hand them the
    whole picture of what the job costs. */
 function _openFullBudgetPrint(opts = {}) {
-  const only     = opts.only instanceof Set && opts.only.size ? opts.only : null;
+  // `filtered` says a selection was made at all; `only` is what it contained,
+  // which may legitimately be empty — ticking Fringes and nothing else is a
+  // real request, and an empty Set must not read as "no filter".
+  const filtered = opts.filtered === true;
+  const only     = filtered ? (opts.only instanceof Set ? opts.only : new Set()) : null;
   const topSheet = opts.topSheet !== false;
+  // Only meaningful on a filtered export; a full budget always carries it.
+  const fringes  = filtered ? opts.fringes === true : true;
   const info = _loadProdInfo();
   const na   = v => (v && String(v).trim()) ? String(v).trim() : '';
   const naTS = v => (v && String(v).trim()) ? String(v).trim() : 'N/A'; // Top Sheet uses N/A fallback
@@ -2973,6 +3060,66 @@ function _openFullBudgetPrint(opts = {}) {
   });
 
   /* ── Assemble full document ── */
+  /* ── Fringes breakdown ──
+     The same P&W-and-fringes summary the overview shows, as its own block. On
+     a full budget it is appended as usual; on a filtered export it is offered
+     as a separate tick, because a department's fringe exposure is often the
+     only figure someone actually needs from a budget. It covers the sections
+     that were chosen, or the whole budget when it was chosen on its own. */
+  const fringeRowsHTML = _sections
+    .filter(def => !only || !only.size || only.has(def.id))
+    .map(def => {
+      const sec   = _budget[def.id];
+      const sub   = _sectionSubTotal(def.id);
+      const bidPw = sub * ((parseFloat(sec?.pwRate) || 0) / 100);
+      const bidFr = sub * ((parseFloat(sec?.fringeRate) || 0) / 100);
+      const actFr = _getFringeActual(def.id);
+      const tot   = bidPw + bidFr;
+      if (tot === 0 && actFr === 0) return '';
+      const hasAct = _hasFringeActual(def.id);
+      return `<tr>
+        <td style="width:28px;text-align:center;border:1px solid #999;padding:2px 4px;font-weight:700;">${def.id}</td>
+        <td style="border:1px solid #999;padding:2px 8px;">${na(_getSectionName(def))}</td>
+        <td style="width:120px;text-align:right;border:1px solid #999;padding:2px 6px;">${fmtM(tot)}</td>
+        <td style="width:120px;text-align:right;border:1px solid #999;padding:2px 6px;">${hasAct ? fmtM(actFr) : ''}</td>
+      </tr>`;
+    }).filter(Boolean).join('');
+
+  // Totalled over the same rows the table prints, not the whole budget — a
+   // partial export whose total exceeded its own rows would be worse than
+   // having no total at all.
+  let fringeBidTotal = 0, fringeActTotal = 0;
+  _sections.filter(def => !only || !only.size || only.has(def.id)).forEach(def => {
+    const sec = _budget[def.id];
+    const sub = _sectionSubTotal(def.id);
+    fringeBidTotal += sub * ((parseFloat(sec?.pwRate) || 0) / 100);
+    fringeBidTotal += sub * ((parseFloat(sec?.fringeRate) || 0) / 100);
+    fringeActTotal += _getFringeActual(def.id);
+  });
+
+  const fringesPage = !fringes || !fringeRowsHTML ? '' : `
+<div class="fb-fringes">
+  <h2 style="font-size:14px;font-weight:700;margin:0 0 6px;">P&amp;W &amp; Fringes Breakdown</h2>
+  <table style="width:100%;border-collapse:collapse;font-size:11px;">
+    <thead>
+      <tr>
+        <th style="background:#d8d8d8;border:1px solid #999;padding:3px 6px;width:28px;">SEC</th>
+        <th style="background:#d8d8d8;border:1px solid #999;padding:3px 6px;text-align:left;">CATEGORY</th>
+        <th style="background:#d8d8d8;border:1px solid #999;padding:3px 6px;width:120px;">BID</th>
+        <th style="background:#d8d8d8;border:1px solid #999;padding:3px 6px;width:120px;">ACTUAL</th>
+      </tr>
+    </thead>
+    <tbody>${fringeRowsHTML}</tbody>
+    <tfoot>
+      <tr>
+        <td colspan="2" style="border:1px solid #999;padding:4px 6px;text-align:right;font-weight:700;background:#efefef;">TOTAL P&amp;W &amp; FRINGES</td>
+        <td style="border:1px solid #999;padding:4px 6px;text-align:right;font-weight:700;background:#efefef;">${fmtM(fringeBidTotal)}</td>
+        <td style="border:1px solid #999;padding:4px 6px;text-align:right;font-weight:700;background:#efefef;">${fringeActTotal ? fmtM(fringeActTotal) : ''}</td>
+      </tr>
+    </tfoot>
+  </table>
+</div>`;
+
   const topSheetPage = !topSheet ? '' : `<!-- ════════ PAGE 1: TOP SHEET ════════ -->
 <div class="ts-page">
   <div class="top-right-block">
@@ -3100,6 +3247,7 @@ function _openFullBudgetPrint(opts = {}) {
   .fb-header-right .fb-date { font-weight: 600; }
   .fb-header-right .fb-project { margin-top: 2px; }
   .fb-section { margin-bottom: 12px; page-break-inside: avoid; }
+  .fb-fringes { margin-top: 14px; page-break-inside: avoid; }
   .fb-sec-header { font-size: 11px; font-weight: 700; background: #e8e8e8; padding: 3px 6px; border: 1px solid #aaa; border-bottom: none; }
   .fb-table { width: 100%; border-collapse: collapse; font-size: 9px; }
   .fb-th { background: #f4f4f4; border: 1px solid #bbb; padding: 2px 4px; font-weight: 700; font-size: 7.5px; text-transform: uppercase; letter-spacing: 0.03em; }
@@ -3135,7 +3283,7 @@ function _openFullBudgetPrint(opts = {}) {
 ${topSheetPage}
 
 <!-- ════════ LINE-ITEM PAGES ════════ -->
-<div class="fb-header">
+${!sectionsHTML ? '' : `<div class="fb-header">
   <div class="fb-header-left">
     <h1>Production Budget — ${only ? 'Selected Sections' : 'Line Items'}</h1>
     <div class="fb-subtitle">${na(info.productionName)}</div>
@@ -3144,9 +3292,11 @@ ${topSheetPage}
     <div class="fb-date">${today}</div>
     <div class="fb-project">${na(info.productionName)}</div>
   </div>
-</div>
+</div>`}
 
 ${sectionsHTML}
+
+${fringesPage}
 
 ${only ? '' : `<div class="fb-grand">GRAND TOTAL: ${fmtM(grandBid)}</div>`}
 
