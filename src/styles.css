@@ -891,6 +891,13 @@ a:hover {
    still holds its width — only the control inside it stops stretching. */
 .field--short input { max-width: 200px; }
 
+/* Vendor and Line Item stack in the right-hand column, so they take the same
+   width — a select and a text box of different lengths sitting one above the
+   other read as a mistake rather than a pair. Wider than the short fields
+   because a vendor name is not a date. */
+.field--mid input,
+.field--mid select { max-width: 280px; }
+
 @media (max-width: 600px) {
   .form-grid {
     grid-template-columns: 1fr;
@@ -1631,11 +1638,17 @@ input[type="number"] {
   grid-template-columns: 1fr 1fr;
 }
 
+/* The form keeps the left, the preview opens on the right. Done with order so
+   the panel stays ahead of the form in the document — the receipt is what the
+   fields are describing, and reading it first is the sensible order. */
+.submission-layout.has-preview .form-panel    { order: 1; }
+.submission-layout.has-preview .preview-panel { order: 2; }
+
 /* ── Preview Panel ── */
 .preview-panel {
   display: none;
   flex-direction: column;
-  border-right: 1px solid var(--border);
+  border-left: 1px solid var(--border);
   background: var(--bg-surface);
   overflow: hidden;
 }
@@ -7349,3 +7362,12 @@ tr:hover .cse-row-del { opacity: 0.6; }
   max-height: 220px;
   overflow-y: auto;
 }
+
+/* Pagination and Remove share the right of the preview toolbar. */
+.preview-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+.preview-remove:hover { color: var(--red); border-color: var(--red); }

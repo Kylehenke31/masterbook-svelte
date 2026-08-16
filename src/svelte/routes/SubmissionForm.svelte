@@ -80,14 +80,25 @@
       <section class="submission-section">
         <div class="submission-layout" id="submission-layout">
 
-          <!-- ── Left: Preview Panel ── -->
+          <!-- ── Right: Preview Panel ──
+               The form holds the left while it is alone, so the preview opens
+               beside it rather than under it. Ordered in CSS, not moved in the
+               markup: the panel stays before the form in the document so a
+               screen reader meets the receipt before the fields describing it. -->
           <aside class="preview-panel" id="preview-panel">
             <div class="preview-toolbar">
               <span class="preview-filename" id="preview-filename">No file selected</span>
-              <div class="preview-pagination hidden" id="preview-pagination">
-                <button type="button" class="btn btn--ghost btn--sm" id="btn-prev-page">‹ Prev</button>
-                <span id="preview-page-info" class="preview-page-info">1 / 1</span>
-                <button type="button" class="btn btn--ghost btn--sm" id="btn-next-page">Next ›</button>
+              <div class="preview-toolbar-right">
+                <div class="preview-pagination hidden" id="preview-pagination">
+                  <button type="button" class="btn btn--ghost btn--sm" id="btn-prev-page">‹ Prev</button>
+                  <span id="preview-page-info" class="preview-page-info">1 / 1</span>
+                  <button type="button" class="btn btn--ghost btn--sm" id="btn-next-page">Next ›</button>
+                </div>
+                <!-- Attaching the wrong receipt should not mean starting the
+                     submission again. This drops the file and leaves every
+                     other field as typed. -->
+                <button type="button" class="btn btn--ghost btn--sm preview-remove"
+                  id="btn-remove-receipt" title="Remove this file">Remove</button>
               </div>
             </div>
             <div class="preview-canvas-wrap" id="preview-canvas-wrap">
@@ -151,7 +162,7 @@
                 </div>
 
                 <!-- Vendor -->
-                <div class="field">
+                <div class="field field--mid">
                   <label for="f-vendor-select">Vendor <span class="req">*</span></label>
                   <select id="f-vendor-select" required>
                     <option value="">Select vendor…</option>
@@ -196,16 +207,6 @@
                   </div>
                 </div>
 
-                <!-- Line Item. Directly under Vendor: the budget line a
-                     charge lands on is usually decided with the vendor in
-                     mind, and it was previously sitting past the type and the
-                     description with nothing near it. -->
-                <div class="field">
-                  <label for="f-line-item">Line Item</label>
-                  <input type="text" id="f-line-item" name="lineItem"
-                         placeholder="If known" />
-                </div>
-
                 <!-- Amount -->
                 <div class="field field--short">
                   <label for="f-amount">Amount ($) <span class="req">*</span></label>
@@ -217,6 +218,15 @@
                          inputmode="decimal" autocomplete="off"
                          placeholder="0.00" required />
                   <span class="field-error" id="err-amount"></span>
+                </div>
+
+                <!-- Line Item sits under Vendor and beside Amount. Which
+                     budget line a charge lands on is worked out with the
+                     vendor in mind, so the two share a column. -->
+                <div class="field field--mid">
+                  <label for="f-line-item">Line Item</label>
+                  <input type="text" id="f-line-item" name="lineItem"
+                         placeholder="If known" />
                 </div>
 
                 <!-- Submission Type — single-select checklist. Radio inputs
@@ -338,7 +348,7 @@
                 <div class="field field--full">
                   <label for="f-description">Description</label>
                   <input type="text" id="f-description" name="description"
-                         placeholder="Brief description (autofilled from receipt)" maxlength="120" />
+                         maxlength="120" />
                 </div>
 
                 <!-- Notes -->
@@ -1584,6 +1594,16 @@ Rules:
     });
 
     fileInput.addEventListener('change', () => handleFile(fileInput, c));
+
+    c.querySelector('#btn-remove-receipt')?.addEventListener('click', () => {
+      // The input itself has to be cleared, not just the preview — otherwise
+      // the same file cannot be picked again (no change event fires) and the
+      // old one is still submitted.
+      fileInput.value = '';
+      const errEl = c.querySelector('#err-receipt');
+      if (errEl) errEl.textContent = '';
+      clearPreview(c);
+    });
     c.querySelectorAll('input[name="type"]').forEach(r =>
       r.addEventListener('change', () => {
         // A hand-picked type supersedes the OCR guess highlight.
