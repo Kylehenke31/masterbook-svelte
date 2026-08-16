@@ -161,7 +161,14 @@
              defeats the second box, whose whole job is letting you see that
              they agree. The input's type is switched rather than the masking
              faked in CSS, so a password manager still sees a password field
-             and the characters never sit in the DOM as plain text. -->
+             and the characters never sit in the DOM as plain text.
+
+             tabindex="-1" keeps it out of the tab order on purpose. Tab from
+             the password field goes to the next field, and on the last one to
+             the submit button — so the habitual tab-then-Enter submits, rather
+             than landing on this and putting the password on screen while
+             someone believes they have just signed in. It stays reachable by
+             mouse and by touch; only the keyboard walks past it. -->
         <div class="login-input-wrap">
           <input
             id="login-password"
@@ -173,7 +180,7 @@
           />
           <button type="button" class="login-eye"
               onclick={() => { showPassword = !showPassword; }}
-              aria-pressed={showPassword} disabled={busy}
+              aria-pressed={showPassword} disabled={busy} tabindex="-1"
               aria-label={showPassword ? 'Hide password' : 'Show password'}
               title={showPassword ? 'Hide password' : 'Show password'}>
               {#if showPassword}
@@ -209,7 +216,7 @@
             />
             <button type="button" class="login-eye"
                 onclick={() => { showPassword = !showPassword; }}
-                aria-pressed={showPassword} disabled={busy}
+                aria-pressed={showPassword} disabled={busy} tabindex="-1"
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
                 title={showPassword ? 'Hide password' : 'Show password'}>
                 {#if showPassword}
