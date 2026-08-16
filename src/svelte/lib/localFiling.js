@@ -145,7 +145,8 @@ async function dirFor(pathSegments) {
 /** Create one nested folder under the project folder, if it is not there. */
 export async function ensureLocalFolder(pathSegments) {
   await dirFor(pathSegments);
-  return pathSegments.join('/');
+  // Sanitised, for the same reason writeLocalFile returns the sanitised path.
+  return pathSegments.map(safeName).join('/');
 }
 
 /**
@@ -184,12 +185,19 @@ export async function provisionLocalFolders(tree) {
  */
 export async function writeLocalFile(pathSegments, filename, bytes) {
   const dir = await dirFor(pathSegments);
-  const fileHandle = await dir.getFileHandle(safeName(filename), { create: true });
+  const safeFilename = safeName(filename);
+  const fileHandle = await dir.getFileHandle(safeFilename, { create: true });
   const writable = await fileHandle.createWritable();
   try {
     await writable.write(bytes);
   } finally {
     await writable.close();
   }
-  return { path: [...pathSegments, filename].join('/') };
+  /* The sanitised path, not the requested one.
+     Every segment and the filename go through safeName on the way to disk, so
+     returning what was asked for describes a file that is not there — and a
+     name containing a slash comes back looking like a folder nobody created.
+     This value is handed to callers as "where it was filed" and stored on the
+     record, so it has to be the path you could actually go and open. */
+  return { path: [...pathSegments.map(safeName), safeFilename].join('/') };
 }

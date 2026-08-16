@@ -93,10 +93,23 @@
       : `All ${r.totalCount} folders created in Dropbox.`;
   });
 
+  /* Choosing the folder also builds the tree in it, which is what connecting
+     Dropbox does. Leaving local as choose-then-click-again meant the two
+     destinations behaved differently for the same decision, and a folder
+     chosen but never populated looks configured while being empty.
+     The folder is kept even if provisioning fails — losing the choice because
+     one directory could not be written would be the wrong trade. */
   const pickLocalFolder = () => runPlanAction('local', async () => {
     const name = await chooseProjectFolder();
     persistPlan({ localFolderName: name });
-    return `Using “${name}” on this computer.`;
+    try {
+      const r = await provisionLocalFolders(FOLDER_TREE);
+      return r.failedCount
+        ? `Using “${name}”. ${r.created} folders created, ${r.failedCount} failed — press Create project folders to retry.`
+        : `Using “${name}” — all ${r.created} project folders created.`;
+    } catch (e) {
+      return `Using “${name}”, but the folders could not be created: ${e.message}`;
+    }
   });
 
   const regrant = () => runPlanAction('local', async () => {
