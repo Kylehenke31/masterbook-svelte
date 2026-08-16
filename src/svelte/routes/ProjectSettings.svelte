@@ -100,19 +100,19 @@
           ${sec('identity', 'Project Identity')}
             <div class="form-grid">
               <div class="field field--full">
-                <label>Project Title <span class="ps-lock-badge">LOCKED</span></label>
+                <label>Project Title</label>
                 <input type="text" value="${v('title')}" disabled class="ps-locked" />
               </div>
               <div class="field">
-                <label>Production Number <span class="ps-lock-badge">LOCKED</span></label>
+                <label>Production Number</label>
                 <input type="text" value="${v('productionNumber')}" disabled class="ps-locked" />
               </div>
               <div class="field">
-                <label>Budget Type <span class="ps-lock-badge">LOCKED</span></label>
+                <label>Budget Type</label>
                 <input type="text" value="${project.budgetTemplate === 'feature' ? 'Feature/TV' : 'Commercial'}" disabled class="ps-locked" />
               </div>
               <div class="field">
-                <label>Call Sheet Type <span class="ps-lock-badge">LOCKED</span></label>
+                <label>Call Sheet Type</label>
                 <input type="text" value="${(project.callSheetTemplate || project.budgetTemplate) === 'feature' ? 'Feature/TV' : 'Commercial'}" disabled class="ps-locked" />
               </div>
               <div class="field">
@@ -507,19 +507,6 @@
   }
 
   /* Scoped badge/lock indicator */
-  :global(.ps-lock-badge) {
-    display: inline-block;
-    font-size: 0.6rem;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    background: var(--bg-elevated, #2a2a2a);
-    color: var(--text-muted, #888);
-    border: 1px solid var(--border, #333);
-    border-radius: 0;
-    padding: 1px 4px;
-    vertical-align: middle;
-    margin-left: 4px;
-  }
 
   :global(.ps-locked) {
     opacity: 0.5;

@@ -6,9 +6,78 @@
   let view      = $state('signin');   // 'signin' | 'signup'
   let email     = $state('');
   let password  = $state('');
+  let confirm   = $state('');
   let name      = $state('');
   let error     = $state('');
   let busy      = $state(false);
+
+  // One toggle for both boxes. Revealing one and not the other would defeat
+  // the point of the second box, which is to see that they agree.
+  let showPassword = $state(false);
+
+  /* ── Human check ───────────────────────────────────────────────
+     Cloudflare Turnstile, because Supabase verifies the token itself: the
+     widget hands us one, we pass it to signUp, and the server rejects the
+     signup if it does not check out. A challenge implemented in this file
+     would be worth nothing — anything the page can validate, a script can
+     skip by calling the API directly.
+
+     Inert until VITE_TURNSTILE_SITE_KEY is set, so signup keeps working while
+     the key and the matching Supabase setting are still to be arranged. When
+     it is set, the token becomes required. */
+  const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY || '';
+  const captchaRequired = !!TURNSTILE_SITE_KEY;
+  let captchaToken = $state('');
+  let captchaEl    = $state(null);
+  let captchaError = $state('');
+  let widgetId     = null;
+
+  function loadTurnstile() {
+    if (window.turnstile) return Promise.resolve();
+    if (!window.__turnstileLoading) {
+      window.__turnstileLoading = new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+        s.async = true;
+        s.onload = resolve;
+        s.onerror = () => reject(new Error('could not load the human check'));
+        document.head.appendChild(s);
+      });
+    }
+    return window.__turnstileLoading;
+  }
+
+  // Rendered only on the signup tab, and torn down when leaving it — a stale
+  // widget hands back a token tied to a challenge the server has forgotten.
+  $effect(() => {
+    if (!captchaRequired || view !== 'signup' || !captchaEl) return;
+    let cancelled = false;
+    captchaError = '';
+    loadTurnstile()
+      .then(() => {
+        if (cancelled || !captchaEl) return;
+        widgetId = window.turnstile.render(captchaEl, {
+          sitekey: TURNSTILE_SITE_KEY,
+          theme: 'dark',
+          callback: (token) => { captchaToken = token; captchaError = ''; },
+          'expired-callback': () => { captchaToken = ''; },
+          'error-callback': () => {
+            captchaToken = '';
+            captchaError = 'The human check failed to load. Refresh and try again.';
+          },
+        });
+      })
+      .catch(e => { if (!cancelled) captchaError = e.message; });
+
+    return () => {
+      cancelled = true;
+      captchaToken = '';
+      if (widgetId !== null && window.turnstile) {
+        try { window.turnstile.remove(widgetId); } catch { /* already gone */ }
+        widgetId = null;
+      }
+    };
+  });
 
   /* An invite link lands here as /?invite=<address>.
      It is not a token and grants nothing on its own — accept_project_invites()
@@ -37,17 +106,33 @@
   async function handleSubmit() {
     error = '';
     if (!email.trim() || !password.trim()) { error = 'Email and password are required.'; return; }
-    if (view === 'signup' && !name.trim())  { error = 'Display name is required.'; return; }
+    if (view === 'signup') {
+      if (!name.trim()) { error = 'Display name is required.'; return; }
+      // Checked here rather than left to a mismatch on the next sign-in, which
+      // is where a typed-twice-wrong password otherwise surfaces: locked out
+      // of an account you just made, with no idea which of the two took.
+      if (password !== confirm) { error = 'The two passwords do not match.'; return; }
+      if (captchaRequired && !captchaToken) {
+        error = 'Please complete the human check below.';
+        return;
+      }
+    }
     busy = true;
     try {
       if (view === 'signin') {
         await signIn(email.trim(), password);
       } else {
-        await signUp(email.trim(), password, name.trim());
+        await signUp(email.trim(), password, name.trim(), captchaToken || undefined);
       }
       onSuccess();
     } catch (e) {
       error = e.message || 'Something went wrong. Please try again.';
+      // A token is single-use: whatever went wrong, the one we hold is spent,
+      // so the widget has to issue another before they can try again.
+      if (captchaRequired && widgetId !== null && window.turnstile) {
+        captchaToken = '';
+        try { window.turnstile.reset(widgetId); } catch { /* nothing to reset */ }
+      }
     } finally {
       busy = false;
     }
@@ -56,6 +141,8 @@
   function switchView(v) {
     view = v;
     error = '';
+    confirm = '';
+    showPassword = false;
   }
 </script>
 
@@ -128,16 +215,53 @@
       </div>
 
       <div class="login-field">
-        <label for="login-password">Password</label>
+        <!-- One toggle drives both boxes. The input's type is switched rather
+             than the masking faked in CSS, so a password manager still sees a
+             password field. -->
+        <div class="login-field-head">
+          <label for="login-password">Password</label>
+          <button type="button" class="login-reveal"
+            onclick={() => { showPassword = !showPassword; }}
+            aria-pressed={showPassword} disabled={busy}>
+            {showPassword ? 'Hide' : 'Show'}
+          </button>
+        </div>
         <input
           id="login-password"
-          type="password"
+          type={showPassword ? 'text' : 'password'}
           placeholder="••••••••"
           bind:value={password}
           autocomplete={view === 'signin' ? 'current-password' : 'new-password'}
           disabled={busy}
         />
       </div>
+
+      {#if view === 'signup'}
+        <div class="login-field">
+          <label for="login-confirm">Confirm Password</label>
+          <input
+            id="login-confirm"
+            type={showPassword ? 'text' : 'password'}
+            placeholder="••••••••"
+            bind:value={confirm}
+            autocomplete="new-password"
+            disabled={busy}
+          />
+          <!-- Only once they have diverged and something is actually typed.
+               Flagging a mismatch on the first keystroke of the second box is
+               telling someone they are wrong while they are still typing. -->
+          {#if confirm.length > 0 && password !== confirm}
+            <span class="login-warn">These do not match yet.</span>
+          {/if}
+        </div>
+
+        {#if captchaRequired}
+          <div class="login-field">
+            <div bind:this={captchaEl} class="login-captcha"></div>
+            {#if captchaError}<span class="login-warn">{captchaError}</span>{/if}
+          </div>
+        {/if}
+      {/if}
 
       {#if error}
         <p class="login-error">{error}</p>
@@ -262,6 +386,40 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
+  }
+
+  /* Label on the left, reveal on the right, sharing the label's line so the
+     toggle costs no vertical space of its own. */
+  .login-field-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .login-reveal {
+    background: none;
+    border: 0;
+    padding: 0;
+    font-family: inherit;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-muted, #888);
+    cursor: pointer;
+    transition: color 0.15s;
+  }
+  .login-reveal:hover:not(:disabled),
+  .login-reveal:focus-visible { color: var(--accent); }
+  .login-reveal:disabled { opacity: 0.5; cursor: default; }
+
+  /* Turnstile renders a fixed-width iframe; centring it keeps it from sitting
+     off to one side of a 340px card. */
+  .login-captcha {
+    display: flex;
+    justify-content: center;
+    min-height: 65px;
   }
 
   .login-field label {

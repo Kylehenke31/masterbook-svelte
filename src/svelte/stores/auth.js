@@ -24,11 +24,21 @@ export async function signIn(email, password) {
   return data;
 }
 
-export async function signUp(email, password, displayName) {
+/**
+ * captchaToken is the Turnstile token from the signup form, when a human check
+ * is configured. It is passed to Supabase rather than checked here on purpose:
+ * anything this file could verify, a script skips by calling the API directly.
+ * Supabase validates it server-side and refuses the signup if it does not hold
+ * up — which is the only place a check like this means anything.
+ */
+export async function signUp(email, password, displayName, captchaToken) {
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
-    options: { data: { display_name: displayName } },
+    options: {
+      data: { display_name: displayName },
+      ...(captchaToken ? { captchaToken } : {}),
+    },
   });
   if (error) throw error;
   return data;

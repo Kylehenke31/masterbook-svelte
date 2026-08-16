@@ -4015,19 +4015,6 @@ textarea {
   border-color: var(--border-subtle) !important;
   opacity: 0.7;
 }
-.ps-lock-badge {
-  display: inline-block;
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  background: var(--bg-hover);
-  color: var(--text-muted);
-  padding: 1px 6px;
-  border-radius: 0;
-  margin-left: 6px;
-  vertical-align: middle;
-}
 
 /* ============================================================
    Budget Overview (Main Menu)
