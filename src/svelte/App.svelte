@@ -489,8 +489,12 @@
   </div>
 
 {:else if !authState}
-  <!-- Not logged in — show full-page login -->
-  <Login />
+  <!-- Not logged in — show full-page login.
+       onSuccess fires only on an explicit sign-in or sign-up, which is why the
+       redirect lives here rather than in the auth subscription: that also runs
+       when an existing session is restored, and forcing the menu there would
+       throw anyone reloading the page out of the project they were working in. -->
+  <Login onSuccess={() => { window.location.hash = '#home'; }} />
 
 {:else}
 

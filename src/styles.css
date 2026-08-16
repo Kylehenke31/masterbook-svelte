@@ -7152,6 +7152,17 @@ tr:hover .cse-row-del { opacity: 0.6; }
 
 .pm-row-caret { opacity: 0.75; }
 
+/* The open project's caret, in the gold the app used before the accent moved
+   to blue. It is the one thing on this menu that is not a destination but a
+   statement of where you already are, so it is deliberately not the accent —
+   a blue caret among blue accents says nothing. Literal rather than a token:
+   naming a colour for its hue is what made the last change tedious, and this
+   is the only place it is used. */
+.pm-open-project .pm-row-caret {
+  color: #c9a84c;
+  opacity: 1;
+}
+
 /* The highlight lands on the name alone, not the whole row — the row is the
    width of the longest project, and lighting all of it would mark dead space
    as hoverable. */
