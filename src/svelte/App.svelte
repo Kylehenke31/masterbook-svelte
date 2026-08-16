@@ -342,12 +342,22 @@
   function _headerTarget() {
     return _hasProject() ? '#settings' : '#setup';
   }
+  /**
+   * Initials for the account button, or '' when there is no name to build them
+   * from — the button draws a user icon in that case.
+   *
+   * It used to answer '?', which was a reasonable placeholder while every
+   * project carried a submitter name. Default Submitter no longer has a field,
+   * so '?' had quietly become the normal state of the control: a question mark
+   * in the corner of the app, reading as something unresolved rather than as
+   * the way in to your account.
+   */
   function _initials() {
     const name  = _project?.defaultSubmitter || '';
     const parts = name.trim().split(/\s+/);
     if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
     if (parts[0]) return parts[0].slice(0, 2).toUpperCase();
-    return '?';
+    return '';
   }
 
   /**
@@ -737,12 +747,26 @@
           </div>
         {/if}
 
+        <!-- Initials when the project knows who you are, a user mark otherwise.
+             Not both: two initials and a figure at this size are the same
+             smudge, and the initials are the more useful of the two when they
+             exist. -->
         <button
           class="btn btn--icon btn--profile"
           aria-label="User profile"
           title="User profile"
           onclick={showDropdown ? closeDropdown : openDropdown}
-        >{_initials()}</button>
+        >
+          {#if _initials()}
+            {_initials()}
+          {:else}
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+              stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+              <circle cx="12" cy="7" r="4"/>
+            </svg>
+          {/if}
+        </button>
       </div>
 
       <!-- Chat trigger (panel rendered by <Chat> below, outside the aside) -->
