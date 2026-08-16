@@ -270,34 +270,42 @@
 <style>
   /* The project menu's photograph, and its geometry: mark centred at the top,
      content held off the left edge where the project list sits. */
+  /* Centred, at every width. The card used to sit 72px from the left, where
+     the project list appears once you are signed in — the idea being that
+     signing in read as arriving at the menu rather than passing through a
+     gate. On a wide screen that just looks like a centred mark above a card
+     shoved into the corner, which is a worse first impression than the
+     continuity was worth. */
   .login-wrap {
     position: fixed;
     inset: 0;
     display: flex;
     flex-direction: column;
-    align-items: flex-start;
+    align-items: center;
+    /* Centred by auto margins on the content, not justify-content. A centred
+       flex container that overflows pushes its first child past the top edge
+       and scrolling cannot reach it — on a short laptop the taller Create
+       Account form put the mark at -54px with no way to see it. Auto margins
+       collapse to nothing when there is no room, so it scrolls from the top
+       instead. */
     background-image: url('/project-menu-bg.jpg');
     background-size: cover;
     background-position: center center;
     background-repeat: no-repeat;
     z-index: 9999;
-    padding: 32px 24px 24px 72px;
+    padding: 32px 24px;
     overflow-y: auto;
   }
 
-  /* The 72px left inset places the card where the project list sits on a
-     desktop. On a phone it just shoves a 340px card into what is left of a
-     375px screen, squeezing it to 279px and hanging it off-centre. Below
-     560px it centres instead. */
+  /* A 340px card in a 375px screen leaves no margin worth the name. */
   @media (max-width: 560px) {
-    .login-wrap {
-      padding: 24px 16px;
-      align-items: center;
-    }
+    .login-wrap { padding: 24px 16px; }
     .login-card { max-width: 100%; }
   }
 
   .login-card {
+    margin-bottom: auto;
+    flex: 0 0 auto;
     width: 100%;
     max-width: 340px;
     background: var(--bg-surface, #1a1a1a);
@@ -315,8 +323,9 @@
      same place, so signing in and arriving are one continuous screen.
      Always the dark one: this is a pale photograph whatever the theme. */
   .login-logo-wrap {
-    align-self: center;
-    margin-bottom: 56px;
+    margin-top: auto;
+    margin-bottom: 40px;
+    flex: 0 0 auto;
   }
   .login-logo {
     width: 180px;
