@@ -135,7 +135,7 @@
                 </div>
 
                 <!-- Date -->
-                <div class="field">
+                <div class="field field--short">
                   <label for="f-date">Date <span class="req">*</span></label>
                   <input type="date" id="f-date" name="date" required />
                   <span class="field-error" id="err-date"></span>
@@ -188,7 +188,7 @@
                 </div>
 
                 <!-- Amount -->
-                <div class="field">
+                <div class="field field--short">
                   <label for="f-amount">Amount ($) <span class="req">*</span></label>
                   <!-- Deliberately type="text" with inputmode="decimal": a
                        number input rejects a typed comma outright, and people
@@ -213,14 +213,19 @@
                       <span class="type-option__label">Purchase Order</span>
                     </label>
                     <label class="type-option">
+                      <!-- The label reads Credit; the value stays "Production
+                           Credit Card" because it is written onto every
+                           purchase of this type and compared by name in the
+                           validation and the method map. Renaming the value
+                           would be a data migration for a wording change. -->
+                      <input type="radio" name="type" value="Production Credit Card" />
+                      <span class="type-option__box" aria-hidden="true"></span>
+                      <span class="type-option__label">Credit</span>
+                    </label>
+                    <label class="type-option">
                       <input type="radio" name="type" value="Petty Cash" />
                       <span class="type-option__box" aria-hidden="true"></span>
                       <span class="type-option__label">Petty Cash</span>
-                    </label>
-                    <label class="type-option">
-                      <input type="radio" name="type" value="Production Credit Card" />
-                      <span class="type-option__box" aria-hidden="true"></span>
-                      <span class="type-option__label">Production Credit Card</span>
                     </label>
                     <label class="type-option">
                       <input type="radio" name="type" value="Return" />

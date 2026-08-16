@@ -886,6 +886,11 @@ a:hover {
   gap: 12px;
 }
 
+/* A date and a dollar amount have a known length. Letting them fill half a
+   form is what made this page read as sparse rather than roomy. The column
+   still holds its width — only the control inside it stops stretching. */
+.field--short input { max-width: 200px; }
+
 @media (max-width: 600px) {
   .form-grid {
     grid-template-columns: 1fr;
@@ -1087,28 +1092,39 @@ a:hover {
    checklist. The native input is hidden but still focusable, so keyboard
    and screen-reader behaviour is the browser's; .type-option__box is the
    visible tick. */
+/* ── Submission Type ──
+   A segmented control, not a row of boxes. These are radios — exactly one
+   submission is one type — but they were drawn as squares, which is the
+   universal signal for "tick as many as apply". Four buttons in a strip with
+   the chosen one filled says one-of-four without needing to be read. */
 .type-checklist {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-  gap: 6px;
-  padding: 8px;
+  display: flex;
+  flex-wrap: wrap;
   border: 1px solid var(--input-border);
   background: var(--input-bg);
+  overflow: hidden;
 }
 
 .type-checklist.invalid { border-color: var(--red); }
-.type-checklist.ocr-filled { border-color: var(--gold); }
+.type-checklist.ocr-filled { border-color: var(--accent); }
 
 .type-option {
+  flex: 1 1 0;
+  min-width: 132px;
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 7px 9px;
+  justify-content: center;
+  text-align: center;
+  padding: 9px 12px;
   cursor: pointer;
   color: var(--text-secondary);
   font-size: 13px;
+  /* Divider between segments rather than around each, so the strip reads as
+     one control. */
+  border-left: 1px solid var(--input-border);
   transition: background var(--transition), color var(--transition);
 }
+.type-option:first-child { border-left: 0; }
 
 .type-option:hover { background: var(--bg-hover); color: var(--text-primary); }
 
@@ -1121,44 +1137,21 @@ a:hover {
   margin: 0;
 }
 
-.type-option__box {
-  flex: 0 0 auto;
-  width: 15px;
-  height: 15px;
-  border: 1px solid var(--input-border);
-  background: var(--bg-base);
-  position: relative;
-}
-
-.type-option__box::after {
-  content: '';
-  position: absolute;
-  left: 4px;
-  top: 0.5px;
-  width: 4px;
-  height: 8px;
-  border: solid var(--bg-base);
-  border-width: 0 2px 2px 0;
-  transform: rotate(45deg);
-  opacity: 0;
-  transition: opacity var(--transition);
-}
-
-.type-option input[type="radio"]:checked ~ .type-option__box {
-  background: var(--gold);
-  border-color: var(--gold);
-}
-
-.type-option input[type="radio"]:checked ~ .type-option__box::after { opacity: 1; }
+/* The box is what carried the tick; a segment fills instead, so it is gone
+   from the layout but kept in the markup for the OCR highlight to hang on. */
+.type-option__box { display: none; }
 
 .type-option input[type="radio"]:checked ~ .type-option__label {
-  color: var(--text-primary);
+  color: #111;
   font-weight: 700;
 }
 
-.type-option input[type="radio"]:focus-visible ~ .type-option__box {
-  outline: 2px solid var(--gold);
-  outline-offset: 2px;
+.type-option:has(input[type="radio"]:checked) { background: var(--accent); }
+.type-option:has(input[type="radio"]:checked):hover { background: var(--accent); }
+
+.type-option input[type="radio"]:focus-visible ~ .type-option__label {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
 }
 
 /* Quote modifier — shown only for Purchase Orders */
@@ -1621,6 +1614,17 @@ input[type="number"] {
   grid-template-columns: 1fr;
   gap: 0;
   min-height: calc(100vh - 120px);
+}
+
+/* Held to a readable measure while the form is on its own. It used to run the
+   full width of the window, which put a date field at 605px — six times what
+   mm/dd/yyyy needs — and left the eye travelling the width of the screen
+   between a label and the box under it. Space at the sides is the cheaper
+   cost. When a file arrives the panel takes the left half and the form drops
+   the cap, so it slides across rather than being squeezed. */
+.submission-layout:not(.has-preview) .form-panel {
+  max-width: 720px;
+  width: 100%;
 }
 
 .submission-layout.has-preview {
