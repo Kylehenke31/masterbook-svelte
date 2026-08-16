@@ -313,12 +313,6 @@
     window.location.hash = '#log';
   }
 
-  function handleNewProject() {
-    closeDropdown();
-    sessionStorage.setItem('pm-intent', 'create');
-    window.location.hash = '#home';
-  }
-
   async function handleSignOut() {
     closeDropdown();
     lastSyncedUserId = null;  // allow re-sync if user signs back in
@@ -712,7 +706,14 @@
             </div>
             {#if profileNameMsg}<div class="pd-name-msg">{profileNameMsg}</div>{/if}
             <div class="pd-divider"></div>
-            <div class="pd-label">Projects</div>
+            <!-- The heading is the way to the project menu. Creating a project
+                 belongs there, beside the ones that already exist, rather than
+                 as a button in here that jumps straight into a blank form. -->
+            <button class="pd-label pd-label-btn" role="menuitem"
+              onclick={() => { closeDropdown(); window.location.hash = '#home'; }}>
+              Projects
+              <span class="pd-label-arrow" aria-hidden="true">›</span>
+            </button>
             <div class="pd-projects">
               {#each dropdownRegistry as r (r.id)}
                 <button
@@ -730,7 +731,10 @@
               {/each}
             </div>
             <div class="pd-divider"></div>
-            <button class="pd-action-btn" role="menuitem" onclick={handleNewProject}>+ New Project</button>
+            <button class="pd-action-btn" role="menuitem"
+              onclick={() => { closeDropdown(); window.location.hash = '#account'; }}>
+              Account Settings
+            </button>
             <div class="pd-divider"></div>
             <!-- The project menu is otherwise only reachable by signing out or
                  by knowing the URL: the sidebar that used to lead there is
@@ -760,10 +764,13 @@
           {#if _initials()}
             {_initials()}
           {:else}
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-              stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true">
-              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-              <circle cx="12" cy="7" r="4"/>
+            <!-- The head-and-shoulders silhouette, filled rather than stroked.
+                 A 1.8px outline of this shape at 32px is a few grey hairlines
+                 on a grey button and disappears; the solid form is what makes
+                 it read as a person at a glance. -->
+            <svg viewBox="0 0 24 24" fill="currentColor" width="19" height="19" aria-hidden="true">
+              <circle cx="12" cy="7.5" r="4"/>
+              <path d="M12 13.6c-4.2 0-7.6 2.5-7.6 5.6v.8h15.2v-.8c0-3.1-3.4-5.6-7.6-5.6Z"/>
             </svg>
           {/if}
         </button>
@@ -1114,6 +1121,27 @@
     letter-spacing: 0.06em;
     color: var(--text-muted, #888);
   }
+
+  /* The Projects heading is also the way to the project menu. It stays a
+     heading to look at — same size, weight and colour as Your Name above it —
+     and only answers on hover, so the list below it still reads as the thing
+     the menu is about rather than as a submenu behind a button. */
+  .pd-label-btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    background: none;
+    border: 0;
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: color var(--transition);
+  }
+  .pd-label-btn:hover,
+  .pd-label-btn:focus-visible { color: var(--text-primary, #eee); }
+  .pd-label-btn:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+  .pd-label-arrow { font-size: 0.85rem; line-height: 1; opacity: 0.8; }
 
   .pd-name-row {
     display: flex;

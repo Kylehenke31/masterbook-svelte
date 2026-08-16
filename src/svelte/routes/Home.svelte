@@ -453,22 +453,13 @@
     });
   }
 
+  // The profile dropdown's New Project button used to jump here with a
+  // sessionStorage flag so this screen opened the create form on arrival. That
+  // button is gone — the dropdown points at this menu instead, where creating
+  // a project sits beside the ones that already exist. Nothing sets the flag,
+  // so the code that read it went with it.
   onMount(() => {
     _render();
-
-    // If the page navigates to #home with an intent to open the create form
-    // (e.g. from profile dropdown "New Project"), auto-open it.
-    const intent = sessionStorage.getItem('pm-intent');
-    if (intent === 'create') {
-      sessionStorage.removeItem('pm-intent');
-      const createCard = container?.querySelector('#pm-create-card');
-      const createForm = container?.querySelector('#pm-create-form');
-      if (createCard && createForm) {
-        createForm.classList.remove('hidden');
-        createCard.classList.add('hidden');
-        container.querySelector('#pm-title')?.focus();
-      }
-    }
   });
 
   onDestroy(() => {
