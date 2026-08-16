@@ -97,10 +97,21 @@ Thank you,
      past full size would show nothing more and only soften it. */
   $effect(() => {
     if (!previewStage) return;
+    // The column, not the stage. The stage's height is derived from the scale
+    // this sets, so observing it means measuring a box this code resizes —
+    // which settles, but not before the browser reports an undelivered
+    // notification. The column's width owes nothing to the scale.
+    const target = previewStage.parentElement || previewStage;
     const ro = new ResizeObserver(([entry]) => {
-      previewScale = Math.min(1, entry.contentRect.width / PAGE_W);
+      const next = Math.min(1, entry.contentRect.width / PAGE_W);
+      // Only when it actually moves. The stage's height is derived from this
+      // scale, so assigning unconditionally resized the very box being
+      // observed and the observer fired again — settling, but logging
+      // "ResizeObserver loop completed with undelivered notifications" on the
+      // way. Sub-pixel changes are not worth a re-render either.
+      if (Math.abs(next - previewScale) > 0.001) previewScale = next;
     });
-    ro.observe(previewStage);
+    ro.observe(target);
     return () => ro.disconnect();
   });
 

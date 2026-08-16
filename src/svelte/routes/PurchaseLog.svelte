@@ -9,7 +9,7 @@
   import { getActiveProjectId } from '../stores/project.js';
   import { authUser } from '../stores/auth.js';
   import { canEditPurchase, canApprovePurchase, canCommitPurchase, hasCommitRole,
-           explainEditBlock, isReviewer } from '../lib/permissions.js';
+           explainEditBlock, isReviewer, DRAFT_STATUSES } from '../lib/permissions.js';
   import { onPurchaseCommitted, onPurchaseOrderVoided } from '../lib/approval.js';
   import { PDFDocument } from 'pdf-lib';
 
@@ -257,7 +257,12 @@
         <div class="detail-field"><label>W9 / Tax Form</label>${p.w9Url?`<button type="button" class="btn btn--ghost btn--sm" id="detail-view-w9-btn">📄 View W9</button>`:`<span>${p.w9Attached?'⚠ Marked attached, no file stored':'✘ Not attached'}</span>`}</div>
         <div class="detail-field"><label>Pay Method Doc</label>${p.payDocUrl?`<button type="button" class="btn btn--ghost btn--sm" id="detail-view-paydoc-btn">📄 View Pay Info</button>`:`<span>${p.payMethodDocAttached?'⚠ Marked attached, no file stored':'✘ Not attached'}</span>`}</div>
         <div class="detail-field"><label>${docLabel}</label>${p.receiptUrl?`<button type="button" class="btn btn--ghost btn--sm" id="detail-view-receipt-btn">📄 ${docBtnLabel}</button><span class="field-error" id="detail-receipt-error"></span>`:'<span class="detail-muted">None</span>'}</div>
-        ${p.linkedFolder?`<div class="detail-field"><label>Linked Folder</label><span>${esc(p.linkedFolder)}</span></div>`:''}
+        ${p.linkedFolder?`<div class="detail-field"><label>Returned Against</label><span>${(()=>{
+          // Now that the id is stored, this can name the purchase instead of
+          // printing a folder number the reader has to go and look up.
+          const orig=p.linkedPurchaseId?getPurchaseById(p.linkedPurchaseId):null;
+          return orig?esc(`${orig.folder} · ${orig.vendor||'Unknown vendor'}`):esc(p.linkedFolder);
+        })()}</span></div>`:''}
         ${p.isFringe?`<div class="detail-field"><label>Fringe</label><span>Yes</span></div>`:''}
       </div>
       ${(p.lineItems&&p.lineItems.length)?`<div class="detail-section"><h3>Line Items Breakdown</h3><div class="detail-line-items">${liHtml}</div></div>`:''}
@@ -435,7 +440,7 @@
                 <div class="field"><label for="f-status">Status <span class="req">*</span></label><select id="f-status" name="status" required><option value="">Select…</option><option value="In Review">In Review</option><option value="Pending Approval">Pending Approval</option><option value="Quote">Quote</option><option value="Refunded">Refunded</option></select><span class="field-error" id="err-status"></span></div>
                 <div class="field"><label for="f-charge-type">Charge Type</label><select id="f-charge-type" name="chargeType"><option value="">Select…</option><option>Camera Equipment</option><option>Grip &amp; Electric</option><option>Lab Processing</option><option>Catering</option><option>Props</option><option>Wardrobe &amp; Costumes</option><option>Art Department</option><option>Set Construction</option><option>Transportation</option><option>Fuel</option><option>Post Production</option><option>Sound</option><option>Locations</option><option>Office &amp; Admin</option><option>Other</option></select></div>
                 <div class="field field--conditional" id="field-cc-last4"><label for="f-cc-last4">CC Last 4 Digits</label><input type="text" id="f-cc-last4" name="ccLast4" maxlength="4" pattern="[0-9]{4}" placeholder="1234" inputmode="numeric" /><span class="field-error" id="err-cc-last4"></span></div>
-                <div class="field field--conditional" id="field-linked-folder"><label for="f-linked-folder">Linked Folder # (original)</label><input type="text" id="f-linked-folder" name="linkedFolder" placeholder="e.g. 0002" /><span class="field-error" id="err-linked-folder"></span></div>
+                <div class="field field--conditional" id="field-linked-folder"><label for="f-linked-folder">Original Purchase</label><select id="f-linked-folder" name="linkedFolder"><option value="">Select the purchase being returned…</option></select><small class="field-hint" id="linked-folder-hint"></small><span class="field-error" id="err-linked-folder"></span></div>
                 <div class="field field--full" id="field-line-items">
                   <div class="li-header"><span class="form-section-label">Line Items</span><span class="li-total-display" id="li-total-display"></span></div>
                   <div class="li-table-wrap"><table class="li-table"><colgroup><col class="li-col-budget"/><col class="li-col-desc"/><col class="li-col-amt"/><col class="li-col-rm"/></colgroup><thead><tr><th>Line #</th><th>Description</th><th class="li-th-amt">Amount ($)</th><th></th></tr></thead><tbody id="li-tbody"></tbody></table></div>
@@ -542,10 +547,51 @@
     });
   }
 
+  /* Purchases the return could be against: the book of the person who filed
+     it, newest first. Scoped to the record's author rather than the viewer —
+     a reviewer editing someone else's return should see that person's
+     purchases, not their own. Falls back to every purchase when the record
+     predates submittedByUserId, which is better than an empty list. */
+  function _returnableFor(record) {
+    const author = record?.submittedByUserId || null;
+    return (getPurchases() || [])
+      .filter(p => {
+        if (!p.folder || p.id === record?.id) return false;
+        if (p.method === 'Return' || p.isReturn) return false;
+        if (DRAFT_STATUSES.includes(p.status)) return false;
+        return author ? p.submittedByUserId === author : true;
+      })
+      .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+  }
+
+  function _fillLinkedOptions(host, record) {
+    const sel = host.querySelector('#f-linked-folder');
+    if (!sel) return;
+    const rows = _returnableFor(record);
+    sel.innerHTML = '<option value="">Select the purchase being returned…</option>' +
+      rows.map(p => {
+        const amt  = '$' + (Math.abs(Number(p.amount) || 0)).toFixed(2);
+        const when = p.date ? String(p.date).slice(0, 10) : '';
+        const label = [p.folder, p.vendor || 'Unknown vendor', amt, when].filter(Boolean).join('  ·  ');
+        return `<option value="${esc(p.folder)}" data-purchase-id="${esc(p.id)}">${esc(label)}</option>`;
+      }).join('');
+    const hint = host.querySelector('#linked-folder-hint');
+    if (hint) hint.textContent = rows.length ? '' : 'No purchases on file to return against.';
+  }
+
   function _prefillEditForm(host, record) {
     const set=(id,val)=>{const el=host.querySelector('#'+id);if(!el||val==null)return;el.value=(id==='f-amount')?Number(val).toFixed(2):String(val);};
     set('f-date',record.date);set('f-vendor',record.vendor);set('f-amount',record.amount);set('f-status',record.status);
-    set('f-method',record.method);set('f-cc-last4',record.ccLast4??'');set('f-linked-folder',record.linkedFolder??'');
+    set('f-method',record.method);set('f-cc-last4',record.ccLast4??'');
+    // Options first — a value set before they exist selects nothing. The id
+    // wins over the folder number, which a return shares with its original.
+    _fillLinkedOptions(host, record);
+    const linkedSel = host.querySelector('#f-linked-folder');
+    if (linkedSel) {
+      const byId = record.linkedPurchaseId &&
+        [...linkedSel.options].find(o => o.dataset.purchaseId === record.linkedPurchaseId);
+      linkedSel.value = byId ? byId.value : (record.linkedFolder ?? '');
+    }
     set('f-charge-type',record.chargeType??'');set('f-notes',record.notes??'');
   }
 
@@ -599,6 +645,10 @@
     const fd=new FormData(form),data={};
     for(const[k,v]of fd.entries()){if(['receipt','w9File','payDocFile'].includes(k))continue;data[k]=v;}
     data.amount=parseFloat(data.amount)||0;data.isReturn=data.method==='Return';
+    // Same as the submission form: the folder number files the return, the id
+    // says which purchase it came from. They share a folder by design.
+    const linkedOpt=host.querySelector('#f-linked-folder')?.selectedOptions?.[0];
+    data.linkedPurchaseId=linkedOpt?.dataset?.purchaseId||'';
     if(data.isReturn){data.amount=-Math.abs(data.amount);data.status='Refunded';}
     const li=_getLI(host);if(li.length>0){data.lineItems=li;data.description=li.length===1?li[0].description:li.map(l=>l.description).filter(Boolean).join('; ');data.lineItem=li[0].lineItem||data.lineItem||'';}
     if((form.querySelector('#f-w9')?.files?.length??0)>0)data.w9Attached=true;
