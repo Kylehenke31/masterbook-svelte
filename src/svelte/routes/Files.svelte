@@ -299,7 +299,7 @@
     align-items: flex-start;
   }
   .fp-option:hover { border-color: var(--border, #333); }
-  .fp-option--active { border-color: var(--gold, #c8a44d); background: rgba(200,164,77,0.05); }
+  .fp-option--active { border-color: var(--gold, #8cabcf); background: rgba(140, 171, 207,0.05); }
   .fp-option--disabled { opacity: 0.55; cursor: not-allowed; }
   .fp-option input { margin-top: 3px; }
 

@@ -14,8 +14,17 @@
   --transition: 0.2s ease;
 
   /* Brand / semantic colors (theme-independent) */
-  --gold:         #c9a84c;
-  --gold-hover:   #b8933a;
+
+  /* The brand accent. Named for its job rather than its hue — it used to be a
+     gold, and every rule that spelled the hue into its own name had to be
+     found and reworded to change it.
+     --gold is kept as an alias because roughly a hundred rules still ask for
+     it by that name. They now resolve here, so the colour has one definition;
+     renaming them is a tidy-up, not a prerequisite. */
+  --accent:       #8cabcf;
+  --accent-hover: #7399c4;
+  --gold:         var(--accent);
+  --gold-hover:   var(--accent-hover);
   --orange:       #e07b1a;
   --purple:       #8b5cf6;
   --purple-light: #ede9fe;
@@ -969,7 +978,7 @@ a:hover {
 .field select:focus,
 .field textarea:focus {
   border-color: var(--gold);
-  box-shadow: 0 0 0 2px rgba(201, 168, 76, 0.15);
+  box-shadow: 0 0 0 2px rgba(140, 171, 207, 0.15);
 }
 
 .field textarea {
@@ -1998,7 +2007,7 @@ textarea {
 .crew-cell-inner:focus {
   white-space: pre-wrap; overflow: visible; background: var(--input-bg);
   border: 2px solid var(--gold); border-radius: 0;
-  box-shadow: 0 0 0 2px rgba(201,168,76,0.18); cursor: text; z-index: 5; position: relative;
+  box-shadow: 0 0 0 2px rgba(140, 171, 207,0.18); cursor: text; z-index: 5; position: relative;
 }
 
 /* ── Drag handle ── */
@@ -2021,7 +2030,7 @@ textarea {
 .crew-cell--weekend { background: rgba(255,255,255,0.015); }
 [data-theme="light"] .crew-cell--weekend { background: rgba(0,0,0,0.02); }
 .crew-cell--week-start { box-shadow: -2px 0 0 var(--border) !important; }
-.crew-cell--day:hover { background: rgba(201,168,76,0.10); }
+.crew-cell--day:hover { background: rgba(140, 171, 207,0.10); }
 
 .crew-day-dot { display: block; font-size: 10px; font-weight: 700; color: var(--text-primary); line-height: 18px; pointer-events: none; }
 
@@ -2035,7 +2044,7 @@ textarea {
 .crew-total-day { font-size: 10px; font-weight: 700; color: var(--earth-blue); line-height: 18px; cursor: default; }
 
 /* ── Selection ── */
-.crew-selected { background: rgba(201, 168, 76, 0.15) !important; outline: 1px solid rgba(201, 168, 76, 0.4); }
+.crew-selected { background: rgba(140, 171, 207, 0.15) !important; outline: 1px solid rgba(140, 171, 207, 0.4); }
 
 /* ── Checkbox ── */
 .crew-check { accent-color: var(--gold); width: 13px; height: 13px; cursor: pointer; }
@@ -2177,7 +2186,7 @@ textarea {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--gold, #c9a227);
+  color: var(--gold, #8cabcf);
   margin: 0 0 8px;
 }
 .bd-stats-grid {
@@ -2474,7 +2483,7 @@ textarea {
   width: 100%;
   box-sizing: border-box;
 }
-.bd-input:focus, .bd-select:focus { border-color: var(--gold, #c9a227); outline: none; }
+.bd-input:focus, .bd-select:focus { border-color: var(--gold, #8cabcf); outline: none; }
 .bd-textarea {
   width: 100%;
   padding: 6px 8px;
@@ -2486,7 +2495,7 @@ textarea {
   font-family: inherit;
   resize: vertical;
 }
-.bd-textarea:focus { border-color: var(--gold, #c9a227); outline: none; }
+.bd-textarea:focus { border-color: var(--gold, #8cabcf); outline: none; }
 
 /* Cast checkboxes */
 .bd-cast-grid { display: flex; flex-wrap: wrap; gap: 6px 16px; }
@@ -2499,7 +2508,7 @@ textarea {
   cursor: pointer;
   white-space: nowrap;
 }
-.bd-cast-check input { accent-color: var(--gold, #c9a227); }
+.bd-cast-check input { accent-color: var(--gold, #8cabcf); }
 
 /* Elements sections — 4-column grid */
 .bd-depts {
@@ -2545,7 +2554,7 @@ textarea {
   color: var(--text-primary);
   font-family: inherit;
 }
-.bd-dept-input:focus { border-color: var(--gold, #c9a227); outline: none; }
+.bd-dept-input:focus { border-color: var(--gold, #8cabcf); outline: none; }
 .bd-dept-ac-dropdown {
   display: none; position: absolute; left: 0; right: 0; top: 100%;
   background: var(--bg-elevated); border: 1px solid var(--border);
@@ -2570,7 +2579,7 @@ textarea {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--gold, #c9a227);
+  color: var(--gold, #8cabcf);
   padding-bottom: 4px;
   border-bottom: 1px solid var(--border);
   margin-bottom: 6px;
@@ -2591,7 +2600,7 @@ textarea {
   color: var(--text-primary);
   font-family: inherit;
 }
-.bd-el-name:focus { border-color: var(--gold, #c9a227); outline: none; }
+.bd-el-name:focus { border-color: var(--gold, #8cabcf); outline: none; }
 .bd-el-count {
   font-size: 9px;
   color: var(--text-muted);
@@ -2869,7 +2878,7 @@ textarea {
   background: var(--input-bg);
   border: 2px solid var(--gold);
   border-radius: 0;
-  box-shadow: 0 0 0 2px rgba(201,168,76,0.18);
+  box-shadow: 0 0 0 2px rgba(140, 171, 207,0.18);
   cursor: text;
   z-index: 5;
   position: relative;
@@ -2929,7 +2938,7 @@ textarea {
 
 /* ── OT columns (labor sections only) ── */
 .bud-th--ot    { width: 68px; min-width: 58px; color: var(--earth-amber) !important; }
-.bud-td--ot    { background: rgba(201,168,76,0.03); }
+.bud-td--ot    { background: rgba(140, 171, 207,0.03); }
 .bud-td--ot .bud-cell { color: var(--text-secondary); }
 
 /* ── Summary table header alignment ── */
@@ -3258,7 +3267,7 @@ textarea {
 }
 .bud-rate-input:focus {
   border-color: var(--gold);
-  box-shadow: 0 0 0 2px rgba(201, 168, 76, 0.15);
+  box-shadow: 0 0 0 2px rgba(140, 171, 207, 0.15);
 }
 .bud-rate-pct {
   font-size: 9px;
@@ -3417,7 +3426,7 @@ textarea {
   background: var(--input-bg);
   border: 2px solid var(--gold);
   border-radius: 0;
-  box-shadow: 0 0 0 2px rgba(201, 168, 76, 0.18);
+  box-shadow: 0 0 0 2px rgba(140, 171, 207, 0.18);
   cursor: text;
   z-index: 5;
   position: relative;
@@ -3561,7 +3570,7 @@ textarea {
   color: var(--text-primary);
 }
 .macro-btn.macro-active {
-  background: rgba(201,168,76,0.12);
+  background: rgba(140, 171, 207,0.12);
   color: var(--gold);
 }
 .macro-btn svg {
@@ -4260,7 +4269,7 @@ textarea {
 }
 
 /* Q/R rows on top sheet overview */
-.ts-qr-row .ts-td { background: rgba(201, 168, 76, 0.05); }
+.ts-qr-row .ts-td { background: rgba(140, 171, 207, 0.05); }
 .ts-qr-row .ts-td:first-child { color: var(--earth-amber, #c49840); font-weight: 800; }
 
 /* ── Fringe Summary rows in Overview top sheet ── */
@@ -4472,7 +4481,7 @@ textarea {
 .hc-td--paid { white-space: nowrap; font-size: 10px; }
 .hc-paid--yes { color: var(--green); }
 .hc-paid--no  { color: var(--text-muted); }
-.hc-qr-row .hc-td { background: rgba(201, 168, 76, 0.04); }
+.hc-qr-row .hc-td { background: rgba(140, 171, 207, 0.04); }
 .hc-qr-row .hc-td--id { color: var(--gold); }
 
 .hc-grand-row td {
@@ -5351,7 +5360,7 @@ textarea {
   color: var(--text-secondary); cursor: pointer; white-space: nowrap;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
-.cse-token-pill:hover { background: rgba(201,168,76,0.15); color: var(--gold); border-color: var(--gold); }
+.cse-token-pill:hover { background: rgba(140, 171, 207,0.15); color: var(--gold); border-color: var(--gold); }
 
 .cse-editor-wrap {
   display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;
@@ -5594,7 +5603,7 @@ textarea {
   padding: 0;
   margin-top: 1px;
 }
-.cse-dc-add:hover { border-color: var(--gold, #c9a84c); color: var(--gold, #c9a84c); }
+.cse-dc-add:hover { border-color: var(--gold, #8cabcf); color: var(--gold, #8cabcf); }
 .cse-hdr-right { text-align: right; }
 .cse-label { font-weight: bold; font-size: 8px; text-transform: uppercase; color: #333; margin-bottom: 1px; }
 .cse-val { margin-bottom: 4px; }
@@ -5866,7 +5875,7 @@ tr:hover .cse-row-del { opacity: 0.6; }
 .ins-vendor-item:last-child { border-bottom: none; }
 .ins-vendor-item:hover { background: var(--bg-hover, rgba(255,255,255,.04)); }
 .ins-vendor--active {
-  background: rgba(201,168,76,.1) !important;
+  background: rgba(140, 171, 207,.1) !important;
   border-left: 3px solid var(--gold);
 }
 .ins-vendor-name { font-size: 12px; font-weight: 600; color: var(--text-primary); }

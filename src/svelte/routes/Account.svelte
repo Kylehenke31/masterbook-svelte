@@ -254,7 +254,7 @@
     font-size: 0.85rem;
     padding: 7px 10px;
   }
-  .acct-input:focus { outline: none; border-color: var(--gold, #c8a44d); }
+  .acct-input:focus { outline: none; border-color: var(--gold, #8cabcf); }
 
   .acct-msg { font-size: 0.75rem; color: var(--earth-green, #7aaa7a); margin: 8px 0 0; }
   .acct-err { font-size: 0.75rem; color: var(--earth-red, #b84f4f); margin: 8px 0 0; line-height: 1.5; }

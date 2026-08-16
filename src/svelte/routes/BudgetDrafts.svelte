@@ -320,7 +320,7 @@
   }
   .bd-row:hover { background: var(--bg-elevated, #1f1f24); }
   .bd-row--selected {
-    border-color: var(--gold, #c9a84c);
+    border-color: var(--gold, #8cabcf);
   }
 
   .bd-row-name {
@@ -379,7 +379,7 @@
     border: 1px solid var(--border, #2c2c35);
     color: var(--text-secondary, #9896a0);
   }
-  .bd-badge--gold { color: var(--gold, #c9a84c); border-color: var(--gold, #c9a84c); }
+  .bd-badge--gold { color: var(--gold, #8cabcf); border-color: var(--gold, #8cabcf); }
 
   .bd-detail-actions {
     display: flex;
@@ -409,7 +409,7 @@
     font-size: 0.82rem;
     border-bottom: 1px solid var(--border-subtle, #232328);
   }
-  .bd-ts-id { color: var(--gold, #c9a84c); font-weight: 700; width: 24px; }
+  .bd-ts-id { color: var(--gold, #8cabcf); font-weight: 700; width: 24px; }
   .bd-ts-name { color: var(--text-secondary, #9896a0); }
   .bd-ts-num { text-align: right; color: var(--text-primary, #eee); font-variant-numeric: tabular-nums; }
   .bd-ts-grand td { border-top: 2px solid var(--border, #2c2c35); border-bottom: none; font-weight: 700; }
@@ -427,7 +427,7 @@
     resize: vertical;
     margin-bottom: 10px;
   }
-  .bd-notes-textarea:focus { outline: none; border-color: var(--gold, #c9a84c); }
+  .bd-notes-textarea:focus { outline: none; border-color: var(--gold, #8cabcf); }
 
   .bd-empty {
     padding: 16px;

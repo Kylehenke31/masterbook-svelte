@@ -3829,7 +3829,7 @@ function _openHotCostSummary(filters = { approved: true, inReview: true, quotes:
 
   <!-- ── Print toolbar (hidden on print) ── -->
   <div class="hcs-no-print" style="padding:8px 0 12px; display:flex; gap:8px; align-items:center;">
-    <button onclick="window.print()" style="padding:6px 16px; font-size:12px; font-weight:600; background:#c9a84c; color:#fff; border:none; border-radius:4px; cursor:pointer;">
+    <button onclick="window.print()" style="padding:6px 16px; font-size:12px; font-weight:600; background:#8cabcf; color:#111; border:none; border-radius:4px; cursor:pointer;">
       Print / Save as PDF
     </button>
     <button onclick="window.close()" style="padding:6px 16px; font-size:12px; background:#eee; border:1px solid #ccc; border-radius:4px; cursor:pointer;">

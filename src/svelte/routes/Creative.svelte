@@ -108,7 +108,7 @@
   }
 
   .cr-dept-card:hover {
-    border-color: var(--gold, #c9a84c);
+    border-color: var(--gold, #8cabcf);
     background: var(--bg-hover, #252525);
   }
 
@@ -121,7 +121,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--gold, #c9a84c);
+    color: var(--gold, #8cabcf);
     flex-shrink: 0;
   }
 
@@ -154,6 +154,6 @@
   }
 
   .cr-dept-card:hover .cr-dept-arrow {
-    color: var(--gold, #c9a84c);
+    color: var(--gold, #8cabcf);
   }
 </style>

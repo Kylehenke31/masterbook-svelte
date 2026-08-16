@@ -245,8 +245,8 @@
   .login-tab:hover { color: var(--text-primary, #eee); }
 
   .login-tab--active {
-    background: rgba(201, 168, 76, 0.12);
-    color: var(--gold, #c9a84c);
+    background: rgba(140, 171, 207, 0.12);
+    color: var(--gold, #8cabcf);
     font-weight: 600;
   }
 
@@ -286,7 +286,7 @@
 
   .login-field input:focus {
     outline: none;
-    border-color: var(--gold, #c9a84c);
+    border-color: var(--gold, #8cabcf);
   }
 
   .login-field input:disabled {
@@ -309,8 +309,8 @@
     color: var(--text-secondary, #ccc);
     margin: 0 0 18px;
     padding: 10px 12px;
-    background: rgba(200, 164, 77, 0.08);
-    border: 1px solid rgba(200, 164, 77, 0.3);
+    background: rgba(140, 171, 207, 0.08);
+    border: 1px solid rgba(140, 171, 207, 0.3);
     line-height: 1.5;
     text-align: left;
   }
@@ -327,7 +327,7 @@
   .login-submit {
     width: 100%;
     padding: 12px;
-    background: var(--gold, #c9a84c);
+    background: var(--gold, #8cabcf);
     color: #111;
     border: none;
     border-radius: 0;

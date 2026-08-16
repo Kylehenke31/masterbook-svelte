@@ -962,7 +962,7 @@
 
   .chat-trigger-btn:hover {
     background: var(--bg-hover, #3a3a3a);
-    border-color: var(--gold, #c9a84c);
+    border-color: var(--gold, #8cabcf);
   }
 
   .chat-badge-mini {
@@ -1033,7 +1033,7 @@
 
   .btn--profile:hover {
     background: var(--bg-hover, #3a3a3a);
-    border-color: var(--gold, #c9a84c);
+    border-color: var(--gold, #8cabcf);
   }
 
   /* Profile dropdown — opens upward from the bottom of the sidebar.
@@ -1166,7 +1166,7 @@
     width: 6px;
     height: 6px;
     border-radius: 0;
-    background: var(--gold, #c9a84c);
+    background: var(--gold, #8cabcf);
     flex-shrink: 0;
   }
 
@@ -1196,7 +1196,7 @@
 
   .pd-action-btn--signout { color: #e66; }
   .pd-action-btn--signout:hover { background: rgba(220,60,60,0.08); color: #e88; }
-  .pd-action-btn--active { color: var(--gold, #c9a84c); font-weight: 600; }
+  .pd-action-btn--active { color: var(--gold, #8cabcf); font-weight: 600; }
 
   /* Ledgers dropdown — same shape as the profile dropdown, opens downward
      from the sidebar trigger instead of upward from the bottom bar. */
@@ -1310,7 +1310,7 @@
     align-items: center;
     gap: 5px;
     font-size: 0.65rem;
-    color: var(--gold, #c9a84c);
+    color: var(--gold, #8cabcf);
     white-space: nowrap;
   }
 

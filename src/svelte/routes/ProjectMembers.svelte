@@ -412,7 +412,7 @@
     line-height: 1.5;
     resize: vertical;
   }
-  .pm-share-text:focus { outline: none; border-color: var(--gold, #c8a44d); }
+  .pm-share-text:focus { outline: none; border-color: var(--gold, #8cabcf); }
   .pm-share-actions {
     display: flex;
     gap: 8px;

@@ -115,7 +115,7 @@
     font-family: inherit;
   }
   .vam-textarea { resize: vertical; }
-  .vam-input:focus, .vam-textarea:focus { outline: none; border-color: var(--gold, #c9a84c); }
+  .vam-input:focus, .vam-textarea:focus { outline: none; border-color: var(--gold, #8cabcf); }
 
   .vam-actions {
     display: flex;

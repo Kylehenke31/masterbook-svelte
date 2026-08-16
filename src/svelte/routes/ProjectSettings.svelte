@@ -649,7 +649,7 @@
   }
 
   :global(.pi-logo-label:hover) {
-    border-color: var(--gold, #c9a84c);
+    border-color: var(--gold, #8cabcf);
   }
 
   :global(.pi-logo-img) {

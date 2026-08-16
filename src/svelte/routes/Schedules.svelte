@@ -406,7 +406,7 @@
     cursor: pointer;
     transition: background 0.12s, border-color 0.12s;
   }
-  .sched-card--active:hover { background: var(--bg-hover, #2a2a2a); border-color: var(--gold, #c9a84c); }
+  .sched-card--active:hover { background: var(--bg-hover, #2a2a2a); border-color: var(--gold, #8cabcf); }
   .sched-card-icon { color: var(--text-muted, #888); }
   .sched-card-body { display: flex; flex-direction: column; gap: 3px; flex: 1; }
   .sched-card-title { font-size: 0.85rem; font-weight: 600; }
@@ -416,7 +416,7 @@
     background: var(--bg-surface, #1a1a1a); color: var(--text-muted, #888);
     align-self: flex-start;
   }
-  .sched-card-badge--ready { background: var(--gold, #c9a84c); color: #000; }
+  .sched-card-badge--ready { background: var(--gold, #8cabcf); color: #000; }
 
   /* Prep layout */
   .prep-layout  { display: flex; gap: 24px; align-items: flex-start; }
@@ -435,7 +435,7 @@
 
   .prep-event-list { display: flex; flex-direction: column; gap: 10px; max-height: 250px; overflow-y: auto; }
   .prep-day-group {}
-  .prep-day-label { font-size: 0.75rem; font-weight: 700; color: var(--gold, #c9a84c); margin-bottom: 3px; }
+  .prep-day-label { font-size: 0.75rem; font-weight: 700; color: var(--gold, #8cabcf); margin-bottom: 3px; }
   .prep-event-item { display: flex; gap: 6px; font-size: 0.75rem; align-items: baseline; padding: 1px 0; }
   .prep-event-time { font-size: 0.7rem; color: var(--text-muted, #888); white-space: nowrap; min-width: 56px; }
   .prep-event-name { flex: 1; }

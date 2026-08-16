@@ -590,7 +590,7 @@
     color: var(--text-secondary, #888);
     text-decoration: none;
   }
-  .crdept-back:hover { color: var(--gold, #c9a84c); }
+  .crdept-back:hover { color: var(--gold, #8cabcf); }
 
   .crdept-title {
     font-size: 1.4rem;
@@ -620,8 +620,8 @@
   }
   .crdept-tab:hover { color: var(--text-primary, #eee); }
   .crdept-tab--active {
-    color: var(--gold, #c9a84c);
-    border-bottom-color: var(--gold, #c9a84c);
+    color: var(--gold, #8cabcf);
+    border-bottom-color: var(--gold, #8cabcf);
     font-weight: 600;
   }
 
@@ -635,7 +635,7 @@
     font-size: 0.875rem;
     line-height: 1.8;
   }
-  .cr-empty a { color: var(--gold, #c9a84c); }
+  .cr-empty a { color: var(--gold, #8cabcf); }
 
   /* ──────── Creative Deck ──────── */
   .deck-layout {
@@ -662,7 +662,7 @@
     margin: 10px 8px 6px;
     padding: 7px;
     font-size: 0.8rem;
-    background: var(--gold, #c9a84c);
+    background: var(--gold, #8cabcf);
     color: #000;
     border: none;
     border-radius: 0;
@@ -684,7 +684,7 @@
     transition: background 0.1s;
   }
   .deck-slide-thumb:hover { background: var(--bg-hover, #252525); }
-  .deck-slide-thumb--active { background: rgba(201,168,76,0.1); }
+  .deck-slide-thumb--active { background: rgba(140, 171, 207,0.1); }
 
   .deck-thumb-img {
     width: 100%;
@@ -809,7 +809,7 @@
     resize: vertical;
     font-family: inherit;
   }
-  .deck-input:focus, .deck-textarea:focus { outline: none; border-color: var(--gold, #c9a84c); }
+  .deck-input:focus, .deck-textarea:focus { outline: none; border-color: var(--gold, #8cabcf); }
   .deck-textarea--sm { resize: none; }
 
   /* ──────── Elements Deck ──────── */
@@ -825,7 +825,7 @@
     background: var(--bg-surface, #1e1e1e);
     transition: border-color 0.15s;
   }
-  .elnode--locked { border-color: var(--gold, #c9a84c); }
+  .elnode--locked { border-color: var(--gold, #8cabcf); }
   .elnode--done { opacity: 0.6; }
 
   .elnode-header {
@@ -861,7 +861,7 @@
     font-family: inherit;
     box-sizing: border-box;
   }
-  .elnode-notes:focus { outline: none; border-color: var(--gold, #c9a84c); }
+  .elnode-notes:focus { outline: none; border-color: var(--gold, #8cabcf); }
 
   /* ──────── Shot List ──────── */
   .shotlist { max-width: 960px; }
@@ -891,7 +891,7 @@
   }
   .sl-scene-hdr:hover { background: var(--bg-hover, #252525); }
 
-  .sl-scene-num { font-weight: 700; font-size: 0.9rem; min-width: 36px; color: var(--gold, #c9a84c); }
+  .sl-scene-num { font-weight: 700; font-size: 0.9rem; min-width: 36px; color: var(--gold, #8cabcf); }
   .sl-scene-meta { font-size: 0.8rem; color: var(--text-secondary, #aaa); min-width: 180px; }
   .sl-scene-desc { flex: 1; font-size: 0.8rem; color: var(--text-secondary, #888); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .sl-scene-shotcount { font-size: 0.75rem; color: var(--text-secondary, #888); white-space: nowrap; }
@@ -930,7 +930,7 @@
     width: 100%;
   }
   .sl-input--wide { min-width: 160px; }
-  .sl-select:focus, .sl-input:focus { outline: none; border-color: var(--gold, #c9a84c); }
+  .sl-select:focus, .sl-input:focus { outline: none; border-color: var(--gold, #8cabcf); }
 
   .sl-del {
     background: none;
@@ -952,7 +952,7 @@
     cursor: pointer;
     transition: border-color 0.15s, color 0.15s;
   }
-  .sl-add-shot:hover { border-color: var(--gold, #c9a84c); color: var(--gold, #c9a84c); }
+  .sl-add-shot:hover { border-color: var(--gold, #8cabcf); color: var(--gold, #8cabcf); }
 
   /* ──────── Camera Reports ──────── */
   .camreports-top { margin-bottom: 20px; }
@@ -960,7 +960,7 @@
   .btn-upload {
     display: inline-block;
     padding: 8px 16px;
-    background: var(--gold, #c9a84c);
+    background: var(--gold, #8cabcf);
     color: #000;
     border-radius: 0;
     font-size: 0.875rem;
@@ -995,7 +995,7 @@
 
   .camrep-info { padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
   .camrep-label { font-size: 0.85rem; font-weight: 600; background: transparent; border: none; border-bottom: 1px solid var(--border, #333); color: var(--text-primary, #eee); padding: 2px 0; width: 100%; }
-  .camrep-label:focus { outline: none; border-bottom-color: var(--gold, #c9a84c); }
+  .camrep-label:focus { outline: none; border-bottom-color: var(--gold, #8cabcf); }
   .camrep-date { font-size: 0.8rem; background: var(--bg-main, #161616); border: 1px solid var(--border, #333); border-radius: 0; color: var(--text-primary, #eee); padding: 3px 6px; }
   .camrep-notes { font-size: 0.78rem; background: var(--bg-main, #161616); border: 1px solid var(--border, #2a2a2a); border-radius: 0; color: var(--text-primary, #ddd); padding: 5px 8px; resize: none; font-family: inherit; width: 100%; box-sizing: border-box; }
 
@@ -1040,9 +1040,9 @@
   }
   .subview-btn:hover { background: var(--bg-elevated, #2a2a2a); color: var(--text-primary, #eee); }
   .subview-btn--active {
-    background: rgba(201,168,76,0.1);
-    border-color: var(--gold, #c9a84c);
-    color: var(--gold, #c9a84c);
+    background: rgba(140, 171, 207,0.1);
+    border-color: var(--gold, #8cabcf);
+    color: var(--gold, #8cabcf);
   }
 
   /* ── Document upload section ── */
@@ -1126,7 +1126,7 @@
     width: 100%;
     max-width: 360px;
   }
-  .doc-label-input:focus { outline: none; border-color: var(--gold, #c9a84c); }
+  .doc-label-input:focus { outline: none; border-color: var(--gold, #8cabcf); }
   .doc-filename {
     font-size: 0.7rem;
     color: var(--text-secondary, #888);

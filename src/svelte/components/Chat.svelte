@@ -417,9 +417,9 @@
     transition: background 0.1s, color 0.1s;
   }
   .chat-auth-tab--active {
-    background: rgba(201,168,76,0.12);
-    border-color: var(--gold, #c9a84c);
-    color: var(--gold, #c9a84c);
+    background: rgba(140, 171, 207,0.12);
+    border-color: var(--gold, #8cabcf);
+    color: var(--gold, #8cabcf);
   }
   .chat-auth-input {
     width: 100%;
@@ -431,7 +431,7 @@
     font-size: 0.825rem;
     box-sizing: border-box;
   }
-  .chat-auth-input:focus { outline: none; border-color: var(--gold, #c9a84c); }
+  .chat-auth-input:focus { outline: none; border-color: var(--gold, #8cabcf); }
   .chat-auth-error {
     font-size: 0.775rem;
     color: #e66;
@@ -440,7 +440,7 @@
   }
   .chat-auth-submit {
     padding: 9px;
-    background: var(--gold, #c9a84c);
+    background: var(--gold, #8cabcf);
     color: #111;
     border: none;
     border-radius: 0;
@@ -483,10 +483,10 @@
     background: var(--bg-elevated, #222);
   }
   .chat-channel-tab--active {
-    color: var(--gold, #c9a84c);
-    border-left-color: var(--gold, #c9a84c);
+    color: var(--gold, #8cabcf);
+    border-left-color: var(--gold, #8cabcf);
     font-weight: 600;
-    background: rgba(201,168,76,0.06);
+    background: rgba(140, 171, 207,0.06);
   }
 
   /* ── Messages ── */
@@ -568,7 +568,7 @@
     white-space: pre-wrap;
   }
   .chat-msg--me .chat-msg-bubble {
-    background: rgba(201,168,76,0.18);
+    background: rgba(140, 171, 207,0.18);
     border-radius: 0;
     border-bottom-right-radius: 3px;
   }
@@ -595,12 +595,12 @@
     line-height: 1.4;
     font-family: inherit;
   }
-  .chat-composer-input:focus { outline: none; border-color: var(--gold, #c9a84c); }
+  .chat-composer-input:focus { outline: none; border-color: var(--gold, #8cabcf); }
   .chat-send-btn {
     width: 34px;
     height: 34px;
     border-radius: 0;
-    background: var(--gold, #c9a84c);
+    background: var(--gold, #8cabcf);
     color: #111;
     border: none;
     cursor: pointer;

@@ -716,7 +716,7 @@
     border: 1px solid currentColor;
   }
   .pc-status--active     { color: var(--earth-green, #7aaa7a); }
-  .pc-status--pending    { color: var(--gold, #c8a44d); }
+  .pc-status--pending    { color: var(--gold, #8cabcf); }
   .pc-status--reconciled { color: var(--text-muted, #888); }
 
   .pc-muted { color: var(--text-muted, #888); }

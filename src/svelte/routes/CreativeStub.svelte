@@ -353,8 +353,8 @@
   }
 
   .crs-tab--active {
-    color: var(--gold, #c9a84c);
-    border-bottom-color: var(--gold, #c9a84c);
+    color: var(--gold, #8cabcf);
+    border-bottom-color: var(--gold, #8cabcf);
   }
 
   .crs-pane { width: 100%; }
@@ -389,11 +389,11 @@
     font-size: 0.8rem;
   }
 
-  .crs-input:focus { outline: none; border-color: var(--gold, #c9a84c); }
+  .crs-input:focus { outline: none; border-color: var(--gold, #8cabcf); }
 
   .crs-btn-add {
     padding: 6px 12px;
-    background: var(--gold, #c9a84c);
+    background: var(--gold, #8cabcf);
     color: #111;
     border: none;
     border-radius: 0;
@@ -418,8 +418,8 @@
   }
 
   .crs-slide-item--active {
-    border-color: var(--gold, #c9a84c);
-    background: rgba(201, 168, 76, 0.06);
+    border-color: var(--gold, #8cabcf);
+    background: rgba(140, 171, 207, 0.06);
   }
 
   .crs-slide-num {
@@ -531,7 +531,7 @@
     transition: border-color 0.15s, color 0.15s;
   }
 
-  .crs-img-add:hover { border-color: var(--gold, #c9a84c); color: var(--gold, #c9a84c); }
+  .crs-img-add:hover { border-color: var(--gold, #8cabcf); color: var(--gold, #8cabcf); }
 
   .crs-field-label {
     font-size: 0.75rem;
@@ -553,7 +553,7 @@
     box-sizing: border-box;
   }
 
-  .crs-textarea:focus { outline: none; border-color: var(--gold, #c9a84c); }
+  .crs-textarea:focus { outline: none; border-color: var(--gold, #8cabcf); }
 
   .crs-placeholder {
     display: flex;
@@ -666,7 +666,7 @@
     box-sizing: border-box;
   }
 
-  .crs-el-notes:focus { outline: none; border-color: var(--gold, #c9a84c); }
+  .crs-el-notes:focus { outline: none; border-color: var(--gold, #8cabcf); }
 
   /* ── Sub-view toggle bar ── */
   .crs-subview-bar {
@@ -690,9 +690,9 @@
   }
   .crs-subview-btn:hover { background: var(--bg-elevated, #2a2a2a); color: var(--text-primary, #eee); }
   .crs-subview-btn--active {
-    background: rgba(201,168,76,0.1);
-    border-color: var(--gold, #c9a84c);
-    color: var(--gold, #c9a84c);
+    background: rgba(140, 171, 207,0.1);
+    border-color: var(--gold, #8cabcf);
+    color: var(--gold, #8cabcf);
   }
 
   /* ── Document section ── */
@@ -775,7 +775,7 @@
     width: 100%;
     max-width: 360px;
   }
-  .crs-doc-label:focus { outline: none; border-color: var(--gold, #c9a84c); }
+  .crs-doc-label:focus { outline: none; border-color: var(--gold, #8cabcf); }
   .crs-doc-filename {
     font-size: 0.7rem;
     color: var(--text-secondary, #888);
