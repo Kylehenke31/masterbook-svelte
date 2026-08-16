@@ -400,8 +400,10 @@
               </div><!-- /.form-grid -->
 
               <div class="form-actions">
-                <button type="button" id="btn-save-profile" class="btn btn--ghost">Save to profile</button>
-                <button type="button" id="btn-review-later" class="btn btn--ghost">Review later</button>
+                <!-- This always saved a draft; "Save to profile" described
+                     something it never did. The id follows the label so the
+                     next person reading either one is told the same thing. -->
+                <button type="button" id="btn-save-draft" class="btn btn--ghost">Save Draft</button>
                 <button type="submit" id="btn-submit" class="btn btn--primary">Submit for review</button>
               </div>
             </form>
@@ -1681,7 +1683,7 @@ Rules:
      */
     async function withButtonLoading(activeBtn, loadingLabel, fn) {
       const submitBtn = c.querySelector('#btn-submit');
-      const saveBtn   = c.querySelector('#btn-save-profile');
+      const saveBtn   = c.querySelector('#btn-save-draft');
       const originalLabel = activeBtn.textContent;
       const statusEl = c.querySelector('#ocr-status');
       [submitBtn, saveBtn].forEach(b => { if (b) b.disabled = true; });
@@ -1707,14 +1709,10 @@ Rules:
         () => submitRecord(form, c, 'In Review'));
     });
 
-    c.querySelector('#btn-save-profile').addEventListener('click', async () => {
+    c.querySelector('#btn-save-draft').addEventListener('click', async () => {
       if (!validateMinimal(form, c)) return;
-      await withButtonLoading(c.querySelector('#btn-save-profile'), 'Saving…',
+      await withButtonLoading(c.querySelector('#btn-save-draft'), 'Saving…',
         () => submitRecord(form, c, 'Draft', true));
-    });
-
-    c.querySelector('#btn-review-later').addEventListener('click', () => {
-      onDone?.('cancel');
     });
 
     attachScanListeners(c, fileInput);

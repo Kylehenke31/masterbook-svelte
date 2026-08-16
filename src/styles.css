@@ -883,7 +883,7 @@ a:hover {
 .form-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  gap: 10px;
 }
 
 /* A date and a dollar amount have a known length. Letting them fill half a
@@ -975,12 +975,18 @@ a:hover {
   box-shadow: 0 0 0 2px rgba(224, 82, 82, 0.15);
 }
 
+/* min-height was reserving a line under every field for an error that is not
+   there — 14px plus the field's gap, on seven fields, which is most of a row
+   of dead space down the form. The message still pushes the layout when it
+   appears; holding the gap open permanently to avoid that costs more than the
+   shift does. */
 .field-error {
   font-size: 11px;
   color: var(--red);
-  min-height: 14px;
   display: block;
 }
+
+.field-error:empty { display: none; }
 
 .field-hint {
   font-size: 11px;
@@ -1182,7 +1188,7 @@ a:hover {
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-muted);
-  padding-top: 8px;
+  padding-top: 6px;
   border-top: 1px solid var(--border-subtle);
 }
 
@@ -1247,17 +1253,26 @@ a:hover {
 }
 
 /* ── Supporting Doc Upload ── */
+/* Side by side, not stacked. Two boxes holding one file input each were
+   taking 221px between them — the tallest thing on the form for the part of
+   it people touch least. They are the same kind of thing and belong on one
+   row; below 620px they fall back to stacking rather than squeezing. */
 .doc-upload-group {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+@media (max-width: 620px) {
+  .doc-upload-group { grid-template-columns: 1fr; }
 }
 
 .doc-upload-item {
   border: 1px solid var(--border);
   border-radius: 0;
-  padding: 12px 14px;
+  padding: 9px 11px;
   background: var(--bg-surface);
+  min-width: 0;
 }
 
 .doc-upload-item.doc-required {
@@ -1271,8 +1286,12 @@ a:hover {
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  margin-bottom: 6px;
+  margin-bottom: 5px;
 }
+
+/* The size limit is worth knowing once, not worth a line of its own in each
+   box — it wraps under the title at this width and doubles the label. */
+.doc-upload-item .doc-note { display: none; }
 
 .doc-note {
   display: inline-block;
