@@ -423,6 +423,25 @@ let _container  = null;
 let _budget     = {};  // { sectionId: { collapsed, pwRate, fringeRate, rows } }
 let _sections   = [];  // active SECTION_DEFS array (set by template)
 let _modalOpen  = null; // { secId, rowId }
+
+/* Every popup in this file is appended to document.body rather than to the
+ * budget container — they have to sit above everything, and a container that
+ * scrolls cannot hold them. The cost is that leaving the Budget does not take
+ * them down: the container goes, the popup stays, floating over whatever
+ * screen came next with no way back to the thing it belonged to.
+ *
+ * So each one hands over the means to close itself, and leaving closes them
+ * all. A registry rather than a list of names because two of these closers are
+ * local closures that nothing outside their own function can reach. */
+const _openPopups = new Set();
+
+function _closeAllPopups() {
+  // Iterate a copy: each close() removes itself from the set as it runs.
+  for (const close of [..._openPopups]) {
+    try { close(); } catch (err) { console.warn('[budget] popup close failed:', err); }
+  }
+  _openPopups.clear();
+}
 let _showEst    = false; // toggled by toolbar button; not persisted
 let _lockState  = null;  // loaded from localStorage; { locked, lockedAt, lockedRows, lockedGroups, lockedPW, lockedFringes }
 
@@ -864,9 +883,11 @@ function _showActualPopup(title, contributions, grandTotal, showLineNums = false
     }
   });
   document.addEventListener('keydown', _popupKeyHandler);
+  _openPopups.add(_closeActualPopup);
 }
 
 function _closeActualPopup() {
+  _openPopups.delete(_closeActualPopup);
   document.getElementById('actual-popup-overlay')?.remove();
   document.removeEventListener('keydown', _popupKeyHandler);
 }
@@ -1573,6 +1594,7 @@ function _attachModalListeners(overlay, secId, ri, isLabor) {
 
   function closeModal() {
     _save();
+    _openPopups.delete(closeModal);
     document.removeEventListener('keydown', onKey);
     overlay.remove();
     _modalOpen = null;
@@ -1596,6 +1618,7 @@ function _attachModalListeners(overlay, secId, ri, isLabor) {
     closeModal();
   };
   document.addEventListener('keydown', onKey);
+  _openPopups.add(closeModal);
 
   /* The contact card is positioned here rather than in CSS because it has to
    * escape two ancestors that clip: the modal body scrolls, and the modal
@@ -2021,6 +2044,7 @@ function _openFringePopup() {
 
   document.body.appendChild(overlay);
   _attachFringePopupListeners(overlay);
+  _openPopups.add(_closeFringePopup);
 }
 
 function _attachFringePopupListeners(overlay) {
@@ -2084,6 +2108,7 @@ function _attachFringePopupListeners(overlay) {
 }
 
 function _closeFringePopup(skipRender) {
+  _openPopups.delete(_closeFringePopup);
   const el = document.getElementById('af-overlay');
   if (el) el.remove();
   document.removeEventListener('keydown', _fringePopupKeyHandler);
@@ -2927,6 +2952,12 @@ function _toast(message) {
 let _overviewCleanup = null;
 
 export function disposeBudgetOverview() {
+  // Before the cleanup, so a closer that saves still has the DOM it expects.
+  _closeAllPopups();
+  // A confirmation about a row is meaningless over the screen that replaced it.
+  clearTimeout(_toastTimer);
+  _toastEl?.remove();
+  _toastEl = null;
   if (_overviewCleanup) { _overviewCleanup(); _overviewCleanup = null; }
 }
 
@@ -2994,7 +3025,12 @@ function _openSectionPicker() {
   wrap.querySelector('#bsp-all').addEventListener('click', () => { boxes().forEach(b => b.checked = true); sync(); });
   wrap.querySelector('#bsp-none').addEventListener('click', () => { boxes().forEach(b => b.checked = false); sync(); });
 
-  const close = () => { document.removeEventListener('keydown', onKey); wrap.remove(); };
+  const close = () => {
+    _openPopups.delete(close);
+    document.removeEventListener('keydown', onKey);
+    wrap.remove();
+  };
+  _openPopups.add(close);
   const onKey = e => { if (e.key === 'Escape') close(); };
   document.addEventListener('keydown', onKey);
   wrap.querySelector('#bsp-cancel').addEventListener('click', close);
