@@ -714,6 +714,70 @@
   }
 
 
+  /* ── Print ──
+     The roster, not the day grid. Eight weeks is 56 day columns; on landscape
+     Letter that is about twice the width of the page, and scaled to fit it
+     comes out at five pixels a column — a grid nobody can read. The # Days
+     total carries what the grid says, and the schedule has its own documents.
+
+     Hidden columns stay hidden. Putting Rate back into the printout would
+     defeat the reason for hiding it, which is having something you can hand
+     round a room. */
+  function exportCrewPdf() {
+    const esc = v => String(v ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const proj  = _getProject();
+    const title = [proj?.productionNumber, proj?.title].filter(Boolean).join('_') || 'Crew List';
+
+    const cols = [
+      ...visibleLeftCols.map(c => ({ key: c.key, label: c.label })),
+      { key: '_days', label: '# DAYS' },
+    ];
+
+    const body = data.map(sec => {
+      // A department nobody has been put into yet prints as a heading with
+      // nothing under it, which reads as an oversight. Skip it.
+      const rows = (sec.rows ?? []).filter(r => cols.some(c => c.key !== '_days' && String(r[c.key] ?? '').trim()));
+      if (!rows.length) return '';
+      return `
+        <tr class="sec"><td colspan="${cols.length}">${esc(sec.sectionName)}</td></tr>
+        ${rows.map(r => `<tr>${cols.map(c => `<td>${esc(
+            c.key === '_days'  ? (countDays(r) || '')
+          : c.key === 'phone'  ? formatPhone(r.phone ?? '')
+          : r[c.key])}</td>`).join('')}</tr>`).join('')}`;
+    }).join('');
+
+    const html = `<!doctype html><html><head><meta charset="utf-8">
+<title>${esc(title)} — Crew List</title>
+<style>
+  @page { size: letter landscape; margin: 0.4in; }
+  * { box-sizing: border-box; }
+  body { font: 11px -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; color: #111; margin: 0; }
+  h1 { font-size: 15px; margin: 0 0 2px; }
+  .sub { font-size: 10px; color: #555; margin: 0 0 10px; }
+  table { border-collapse: collapse; width: 100%; }
+  th { text-align: left; font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase;
+       border-bottom: 1.5px solid #111; padding: 4px 6px; }
+  td { padding: 3px 6px; border-bottom: 1px solid #ddd; vertical-align: top; }
+  /* Repeat on every page: a department that breaks across a page boundary
+     otherwise leaves the second half with no heading. */
+  thead { display: table-header-group; }
+  tr.sec td { font-weight: 700; font-size: 10px; letter-spacing: 0.05em;
+              background: #eee; border-bottom: 1px solid #999; padding: 4px 6px; }
+  tr { break-inside: avoid; }
+</style></head><body>
+<h1>${esc(title)}</h1>
+<p class="sub">Crew List &middot; ${esc(rangeLabel)}</p>
+<table>
+  <thead><tr>${cols.map(c => `<th>${esc(c.label)}</th>`).join('')}</tr></thead>
+  <tbody>${body || `<tr><td colspan="${cols.length}">No crew entered yet.</td></tr>`}</tbody>
+</table>
+<script>window.onload = () => { window.print(); }<\/script>
+</body></html>`;
+
+    const w = window.open('', '_blank', 'width=1100,height=800');
+    if (w) { w.document.write(html); w.document.close(); }
+  }
+
   /* ── Mount / cleanup ── */
   onMount(() => {
     // Read once on open. The budget is not being edited from this screen, so
@@ -786,6 +850,16 @@
       {/each}
       <button class="btn btn--ghost btn--sm" onclick={() => { numWeeks++; save(); }}>+ Week</button>
       <button class="btn btn--ghost btn--sm" onclick={() => { if (numWeeks > 1) { numWeeks--; save(); } }} disabled={numWeeks <= 1}>− Week</button>
+      <!-- Same mark as the budget's print button, so the one thing that makes a
+           PDF looks the same wherever you meet it. -->
+      <button class="btn btn--ghost btn--sm bud-icon-btn" title="Print crew list" onclick={exportCrewPdf}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+          stroke-linecap="round" stroke-linejoin="round" width="15" height="15" aria-hidden="true">
+          <polyline points="6 9 6 2 18 2 18 9"/>
+          <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+          <rect x="6" y="14" width="12" height="8"/>
+        </svg>
+      </button>
     </div>
   </div>
 
