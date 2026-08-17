@@ -14,9 +14,19 @@
  */
 
 import { FEATURES, levelFor } from './features.js';
+import { APP_ORIGIN } from './appOrigin.js';
 
-/** The app's own origin — whatever host this copy is being used from. */
-export function inviteLink(email, origin = window.location.origin) {
+/**
+ * The link is for somebody else, so it points at the app's real address rather
+ * than at whatever host it was composed from. It used to default to
+ * window.location.origin, which meant an invite written from a dev server went
+ * out pointing at http://localhost:5173 — an address that resolves, on the
+ * recipient's machine, to nothing at all.
+ *
+ * The origin is still an argument so a caller can override it, but no caller
+ * should need to.
+ */
+export function inviteLink(email, origin = APP_ORIGIN) {
   const base = String(origin || '').replace(/\/+$/, '');
   return `${base}/?invite=${encodeURIComponent(String(email || '').trim().toLowerCase())}`;
 }

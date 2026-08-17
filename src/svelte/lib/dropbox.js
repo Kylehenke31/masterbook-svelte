@@ -1,3 +1,5 @@
+import { APP_ORIGIN } from './appOrigin.js';
+
 /**
  * dropbox.js — Dropbox connection + Files API wrapper.
  *
@@ -24,12 +26,15 @@ const REDIRECT_URI  = window.location.origin;
    deploy. Connecting from one used to hand you a Dropbox error page about a
    redirect_uri you had never seen, which reads as the app being broken. */
 const DROPBOX_REGISTERED_ORIGINS = [
-  'https://masterbook.net',
+  APP_ORIGIN,
   'http://localhost:5173',
   'http://127.0.0.1:5173',
 ];
 
-export const DROPBOX_CANONICAL_ORIGIN = 'https://masterbook.net';
+// Not written down again: the redirect URI registered with Dropbox and the
+// app's own address are the same string, and keeping two copies is how they
+// end up disagreeing after a domain change.
+export const DROPBOX_CANONICAL_ORIGIN = APP_ORIGIN;
 
 /** Whether Dropbox will accept a connection started from this host. */
 export function dropboxOriginSupported() {
