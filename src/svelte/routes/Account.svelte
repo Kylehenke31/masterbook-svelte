@@ -204,10 +204,7 @@
        heading reads as broken, a disabled button reads as not yet. -->
   <div class="acct-block">
     <h3 class="acct-h">Subscription</h3>
-    <p class="acct-note">
-      Billing is not switched on. Everything is open while the app is being
-      tested, and nothing here will start charging without asking first.
-    </p>
+    <p class="acct-note">Feature coming soon. Billing not switched on.</p>
     <div class="acct-row">
       <span class="acct-chip">Not billed</span>
       <button class="btn btn--ghost btn--sm" disabled
