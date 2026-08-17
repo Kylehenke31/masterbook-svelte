@@ -7580,29 +7580,14 @@ tr:hover .cse-row-del { opacity: 0.6; }
    from the menu opens it here instead of routing to #account, which renders
    inside the app shell and would put a project's sidebar within reach of
    someone who has not opened a project. */
-.pm-account-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-  background: rgba(0, 0, 0, 0.5);
-  border: 0;
-  /* Its own keyframe, not the panel's. pmFormIn carries the translate(-50%,-50%)
-     that centres a panel, and on a full-bleed backdrop that shifts it up and
-     left by half the viewport — covering one quadrant instead of the screen. */
-  animation: pmBackdropIn 240ms ease both;
-}
-
-@keyframes pmBackdropIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-
 .pm-account-panel {
   position: fixed;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  z-index: 41;
+  /* 30, the same layer as the New Project form. 40-something was chosen to sit
+     above a scrim that no longer exists. */
+  z-index: 30;
   width: min(560px, calc(100vw - 48px));
   /* Bounded, then scrolled inside: the account screen grows with the number of
      projects you are on, and a panel that grows with it runs off the picture. */
@@ -7610,5 +7595,29 @@ tr:hover .cse-row-del { opacity: 0.6; }
   overflow-y: auto;
   background: var(--bg-surface);
   border: 1px solid var(--border);
-  animation: pmFormIn 240ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  /* No animation here: the panel's fade is a Svelte transition so that it runs
+     on the way out too, and a CSS animation would re-run it on every render. */
+}
+
+/* The menu the account panel appears in place of. Fading rather than hiding,
+   so the two halves of the swap overlap the way they do for New Project. */
+.pm-menu,
+.pm-archived-section {
+  transition: opacity 240ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.pm-faded {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Coming back, the menu has just been rebuilt, so there is no prior opacity for
+   a transition to run from — the same reason the New Project form animates. */
+.pm-fade-in {
+  animation: pmFadeIn 240ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+@keyframes pmFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }

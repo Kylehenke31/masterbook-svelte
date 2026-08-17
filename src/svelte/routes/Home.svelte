@@ -1,5 +1,6 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
+  import { cubicOut } from 'svelte/easing';
   import Account from './Account.svelte';
   import { hydrate } from '../../../src/data.js';
   import {
@@ -33,14 +34,46 @@
    */
   let accountOpen = $state(false);
 
+  /** The menu and the archive list — what the panel appears in place of. */
+  function fadeTargets() {
+    return [
+      container?.querySelector('.pm-menu'),
+      container?.querySelector('.pm-archived-section'),
+    ].filter(Boolean);
+  }
+
+  function openAccount() {
+    fadeTargets().forEach(el => el.classList.add('pm-faded'));
+    accountOpen = true;
+  }
+
   /**
    * Re-render on the way out. The menu behind the panel is built as HTML and
    * does not react to anything, so leaving a project from inside the account
    * screen would otherwise leave it still listed until the next navigation.
+   *
+   * That rebuild is why the menu comes back on an animation rather than on the
+   * transition it left by: the elements are new, and a transition has no prior
+   * state to run from. Same reason the New Project form animates in.
    */
   function closeAccount() {
     accountOpen = false;
     _render();
+    fadeTargets().forEach(el => el.classList.add('pm-fade-in'));
+  }
+
+  /**
+   * The New Project form's motion, expressed as a Svelte transition so it runs
+   * on the way out as well as in. The transform is written in full because the
+   * panel is centred with one, and a transition that set only opacity would
+   * leave it — while one that set only the offset would drop the centring.
+   */
+  function panelFade(node, { duration = 240 } = {}) {
+    return {
+      duration,
+      easing: cubicOut,
+      css: (t, u) => `opacity: ${t}; transform: translate(-50%, calc(-50% + ${u * 6}px));`,
+    };
   }
 
   function _esc(str) {
@@ -260,7 +293,7 @@
     }
 
     c.querySelector('#pm-account')?.addEventListener('click', () => {
-      accountOpen = true;
+      openAccount();
     });
 
     // Open project → go to Purchase Log
@@ -498,15 +531,14 @@
 <div bind:this={container} class="pm-root"></div>
 
 {#if accountOpen}
-  <!-- Same shape as the New Project form: a surface floating over the
-       photograph, centred, dismissed by Escape or by the backdrop. Taller,
-       because the account screen is a page rather than four fields, and it
-       scrolls inside itself so the panel never runs off the picture. -->
-  <div class="pm-account-backdrop"
-       role="button" tabindex="-1" aria-label="Close account"
-       onclick={closeAccount}
-       onkeydown={e => { if (e.key === 'Escape') closeAccount(); }}></div>
-  <div class="pm-account-panel" role="dialog" aria-modal="true" aria-label="Account">
+  <!-- The New Project form's twin: a surface over the photograph, in place of
+       the menu rather than on top of it. No scrim — the picture is the screen's
+       backdrop already, and dimming it made this panel a different kind of
+       object from the one it is meant to match. Taller, because the account
+       screen is a page rather than four fields, and it scrolls inside itself so
+       it never runs off the picture. -->
+  <div class="pm-account-panel" role="dialog" aria-modal="true" aria-label="Account"
+       transition:panelFade>
     <Account onBack={closeAccount} />
   </div>
 {/if}
