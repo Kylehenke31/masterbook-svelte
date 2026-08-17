@@ -7150,6 +7150,13 @@ tr:hover .cse-row-del { opacity: 0.6; }
   margin-bottom: 6px;
 }
 
+/* A blank line between the projects and everything under them. The rows are
+   what you came for; New Project, Archive and Account are what you do instead.
+   The menu's own 18px gap spaces items of one kind — this separates two kinds. */
+.pm-rows + .pm-link {
+  margin-top: 18px;
+}
+
 .pm-row {
   position: relative;
   display: flex;
