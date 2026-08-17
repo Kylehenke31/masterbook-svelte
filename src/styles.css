@@ -7654,3 +7654,13 @@ tr:hover .cse-row-del { opacity: 0.6; }
   from { opacity: 0; }
   to   { opacity: 1; }
 }
+
+/* ── Crew print menu ──
+   Fixed, not absolute. The crew toolbar scrolls horizontally so the last
+   buttons stay reachable on a narrow window, and a box that clips one axis
+   clips the other — an absolutely positioned menu was cut off at the toolbar's
+   bottom edge. Coordinates come from the button, in CrewList. */
+.crew-print-menu {
+  position: fixed;
+  z-index: 1300;
+}

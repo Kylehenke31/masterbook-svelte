@@ -128,6 +128,27 @@
 
   /** Which document to print is now a choice, so the button carries a menu. */
   let printMenuOpen = $state(false);
+  let printMenuBtn  = null;
+
+  /**
+   * The menu is fixed and placed by hand because the toolbar scrolls
+   * horizontally — and a box that clips one axis clips the other, so a menu
+   * parented to the button was cut off at the toolbar's bottom edge.
+   *
+   * Placed by an action rather than from stored coordinates so it can measure
+   * itself. Positioning against an assumed width put it 20px off and hanging
+   * over the right edge of the window, because the menu is as wide as its
+   * longest item and not whatever number was written here.
+   */
+  function placePrintMenu(node) {
+    const r = printMenuBtn?.getBoundingClientRect();
+    if (!r) return;
+    const w = node.offsetWidth;
+    // Right-aligned to the button, then pulled back off the window edge: this
+    // is the last control on the bar, so a left-aligned menu runs off-screen.
+    node.style.left = Math.max(8, Math.min(r.right - w, window.innerWidth - w - 8)) + 'px';
+    node.style.top  = Math.round(r.bottom + 4) + 'px';
+  }
 
   /* ── Load ── */
   (function _load() {
@@ -948,7 +969,11 @@ ${mode === 'roster' ? '' : gridPagesHTML(esc)}
       <div class="bud-menu-wrap">
         <button class="btn btn--ghost btn--sm bud-icon-btn" title="Print"
           aria-haspopup="menu" aria-expanded={printMenuOpen}
-          onclick={e => { e.stopPropagation(); printMenuOpen = !printMenuOpen; }}>
+          onclick={e => {
+            e.stopPropagation();
+            printMenuBtn = e.currentTarget;
+            printMenuOpen = !printMenuOpen;
+          }}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
             stroke-linecap="round" stroke-linejoin="round" width="15" height="15" aria-hidden="true">
             <polyline points="6 9 6 2 18 2 18 9"/>
@@ -958,7 +983,7 @@ ${mode === 'roster' ? '' : gridPagesHTML(esc)}
           <span class="bud-caret" aria-hidden="true">▾</span>
         </button>
         {#if printMenuOpen}
-          <div class="bud-menu" role="menu">
+          <div class="bud-menu crew-print-menu" role="menu" use:placePrintMenu>
             <button class="bud-menu-item" role="menuitem"
               onclick={() => { printMenuOpen = false; exportCrewPdf('roster'); }}>Crew List</button>
             <button class="bud-menu-item" role="menuitem"
