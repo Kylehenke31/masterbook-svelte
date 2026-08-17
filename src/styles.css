@@ -41,6 +41,12 @@
 
 /* ── Dark theme (default) ── */
 [data-theme="dark"] {
+  /* Tells the browser which way round its own controls should be drawn. Without
+     it the native date-picker button is rendered for a light page — a dark
+     glyph on a dark field, invisible until you happen to click it. It also
+     fixes scrollbars and the select dropdown, which had the same problem
+     less visibly. */
+  color-scheme: dark;
   --bg-base:        #0d0d0f;
   --bg-surface:     #17171a;
   --bg-elevated:    #1f1f24;
@@ -92,6 +98,7 @@
 
 /* ── Light theme ── */
 [data-theme="light"] {
+  color-scheme: light;
   --bg-base:        #ffffff;
   --bg-surface:     #f7f7f8;
   --bg-elevated:    #ededf0;
@@ -1411,6 +1418,19 @@ a:hover {
   margin-bottom: 14px;
   padding-bottom: 8px;
   border-bottom: 1px solid var(--border-subtle);
+}
+
+/* The native date button sits inside the field, so it should read like the
+   text next to it rather than as full-strength browser chrome. color-scheme
+   above decides light or dark; this only settles its weight, and brightens it
+   on hover so it is clearly a control. */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  opacity: 0.65;
+  cursor: pointer;
+  transition: opacity var(--transition);
+}
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
 }
 
 /* ── Collapsible settings sections ──
@@ -7402,3 +7422,39 @@ tr:hover .cse-row-del { opacity: 0.6; }
   flex: 0 0 auto;
 }
 .preview-remove:hover { color: var(--red); border-color: var(--red); }
+
+/* ── Brief confirmation bubble ── */
+.bud-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  transform: translate(-50%, 12px);
+  z-index: 1400;
+  padding: 9px 16px;
+  font-size: 0.82rem;
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  /* Not clickable — it sits over the page and must never swallow a click
+     meant for the row that was just added. */
+  pointer-events: none;
+  transition: opacity var(--transition), transform var(--transition);
+}
+
+.bud-toast--on {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bud-toast { transition: opacity var(--transition); transform: translate(-50%, 0); }
+}
+
+/* Section name in the line-item detail header — context, not the title. */
+.bud-modal-sub {
+  font-weight: 400;
+  color: var(--text-muted);
+  margin-left: 6px;
+}

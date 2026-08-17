@@ -236,9 +236,12 @@
             checked={selectedDest === 'manual'}
             onchange={() => persistPlan({ destination: 'manual' })} />
           <span class="fp-option-body">
-            <span class="fp-option-title">Keep files myself</span>
+            <span class="fp-option-title">Don't file anything — download it to me</span>
             <span class="fp-option-note">
-              Committing downloads the document and stops there. Nothing is stored for you.
+              No job folder is used. Each document downloads to this computer when it is
+              committed, and filing it somewhere is up to you. Receipts and paperwork you
+              upload are still kept with their record either way — this only decides
+              whether a copy is filed into a folder.
             </span>
           </span>
         </label>

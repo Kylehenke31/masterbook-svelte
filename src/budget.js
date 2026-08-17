@@ -558,7 +558,9 @@ function _buildSectionRanges() {
 
 function _lineNumForRow(ranges, secId, rowIndex) {
   const r = ranges[secId];
-  if (!r) return { num: rowIndex + 1, isAdded: false };
+  // `display` on every branch — a caller reading it off this one got undefined,
+  // which is the same class of bug as the object that reached the title.
+  if (!r) return { num: rowIndex + 1, display: String(rowIndex + 1).padStart(4, '0'), isAdded: false };
   const natural = r.start + rowIndex;
   const isAdded = rowIndex >= r.slots;
   if (isAdded) {
@@ -1469,8 +1471,12 @@ function _openModal(secId, ri) {
   const isLabor = def.type === 'labor';
 
   // Find global line number
-  const lineMap = _buildGlobalLineMap();
-  const globalNum = lineMap[secId]?.[row.id] ?? (ri + 1);
+  /* _buildGlobalLineMap stores { display, isAdded } per row, not a number.
+     Passing the object to _fmt4 produced "DETAIL — [object Object]: Gaffer".
+     `display` is already padded, so it is used as-is rather than re-padded. */
+  const lineMap  = _buildGlobalLineMap();
+  const lineInfo = lineMap[secId]?.[row.id];
+  const lineNo   = lineInfo?.display ?? _fmt4(ri + 1);
 
   const colHeaders = isLabor
     ? `<th class="bud-sub-th">DESCRIPTION</th>
@@ -1511,7 +1517,7 @@ function _openModal(secId, ri) {
   overlay.innerHTML = `
     <div class="bud-modal" role="dialog" aria-modal="true">
       <div class="bud-modal-header">
-        <span class="bud-modal-title">DETAIL — ${_fmt4(globalNum)}: ${esc(row.description)}</span>
+        <span class="bud-modal-title">DETAIL — ${esc(lineNo)}${row.description ? ' · ' + esc(row.description) : ''} <span class="bud-modal-sub">${esc(_getSectionName(def))}</span></span>
         ${baseHrsSelect}
         <button class="bud-modal-close btn btn--ghost btn--sm" id="bud-modal-close">✕</button>
       </div>
@@ -1787,6 +1793,7 @@ function _attachListeners(lineMap) {
       const sec = btn.dataset.sec;
       _budget[sec].rows.push(_blankRow());
       _save(); _rerenderSection(sec);
+      _toast(`Row added to ${_getSectionName(_sections.find(d => d.id === sec)) || sec}`);
     });
   });
 
@@ -2349,6 +2356,7 @@ function _rerenderSection(sec) {
       const s = btn.dataset.sec;
       _budget[s].rows.push(_blankRow());
       _save(); _rerenderSection(s);
+      _toast(`Row added to ${_getSectionName(_sections.find(d => d.id === s)) || s}`);
     });
   });
   built.querySelectorAll('.bud-rate-input').forEach(inp => {
@@ -2775,6 +2783,34 @@ function _openTopSheetPrint(info, sections, budget) {
   if (w) { w.document.write(html); w.document.close(); }
 }
 
+
+
+/* ── Brief confirmation ───────────────────────────────────────────
+ * Adding a row appends it below the fold of a long section, so the click had
+ * no visible result and people pressed it again. This says it happened.
+ *
+ * One element reused rather than one per call: holding the button down
+ * produced a stack of identical bubbles, which is noisier than the silence it
+ * replaced. The timer restarts on each message instead.
+ */
+let _toastEl = null;
+let _toastTimer = 0;
+
+function _toast(message) {
+  if (!_toastEl || !document.body.contains(_toastEl)) {
+    _toastEl = document.createElement('div');
+    _toastEl.className = 'bud-toast';
+    // Announced to a screen reader without moving focus — polite, because a
+    // confirmation should not interrupt what is being typed.
+    _toastEl.setAttribute('role', 'status');
+    _toastEl.setAttribute('aria-live', 'polite');
+    document.body.appendChild(_toastEl);
+  }
+  _toastEl.textContent = message;
+  _toastEl.classList.add('bud-toast--on');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => _toastEl?.classList.remove('bud-toast--on'), 1800);
+}
 
 /* ── Overview toolbar plumbing ───────────────────────────────────
    The draft actions still live in BudgetVersionBar, which owns the modals and

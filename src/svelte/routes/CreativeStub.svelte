@@ -133,6 +133,16 @@
 </script>
 
 <div class="crs-wrap">
+  <!-- Header. This component stands in for six departments and had no way back
+       to Creative — the other two department screens have carried one all
+       along, so the way out depended on which department you happened to open.
+       Same markup and classes as CreativeCamera and CreativeLocations so the
+       three read identically. -->
+  <div class="crdept-header">
+    <a href="#creative" class="crdept-back">← Creative</a>
+    <h2 class="crdept-title">{deptLabel}</h2>
+  </div>
+
   <!-- Tab bar -->
   <div class="crs-tabs">
     <button class="crs-tab" class:crs-tab--active={activeTab === 'creative'}
@@ -325,6 +335,28 @@
 </div>
 
 <style>
+  /* Matches CreativeCamera and CreativeLocations, which have carried this
+     header all along — this component stands in for six departments and had
+     no way back to Creative, so the exit depended on which one you opened. */
+  .crdept-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+  .crdept-back {
+    font-size: 0.8rem;
+    color: var(--text-secondary, #888);
+    text-decoration: none;
+  }
+  .crdept-back:hover { color: var(--accent); }
+  .crdept-title {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--text-primary, #eee);
+    margin: 0;
+  }
+
   .crs-wrap {
     max-width: 1100px;
     padding: 24px 0;
