@@ -13,6 +13,15 @@
   import { getRegistry, saveRegistry, getActiveProjectId, setActiveProjectId } from '../stores/project.js';
   import { isDropboxConnected, startDropboxAuth, disconnectDropbox } from '../lib/dropbox.js';
 
+  /**
+   * Where the back arrow goes. Absent — the standalone #account route — it
+   * returns to the project menu by hash. The project menu passes its own, so
+   * the same screen can be shown there as a panel without navigating at all,
+   * which is the point: reaching your account from the menu should not put a
+   * project's sidebar within reach.
+   */
+  let { onBack = null } = $props();
+
   let profile   = $state(null);
   let name      = $state('');
   let nameMsg   = $state('');
@@ -123,8 +132,8 @@
   }
 </script>
 
-<section class="acct">
-  <button class="acct-back" onclick={() => { window.location.hash = '#home'; }} aria-label="Back to project menu">
+<section class="acct" class:acct--panel={!!onBack}>
+  <button class="acct-back" onclick={() => { onBack ? onBack() : (window.location.hash = '#home'); }} aria-label="Back to project menu">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="18" height="18">
       <polyline points="15 18 9 12 15 6"/>
     </svg>
@@ -233,6 +242,15 @@
     max-width: 520px;
     margin: 0 auto;
     padding: 28px 16px 60px;
+  }
+
+  /* Shown inside the project menu's panel, which is already the column and
+     already has a border. Declared here rather than in styles.css: a global
+     rule would tie with the scoped .acct above on specificity and be settled
+     by whichever stylesheet the bundler happened to emit second. */
+  .acct--panel {
+    max-width: none;
+    padding: 20px 20px 28px;
   }
 
   .acct-back {

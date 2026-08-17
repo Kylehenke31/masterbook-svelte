@@ -1,5 +1,6 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
+  import Account from './Account.svelte';
   import { hydrate } from '../../../src/data.js';
   import {
     getProject, saveProject,
@@ -16,6 +17,31 @@
   let _docCloseBound = false;
 
   let container;
+
+  /**
+   * The account screen, shown here as a panel rather than as the #account
+   * route.
+   *
+   * The route renders inside the app shell, which carries the project
+   * sidebar — so reaching your account from the project menu handed you a way
+   * into a project you had not opened. As a panel it stays on this screen and
+   * there is nothing else to click.
+   *
+   * The real Account component is rendered, not a copy of its markup. A second
+   * copy would be one to keep in step, and it would stop being a mirror the
+   * first time either was edited.
+   */
+  let accountOpen = $state(false);
+
+  /**
+   * Re-render on the way out. The menu behind the panel is built as HTML and
+   * does not react to anything, so leaving a project from inside the account
+   * screen would otherwise leave it still listed until the next navigation.
+   */
+  function closeAccount() {
+    accountOpen = false;
+    _render();
+  }
 
   function _esc(str) {
     return String(str ?? '')
@@ -234,7 +260,7 @@
     }
 
     c.querySelector('#pm-account')?.addEventListener('click', () => {
-      window.location.hash = '#account';
+      accountOpen = true;
     });
 
     // Open project → go to Purchase Log
@@ -470,6 +496,22 @@
 </script>
 
 <div bind:this={container} class="pm-root"></div>
+
+{#if accountOpen}
+  <!-- Same shape as the New Project form: a surface floating over the
+       photograph, centred, dismissed by Escape or by the backdrop. Taller,
+       because the account screen is a page rather than four fields, and it
+       scrolls inside itself so the panel never runs off the picture. -->
+  <div class="pm-account-backdrop"
+       role="button" tabindex="-1" aria-label="Close account"
+       onclick={closeAccount}
+       onkeydown={e => { if (e.key === 'Escape') closeAccount(); }}></div>
+  <div class="pm-account-panel" role="dialog" aria-modal="true" aria-label="Account">
+    <Account onBack={closeAccount} />
+  </div>
+{/if}
+
+<svelte:window onkeydown={e => { if (accountOpen && e.key === 'Escape') closeAccount(); }} />
 
 <style>
   .pm-root {
