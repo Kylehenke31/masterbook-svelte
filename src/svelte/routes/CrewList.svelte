@@ -14,14 +14,29 @@
   const DEFAULT_WEEKS = 8;
   const HANDLE_W      = 10;
 
-  const LEFT_COLS = [
-    { key: 'position', label: 'POSITION', width: 100, frozen: true, left: HANDLE_W },
-    { key: 'name',     label: 'NAME',     width: 120, frozen: true, left: HANDLE_W + 100 },
-    { key: 'phone',    label: 'PHONE',    width: 96  },
-    { key: 'email',    label: 'EMAIL',    width: 148 },
-    { key: 'rate',     label: 'RATE',     width: 64  },
-    { key: 'kitFee',   label: 'KIT FEE',  width: 58  },
-  ];
+  /**
+   * Position is 132 because that is what the longest real job titles need.
+   * Measured at the table's own 10px: "Key Hair & Makeup Artist" is 112px of
+   * text and "Director of Photography" 106px, plus the cell's 8px of padding.
+   * At 100 the DP was being cut off, and it is not even the longest one.
+   *
+   * The sticky offsets are computed rather than written down. They used to be,
+   * and `left: HANDLE_W + 100` had to be edited by hand every time the column
+   * beside it changed width — miss it and the two frozen columns overlap.
+   */
+  const LEFT_COLS = (() => {
+    const cols = [
+      { key: 'position', label: 'POSITION', width: 132, frozen: true },
+      { key: 'name',     label: 'NAME',     width: 120, frozen: true },
+      { key: 'phone',    label: 'PHONE',    width: 96  },
+      { key: 'email',    label: 'EMAIL',    width: 148 },
+      { key: 'rate',     label: 'RATE',     width: 64  },
+      { key: 'kitFee',   label: 'KIT FEE',  width: 58  },
+    ];
+    let x = HANDLE_W;
+    for (const c of cols) if (c.frozen) { c.left = x; x += c.width; }
+    return cols;
+  })();
 
   const DEFAULT_CHECK_COLS = [
     { key: 'hired',           label: 'HIRED' },
