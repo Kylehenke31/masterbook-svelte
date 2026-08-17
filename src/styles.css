@@ -7182,6 +7182,10 @@ tr:hover .cse-row-del { opacity: 0.6; }
 .pm-open-project .pm-row-caret {
   color: #672121;
   opacity: 1;
+  /* Weight as well as colour. Dark red on a bright sky is legible but thin,
+     and the caret is a single character — the extra stroke is what makes it
+     read as marked rather than just differently coloured. */
+  font-weight: 700;
 }
 
 /* The highlight lands on the name alone, not the whole row — the row is the
