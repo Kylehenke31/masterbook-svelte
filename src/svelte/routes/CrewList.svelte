@@ -9,6 +9,7 @@
   const SCHED_KEY     = 'movie-ledger-crew-schedule';
   const DAYTYPES_KEY  = 'movie-ledger-crew-daytypes';
   const CHECKCOLS_KEY = 'movie-ledger-crew-checkcols';
+  const HIDDENCOLS_KEY = 'movie-ledger-crew-hiddencols';
   const DEFAULT_START = '2026-03-16';
   const DEFAULT_WEEKS = 8;
   const HANDLE_W      = 10;
@@ -95,6 +96,21 @@
   let dayTypes  = $state({});
   let checkCols = $state([...DEFAULT_CHECK_COLS]);
 
+  /**
+   * Left-hand columns the user has put away. Only the money ones can be
+   * hidden — a crew list with no Position or Name is not a crew list, and
+   * Phone and Email are the reason most people open this screen.
+   *
+   * Hiding rather than deleting: the values stay in the data and come back
+   * untouched, which matters because this is what gets shown in a room where
+   * not everyone should be reading rates.
+   */
+  const HIDEABLE = [
+    { key: 'rate',   label: 'Rate' },
+    { key: 'kitFee', label: 'Kit Fee' },
+  ];
+  let hiddenCols = $state([]);
+
   /* ── Load ── */
   (function _load() {
     try { data      = JSON.parse(localStorage.getItem(CREW_KEY))     || _defaultData();    } catch { data = _defaultData(); }
@@ -103,6 +119,10 @@
     try {
       const stored = JSON.parse(localStorage.getItem(CHECKCOLS_KEY));
       if (Array.isArray(stored)) checkCols = stored;
+    } catch {}
+    try {
+      const stored = JSON.parse(localStorage.getItem(HIDDENCOLS_KEY));
+      if (Array.isArray(stored)) hiddenCols = stored;
     } catch {}
     _ensureRequiredSections();
     _autoImportStaff();
@@ -148,12 +168,25 @@
     _notifyPersonnelChanged();
   }
 
+  function toggleHiddenCol(key) {
+    hiddenCols = hiddenCols.includes(key)
+      ? hiddenCols.filter(k => k !== key)
+      : [...hiddenCols, key];
+    localStorage.setItem(HIDDENCOLS_KEY, JSON.stringify(hiddenCols));
+  }
+
   function saveCheckCols() {
     localStorage.setItem(CHECKCOLS_KEY, JSON.stringify(checkCols));
     _notifyPersonnelChanged();
   }
 
   /* ── Derived ── */
+  // Every place that walks the left columns uses this rather than LEFT_COLS,
+  // so a hidden column disappears from the header, the rows, the section
+  // banners, keyboard navigation and copy/paste in one move. Missing one of
+  // those is how a hidden column ends up still reachable by Tab.
+  let visibleLeftCols = $derived(LEFT_COLS.filter(c => !hiddenCols.includes(c.key)));
+
   let dateCols = $derived.by(() => {
     const [sy, sm, sd] = _getStartDate().split('-').map(Number);
     const raw   = new Date(sy, sm - 1, sd);
@@ -369,6 +402,66 @@
     data[target.si].rows.splice(Math.max(0, Math.min(insertAt, data[target.si].rows.length)), 0, row);
   }
 
+  /* ── Department reordering ──
+     The rows are inside the section object, so moving a department is a single
+     splice of `data` and its people come with it — there is no separate list of
+     rows to keep in step. */
+  let secDragSi     = $state(null);   // department being dragged
+  let secDropSi     = $state(null);   // department it would land against
+  let secDropBelow  = $state(false);
+
+  function onSecDragDown(e, si) {
+    e.preventDefault();
+    secDragSi = si;
+    document.addEventListener('mousemove', onSecDragMove);
+    document.addEventListener('mouseup',   onSecDragEnd);
+  }
+
+  function onSecDragMove(e) {
+    if (secDragSi === null) return;
+    const el  = document.elementFromPoint(e.clientX, e.clientY);
+    // Anywhere in a department counts, not just its banner — aiming at a 26px
+    // header while dragging is fussy, and the rows below it are the same thing.
+    const row = el?.closest('.crew-sec-row, .crew-row');
+    if (!row) { secDropSi = null; return; }
+    const si = Number(row.dataset.secSi);
+    if (Number.isNaN(si) || si === secDragSi) { secDropSi = null; return; }
+    // Measured against the whole department, not the one row under the
+    // pointer. A department is many rows tall, and using the row's own midpoint
+    // meant the answer flipped between above and below as you moved down it.
+    const bounds = sectionBounds(si);
+    if (!bounds) { secDropSi = null; return; }
+    secDropSi    = si;
+    secDropBelow = e.clientY > bounds.top + bounds.height / 2;
+  }
+
+  /** Top and height of every row belonging to one department. */
+  function sectionBounds(si) {
+    const parts = document.querySelectorAll(`[data-sec-si="${si}"]`);
+    if (!parts.length) return null;
+    const first = parts[0].getBoundingClientRect();
+    const last  = parts[parts.length - 1].getBoundingClientRect();
+    return { top: first.top, height: last.bottom - first.top };
+  }
+
+  function onSecDragEnd() {
+    document.removeEventListener('mousemove', onSecDragMove);
+    document.removeEventListener('mouseup',   onSecDragEnd);
+    if (secDragSi !== null && secDropSi !== null) moveSection(secDragSi, secDropSi, secDropBelow);
+    secDragSi = secDropSi = null;
+    secDropBelow = false;
+  }
+
+  function moveSection(from, to, below) {
+    const [sec] = data.splice(from, 1);
+    // Removing the department shifts everything after it down by one, so a
+    // target past the old position has to come back by one to stay put.
+    let at = to > from ? to - 1 : to;
+    if (below) at += 1;
+    data.splice(Math.max(0, Math.min(at, data.length)), 0, sec);
+    save();
+  }
+
   /* ── Cell selection ── */
   let anchorCell  = null;
   let focusCell   = null;
@@ -406,7 +499,7 @@
   }
 
   function getTextColKeys() {
-    return [...LEFT_COLS.map(c=>c.key), ...rightCols.filter(c=>!c.check&&!c.computed).map(c=>c.key)];
+    return [...visibleLeftCols.map(c=>c.key), ...rightCols.filter(c=>!c.check&&!c.computed).map(c=>c.key)];
   }
 
   function cellAt(si, ri, col) {
@@ -451,12 +544,48 @@
       if (below) { below.focus(); selectAll(below); }
     } else if (e.key === 'Escape') {
       e.target.blur();
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      // Only at the ends of the text. In the middle of a word the arrow keys
+      // belong to the caret — jumping cells there would make a cell you cannot
+      // edit without the mouse.
+      if (!atTextEdge(e.target, e.key === 'ArrowLeft' ? 'start' : 'end')) return;
+      const next = e.key === 'ArrowLeft'
+        ? prevCell(si, ri, ci, keys)
+        : nextCell(si, ri, ci, keys);
+      if (next) { e.preventDefault(); next.focus(); selectAll(next); }
     } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
       const next = e.key === 'ArrowUp'
         ? (cellAt(si,ri-1,col) ?? cellAt(si-1,(data[si-1]?.rows.length??1)-1,col))
         : (cellAt(si,ri+1,col) ?? cellAt(si+1,0,col));
       if (next) { e.preventDefault(); next.focus(); selectAll(next); }
     }
+  }
+
+  /**
+   * Is the caret at the very start or end of this cell's text?
+   *
+   * A selection counts as being at both ends, so arriving in a cell with its
+   * contents selected — which is what every other move here does — lets you
+   * carry straight on in either direction without an extra keypress.
+   */
+  function atTextEdge(el, which) {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return true;
+    const range = sel.getRangeAt(0);
+    if (!el.contains(range.commonAncestorContainer)) return true;
+    const len = el.textContent.length;
+    if (!range.collapsed) {
+      // Whole contents selected: treat as either edge.
+      const pre = range.cloneRange();
+      pre.selectNodeContents(el);
+      pre.setEnd(range.startContainer, range.startOffset);
+      return pre.toString().length === 0 && range.toString().length === len;
+    }
+    const pre = range.cloneRange();
+    pre.selectNodeContents(el);
+    pre.setEnd(range.startContainer, range.startOffset);
+    const offset = pre.toString().length;
+    return which === 'start' ? offset === 0 : offset === len;
   }
 
   function nextCell(si,ri,ci,keys) {
@@ -484,7 +613,9 @@
     if (!anchorCell) return;
     const ctrl = /mac/i.test(navigator.platform) ? e.metaKey : e.ctrlKey;
     if (ctrl && e.key === 'c') { e.preventDefault(); copySelection(); }
-    if (ctrl && e.key === 'v') { e.preventDefault(); pasteAtAnchor(); }
+    // Paste is deliberately not handled here. Cancelling the keystroke stops
+    // the browser ever firing a paste event, and the event is the only way to
+    // read the clipboard without asking the user for permission.
   }
 
   function copySelection() {
@@ -509,24 +640,64 @@
     navigator.clipboard.writeText(lines.join('\n')).catch(()=>{});
   }
 
-  async function pasteAtAnchor() {
-    if (!anchorCell) return;
-    let text; try { text = await navigator.clipboard.readText(); } catch { return; }
-    if (!text) return;
+  /**
+   * Paste into a cell, including a block copied out of a spreadsheet.
+   *
+   * On the paste event rather than on Cmd+V, because the event carries the
+   * clipboard with it. Reading the clipboard by API needs a permission the
+   * user has to grant and which fails silently when they have not — which is
+   * why pasting appeared to do nothing at all.
+   *
+   * Always plain text: the default would drop a spreadsheet's HTML into a
+   * contenteditable, styling and all.
+   */
+  function handleCellPaste(e, si, ri, col) {
+    const text = e.clipboardData?.getData('text/plain');
+    if (text == null) return;
+    e.preventDefault();
+
+    // Excel and Sheets end lines with \r\n, and leave a trailing newline on a
+    // block copy. Left in, the first gives every value an invisible carriage
+    // return and the second overwrites a row with blanks.
+    const grid = text
+      .replace(/\r\n?/g, '\n')
+      .replace(/\n+$/, '')
+      .split('\n')
+      .map(line => line.split('\t'));
+
+    // One value pasted into one cell is a plain edit, not a grid write — it
+    // should land at the caret like any other paste.
+    if (grid.length === 1 && grid[0].length === 1) {
+      document.execCommand('insertText', false, grid[0][0]);
+      return;
+    }
+
     const keys = getTextColKeys();
-    const aci  = keys.indexOf(anchorCell.col);
-    let si = anchorCell.si, ri = anchorCell.ri;
-    text.split('\n').forEach(rowStr => {
-      rowStr.split('\t').forEach((val, di) => {
-        const col = keys[aci+di]; if (!col || !data[si]) return;
-        while (data[si].rows.length <= ri) data[si].rows.push(_blankRow());
-        data[si].rows[ri][col] = val;
+    const ci   = keys.indexOf(col);
+    if (ci === -1) return;
+
+    // Before writing anything. blur() fires its handler synchronously, and that
+    // handler saves whatever text the cell is showing — which is still the old
+    // value, since the browser's own paste was cancelled. Blurring afterwards
+    // put that stale value straight back over the top-left cell of the paste.
+    e.target.blur();
+
+    let s2 = si, r2 = ri;
+    for (const cells of grid) {
+      if (!data[s2]) break;
+      while (data[s2].rows.length <= r2) data[s2].rows.push(_blankRow());
+      cells.forEach((val, di) => {
+        const key = keys[ci + di];
+        if (key) data[s2].rows[r2][key] = val;
       });
-      ri++;
-      if (ri >= (data[si]?.rows.length ?? 0) && si < data.length-1) { si++; ri = 0; }
-    });
+      r2++;
+      // Runs off the end of a department into the next one, rather than
+      // inventing rows past the end of the list.
+      if (r2 >= data[s2].rows.length && s2 < data.length - 1) { s2++; r2 = 0; }
+    }
     save();
   }
+
 
   /* ── Mount / cleanup ── */
   onMount(() => {
@@ -591,6 +762,13 @@
       <button class="btn btn--ghost btn--sm" onclick={reImportStaff}>↓ Re-import Staff</button>
       <button class="btn btn--ghost btn--sm" onclick={addSection}>+ Department</button>
       <button class="btn btn--ghost btn--sm" onclick={addCheckCol}>+ Column</button>
+      {#each HIDEABLE as h}
+        <button class="btn btn--ghost btn--sm"
+          title={hiddenCols.includes(h.key) ? `Show the ${h.label} column` : `Hide the ${h.label} column`}
+          onclick={() => toggleHiddenCol(h.key)}>
+          {hiddenCols.includes(h.key) ? 'Show' : 'Hide'} {h.label}
+        </button>
+      {/each}
       <button class="btn btn--ghost btn--sm" onclick={() => { numWeeks++; save(); }}>+ Week</button>
       <button class="btn btn--ghost btn--sm" onclick={() => { if (numWeeks > 1) { numWeeks--; save(); } }} disabled={numWeeks <= 1}>− Week</button>
     </div>
@@ -603,7 +781,7 @@
         <!-- Row 1: week groups -->
         <tr class="crew-header-row crew-header-row--weeks">
           <th class="crew-th crew-th--handle" rowspan="3"></th>
-          {#each LEFT_COLS as c}
+          {#each visibleLeftCols as c}
             <th class="crew-th crew-th--left" rowspan="3"
                 style="width:{c.width}px;min-width:{c.width}px;{c.frozen?`position:sticky;left:${c.left}px;z-index:30;`:''}">{c.label}</th>
           {/each}
@@ -662,8 +840,14 @@
       <tbody>
         {#each data as sec, si (sec.sectionId)}
           <!-- Section header row -->
-          <tr class="crew-sec-row">
-            <td class="crew-cell crew-cell--sticky crew-sec-handle" style="left:0;width:{HANDLE_W}px;"></td>
+          <tr class="crew-sec-row" data-sec-si={si}
+              class:crew-sec-row--dragging={secDragSi === si}
+              class:crew-sec-drop-above={secDropSi === si && !secDropBelow}
+              class:crew-sec-drop-below={secDropSi === si && secDropBelow}>
+            <td class="crew-cell crew-cell--sticky crew-sec-handle" style="left:0;width:{HANDLE_W}px;">
+              <span class="crew-handle-nub" title="Drag to reorder this department"
+                onmousedown={e => onSecDragDown(e, si)}>⠿</span>
+            </td>
             <td class="crew-cell crew-cell--sticky crew-sec-name-cell" colspan="2"
                 style="position:sticky;left:{HANDLE_W}px;z-index:2;">
               <span class="crew-sec-name" contenteditable="plaintext-only"
@@ -673,7 +857,7 @@
               <button class="btn btn--ghost btn--sm crew-add-row" title="Add row"
                 onclick={() => addRow(si)}>+</button>
             </td>
-            {#each LEFT_COLS.slice(2) as _}
+            {#each visibleLeftCols.slice(2) as _}
               <td class="crew-cell crew-sec-bg"></td>
             {/each}
             {#each dateCols as c}
@@ -694,7 +878,8 @@
           <!-- Data rows -->
           {#each sec.rows as row, ri (row.id)}
             {@const numDays = countDays(row)}
-            <tr class="crew-row" data-si={si} data-ri={ri} data-row-id={row.id}>
+            <tr class="crew-row" data-si={si} data-ri={ri} data-row-id={row.id}
+                data-sec-si={si}>
               <!-- Drag handle -->
               <td class="crew-cell crew-cell--sticky crew-cell--handle" style="left:0">
                 <span class="crew-handle-nub" title="Drag to reorder"
@@ -705,7 +890,7 @@
               </td>
 
               <!-- Left cols (contenteditable) -->
-              {#each LEFT_COLS as c}
+              {#each visibleLeftCols as c}
                 <td class="crew-cell crew-cell--left{c.frozen?' crew-cell--sticky':''}"
                     style={c.frozen?`position:sticky;left:${c.left}px;z-index:2;`:''}>
                   <div class="crew-cell-inner" contenteditable="plaintext-only"
@@ -727,6 +912,7 @@
                       }
                       handleCellKeydown(e, si, ri, c.key);
                     }}
+                    onpaste={e => handleCellPaste(e, si, ri, c.key)}
                     onmousedown={e => handleCellMouseDown(e, si, ri, c.key)}
                     onmouseover={e => handleCellMouseOver(e, si, ri, c.key)}
                   ></div>
@@ -763,6 +949,7 @@
                       use:cellText={row[c.key] ?? ''}
                       onblur={e => setCellValue(si, ri, c.key, e.target.textContent.trim())}
                       onkeydown={e => handleCellKeydown(e, si, ri, c.key)}
+                      onpaste={e => handleCellPaste(e, si, ri, c.key)}
                       onmousedown={e => handleCellMouseDown(e, si, ri, c.key)}
                       onmouseover={e => handleCellMouseOver(e, si, ri, c.key)}
                     ></div>
@@ -784,7 +971,7 @@
       <tfoot>
         <tr class="crew-total-row">
           <td class="crew-cell crew-cell--sticky" style="left:0;width:{HANDLE_W}px;"></td>
-          {#each LEFT_COLS as c, i}
+          {#each visibleLeftCols as c, i}
             <td class="crew-cell crew-cell--left{c.frozen?' crew-cell--sticky':''} crew-total-label"
                 style={c.frozen?`position:sticky;left:${c.left}px;z-index:2;`:''}>
               {i === 0 ? 'TOTAL' : ''}
