@@ -7458,3 +7458,114 @@ tr:hover .cse-row-del { opacity: 0.6; }
   color: var(--text-muted);
   margin-left: 6px;
 }
+
+/* ── Position suggestions (Crew List) ──
+   Fixed, because the crew grid scrolls both ways and clips its overflow — a
+   dropdown parented to a cell is cut off at the edge of the view. */
+.crew-suggest {
+  position: fixed;
+  z-index: 1300;
+  min-width: 180px;
+  max-width: 320px;
+  margin: 2px 0 0;
+  padding: 3px 0;
+  list-style: none;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.crew-suggest-item {
+  display: block;
+  width: 100%;
+  padding: 6px 12px;
+  text-align: left;
+  background: none;
+  border: 0;
+  font-family: inherit;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.crew-suggest-item:hover,
+.crew-suggest-item--on {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* ── Crew on a budget line ──
+   Who actually holds the position this line pays for. The card is hover-only
+   detail; the name itself carries the same text in a title attribute so touch
+   and screen readers are not left with nothing. */
+.bud-crew-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+  font-size: 0.8rem;
+}
+
+.bud-crew-label {
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.68rem;
+}
+
+.bud-crew-chip { position: relative; display: inline-block; }
+
+.bud-crew-name { color: var(--text-secondary); }
+
+.bud-crew-name--link {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px dotted currentColor;
+  cursor: pointer;
+}
+
+.bud-crew-name--link:hover { color: var(--text-primary); }
+
+.bud-crew-card {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 6px);
+  z-index: 40;
+  display: none;
+  min-width: 190px;
+  padding: 8px 10px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  white-space: nowrap;
+}
+
+.bud-crew-chip:hover .bud-crew-card,
+.bud-crew-chip:focus-within .bud-crew-card { display: block; }
+
+.bud-crew-card-name {
+  display: block;
+  color: var(--text-primary);
+  font-weight: 600;
+  margin-bottom: 3px;
+}
+
+.bud-crew-card-row {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+
+.bud-crew-card-hint {
+  display: block;
+  margin-top: 5px;
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  font-style: italic;
+}

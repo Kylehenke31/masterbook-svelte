@@ -17,12 +17,50 @@
   import { getPurchases } from '../../data.js';
   import { authUser, getDisplayName } from '../stores/auth.js';
   import { DRAFT_STATUSES } from '../lib/permissions.js';
+  import { MEMBERS_CACHE_KEY } from '../lib/db.js';
+
+  /**
+   * Whose book to show. Null — the ordinary case — means the signed-in user's.
+   * An id arrives from "#my-book?user=…", which is how an admin follows a
+   * crew member's name out of a budget line.
+   */
+  let { viewUserId = null, membership = null } = $props();
 
   const CARDS_KEY = 'movie-ledger-credit-cards';
 
   let user = $state(null);
   const unsubAuth = authUser.subscribe(u => { user = u; });
   onDestroy(() => unsubAuth());
+
+  /**
+   * Looking at someone else's book takes a grant; your own never does.
+   *
+   * Checked here rather than in the route guard because the route is the same
+   * either way — 'my-book' is always allowed, and it is the ?user= argument,
+   * not the screen, that needs permission. Owners and admins pass by role.
+   */
+  let mayViewOther = $derived(
+    membership?.role === 'owner' || membership?.role === 'admin' ||
+    !!membership?.permissions?.view_all_books);
+
+  /** Asked for someone else's book — whether or not that is allowed. */
+  let askedForOther = $derived(!!viewUserId && !!user && viewUserId !== user.id);
+  let refused       = $derived(askedForOther && !mayViewOther);
+
+  /**
+   * Every list on this page derives from this one id, so a refusal here is a
+   * refusal everywhere — there is no second place to remember to check.
+   */
+  let subjectId = $derived(askedForOther && mayViewOther ? viewUserId : (user?.id ?? null));
+  let viewingOther = $derived(!!subjectId && subjectId !== user?.id);
+
+  /** The name to show at the top when the book is not your own. */
+  let subjectName = $derived.by(() => {
+    if (!viewingOther) return user ? getDisplayName(user) : 'Not signed in';
+    let roster = [];
+    try { roster = JSON.parse(localStorage.getItem(MEMBERS_CACHE_KEY)) || []; } catch { /* none cached */ }
+    return roster.find(m => m.userId === subjectId)?.displayName || 'This member';
+  });
 
   let cards = $state([]);
   let purchases = $state([]);
@@ -41,7 +79,7 @@
   window.addEventListener('masterbook-purchases-loaded', onPurchasesLoaded);
   onDestroy(() => window.removeEventListener('masterbook-purchases-loaded', onPurchasesLoaded));
 
-  let myCards = $derived(user ? cards.filter(c => c.userId === user.id) : []);
+  let myCards = $derived(subjectId ? cards.filter(c => c.userId === subjectId) : []);
 
   /** Charges on a card assigned to me, whoever submitted them. */
   function chargesForCard(card) {
@@ -55,7 +93,7 @@
    * which is not a stable identifier.
    */
   let mySubmissions = $derived(
-    user ? purchases.filter(p => p.submittedByUserId === user.id) : []);
+    subjectId ? purchases.filter(p => p.submittedByUserId === subjectId) : []);
 
   // Drafts are not "awaiting review" — nobody is looking at them. They are the
   // author's unfinished work, and lumping them in with submitted items made
@@ -105,12 +143,16 @@
 <section class="mb-page">
   <header class="mb-header">
     <div>
-      <h2 class="mb-title">My Book</h2>
+      <h2 class="mb-title">{viewingOther ? `${subjectName}\u2019s Book` : 'My Book'}</h2>
       <p class="mb-subtitle">
-        {user ? getDisplayName(user) : 'Not signed in'}
+        {viewingOther ? 'Viewing as an administrator' : (user ? getDisplayName(user) : 'Not signed in')}
       </p>
     </div>
-    <button class="btn btn--primary btn--sm" onclick={() => goto('#submit')}>+ New Submission</button>
+    {#if viewingOther || refused}
+      <button class="btn btn--ghost btn--sm" onclick={() => goto('#my-book')}>Back to my book</button>
+    {:else}
+      <button class="btn btn--primary btn--sm" onclick={() => goto('#submit')}>+ New Submission</button>
+    {/if}
   </header>
 
   <!-- ══ My Cards ══ -->

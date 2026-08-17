@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { version as APP_VERSION } from '../../package.json';
-  import { currentRoute } from './stores/router.js';
+  import { currentRoute, routeParams } from './stores/router.js';
   import {
     projectStore, refreshProjectStore,
     getProject, migrateToMultiProject,
@@ -187,6 +187,9 @@
 
   /* ── Routing ── */
   let route = $state(null);
+  /** Extra hash arguments, e.g. ?user= when an admin opens someone's book. */
+  let params = $state({});
+  routeParams.subscribe(p => { params = p; });
   // Where to send the user back to when they finish (or abandon) a submission.
   let submitReturnRoute = 'log';
   currentRoute.subscribe(r => {
@@ -371,7 +374,13 @@
   }
 
   function resolveRoute() {
-    const hash = window.location.hash.slice(1);
+    const raw   = window.location.hash.slice(1);
+    // Guards compare against screen names, so the query has to come off first
+    // — otherwise "my-book?user=abc" matches nothing and every rule below
+    // treats a legitimate screen as an unknown one.
+    const qIdx  = raw.indexOf('?');
+    const hash  = qIdx === -1 ? raw : raw.slice(0, qIdx);
+    routeParams.set(qIdx === -1 ? {} : Object.fromEntries(new URLSearchParams(raw.slice(qIdx + 1))));
     const p    = getProject();
     const hasProject = !!p?.title && !p._archived;
 
@@ -384,7 +393,7 @@
     // redirect, not a fault — so in production it would be noise around the
     // lines that do mean something. Vite folds the branch away at build time.
     const bounce = (to, why) => {
-      if (import.meta.env.DEV) console.warn(`[route] "${hash || '(empty)'}" → ${to} — ${why}`);
+      if (import.meta.env.DEV) console.warn(`[route] "${raw || '(empty)'}" → ${to} — ${why}`);
       window.location.hash = to;
     };
 
@@ -822,7 +831,7 @@
     {:else if route === 'po-log'}
       <PurchaseOrdersLog />
     {:else if route === 'my-book'}
-      <MyBook />
+      <MyBook viewUserId={params.user ?? null} membership={myMembership} />
     {:else if route === 'members'}
       <ProjectMembers />
     {:else if route === 'credit-cards'}

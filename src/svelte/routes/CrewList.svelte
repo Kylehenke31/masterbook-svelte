@@ -1,5 +1,6 @@
 <script>
   import { onMount } from 'svelte';
+  import { getBudgetLineMap } from '../../budget.js';
 
   let { tab = 'crew', setTab = () => {} } = $props();
 
@@ -34,6 +35,59 @@
   ];
   const DAY_NAMES    = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
   const TYPE_CLASSES = ['crew-col--prep','crew-col--shoot','crew-col--wrap','crew-col--hold'];
+
+  /* ── Position suggestions ─────────────────────────────────────────
+   * Positions are typed into the crew list and separately into the budget as
+   * line descriptions. Typing them twice means they drift — "Gaffer" here and
+   * "Gaffer " or "Key Grip/Gaffer" there — and once they drift nothing can be
+   * matched between the two. Suggesting what the budget already calls things
+   * is what keeps a crew member and a budget line referring to each other.
+   *
+   * Read from the budget's own line map rather than a list kept in parallel,
+   * so a position renamed in the budget is what gets offered here.
+   */
+  let budgetPositions = $state([]);
+  let suggestFor  = $state(null);   // { si, ri } of the cell being typed into
+  let suggestList = $state([]);
+  let suggestAt   = $state({ x: 0, y: 0 });
+  let suggestIdx  = $state(0);
+
+  function loadBudgetPositions() {
+    try {
+      const seen = new Set();
+      for (const info of getBudgetLineMap().values()) {
+        const d = (info.description || '').trim();
+        if (d && !info.isFringeLine) seen.add(d);
+      }
+      budgetPositions = [...seen].sort((a, b) => a.localeCompare(b));
+    } catch { budgetPositions = []; }
+  }
+
+  function openSuggestions(el, si, ri) {
+    const typed = el.textContent.trim().toLowerCase();
+    // Nothing typed yet is not a prompt to list the entire budget at them.
+    if (!typed) { suggestFor = null; return; }
+    const hits = budgetPositions
+      .filter(p => p.toLowerCase().includes(typed) && p.toLowerCase() !== typed)
+      .slice(0, 8);
+    if (!hits.length) { suggestFor = null; return; }
+    const r = el.getBoundingClientRect();
+    suggestAt   = { x: Math.round(r.left), y: Math.round(r.bottom) };
+    suggestList = hits;
+    suggestIdx  = 0;
+    suggestFor  = { si, ri };
+  }
+
+  function applySuggestion(value) {
+    if (!suggestFor) return;
+    const { si, ri } = suggestFor;
+    setCellValue(si, ri, 'position', value);
+    suggestFor = null;
+    // Re-render so the cell shows the chosen text — the action that owns the
+    // cell's content only writes when the element is not focused.
+    const el = cellAt(si, ri, 'position');
+    if (el) { el.textContent = value; el.blur(); }
+  }
 
   /* ── State ── */
   let data      = $state([]);
@@ -476,6 +530,9 @@
 
   /* ── Mount / cleanup ── */
   onMount(() => {
+    // Read once on open. The budget is not being edited from this screen, so
+    // re-reading on every keystroke would parse the whole thing for nothing.
+    loadBudgetPositions();
     document.addEventListener('mouseup',  handleCellMouseUp);
     document.addEventListener('keydown',  handleGlobalKey);
     return () => {
@@ -654,8 +711,22 @@
                   <div class="crew-cell-inner" contenteditable="plaintext-only"
                     data-si={si} data-ri={ri} data-col={c.key}
                     use:cellText={c.key === 'phone' ? formatPhone(row[c.key] ?? '') : (row[c.key] ?? '')}
-                    onblur={e => setCellValue(si, ri, c.key, e.target.textContent.trim())}
-                    onkeydown={e => handleCellKeydown(e, si, ri, c.key)}
+                    oninput={e => { if (c.key === 'position') openSuggestions(e.target, si, ri); }}
+                    onblur={e => {
+                      setCellValue(si, ri, c.key, e.target.textContent.trim());
+                      // Closed on a timer so a click on a suggestion lands first —
+                      // blur fires before the click that caused it.
+                      if (c.key === 'position') setTimeout(() => { suggestFor = null; }, 150);
+                    }}
+                    onkeydown={e => {
+                      if (c.key === 'position' && suggestFor && suggestFor.si === si && suggestFor.ri === ri) {
+                        if (e.key === 'ArrowDown') { e.preventDefault(); suggestIdx = (suggestIdx + 1) % suggestList.length; return; }
+                        if (e.key === 'ArrowUp')   { e.preventDefault(); suggestIdx = (suggestIdx - 1 + suggestList.length) % suggestList.length; return; }
+                        if (e.key === 'Enter')     { e.preventDefault(); applySuggestion(suggestList[suggestIdx]); return; }
+                        if (e.key === 'Escape')    { suggestFor = null; return; }
+                      }
+                      handleCellKeydown(e, si, ri, c.key);
+                    }}
                     onmousedown={e => handleCellMouseDown(e, si, ri, c.key)}
                     onmouseover={e => handleCellMouseOver(e, si, ri, c.key)}
                   ></div>
@@ -734,6 +805,21 @@
     </table>
   </div>
 </div>
+
+<!-- Positions the budget already knows. Fixed rather than inside the table:
+     the crew grid scrolls in both directions and clips its overflow, so a
+     dropdown parented to a cell would be cut off at the edge of the view. -->
+{#if suggestFor && suggestList.length}
+  <ul class="crew-suggest" style="left:{suggestAt.x}px; top:{suggestAt.y}px;" role="listbox">
+    {#each suggestList as item, i}
+      <li>
+        <button type="button" class="crew-suggest-item" class:crew-suggest-item--on={i === suggestIdx}
+          role="option" aria-selected={i === suggestIdx}
+          onmousedown={e => { e.preventDefault(); applySuggestion(item); }}>{item}</button>
+      </li>
+    {/each}
+  </ul>
+{/if}
 
 <style>
   /* Scope the del-col button inside the vertical right header */

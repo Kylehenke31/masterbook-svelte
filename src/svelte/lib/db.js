@@ -368,6 +368,9 @@ export async function getMyProjectRole(projectId) {
  * the Crew List. These are people with a login and a set of permissions.
  */
 
+/** Where listMembersWithPermissions leaves its roster for synchronous readers. */
+export const MEMBERS_CACHE_KEY = 'masterbook-members-cache';
+
 /** Members with their grants, plus profile fields for display. */
 export async function listMembersWithPermissions(projectId) {
   if (!projectId) return [];
@@ -376,7 +379,7 @@ export async function listMembersWithPermissions(projectId) {
     .select('user_id, role, permissions, created_at, profiles ( display_name, email )')
     .eq('project_id', projectId);
   if (error) { console.warn('[db] listMembersWithPermissions error:', error.message); return []; }
-  return (data ?? []).map(r => ({
+  const out = (data ?? []).map(r => ({
     userId: r.user_id,
     role: r.role,
     permissions: r.permissions || {},
@@ -384,6 +387,14 @@ export async function listMembersWithPermissions(projectId) {
     email: r.profiles?.email || '',
     since: r.created_at,
   })).sort((a, b) => a.displayName.localeCompare(b.displayName));
+  // Budget print/detail code is plain synchronous DOM building outside the
+  // component tree — it cannot await this. Leaving the roster behind lets it
+  // answer "is this crew member also a member here" without a round trip.
+  try {
+    localStorage.setItem(MEMBERS_CACHE_KEY, JSON.stringify(
+      out.map(m => ({ userId: m.userId, email: m.email, displayName: m.displayName }))));
+  } catch { /* private mode, or full — the caller still gets its answer */ }
+  return out;
 }
 
 /** Invites that have not been claimed yet. Admin-visible only, per RLS. */

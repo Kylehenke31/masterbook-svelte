@@ -1522,6 +1522,7 @@ function _openModal(secId, ri) {
         <button class="bud-modal-close btn btn--ghost btn--sm" id="bud-modal-close">✕</button>
       </div>
       <div class="bud-modal-body">
+        ${_crewBlockHTML(row.description)}
         <table class="bud-subline-table">
           <thead><tr>${colHeaders}</tr></thead>
           <tbody id="bud-subline-tbody">${subRowsHTML}</tbody>
@@ -2784,6 +2785,73 @@ function _openTopSheetPrint(info, sections, budget) {
 }
 
 
+
+
+/* ── Who holds this position ──────────────────────────────────────
+ * The crew list and the budget both name positions. Matching them on that
+ * name is what lets a budget line say who is actually doing the job, without
+ * either side storing a reference to the other — a reference would have to be
+ * maintained on every rename, and renames are exactly what happens.
+ *
+ * Matched loosely on trimmed case, because "Gaffer" and "gaffer " are the
+ * same job. The Crew List suggests budget wording as you type to keep the two
+ * from drifting further than that.
+ */
+function _crewForPosition(position) {
+  const want = String(position || '').trim().toLowerCase();
+  if (!want) return [];
+  let sections = [];
+  try { sections = JSON.parse(localStorage.getItem('movie-ledger-crew')) || []; } catch { return []; }
+  const out = [];
+  for (const sec of sections) {
+    for (const row of sec?.rows ?? []) {
+      if (String(row?.position || '').trim().toLowerCase() !== want) continue;
+      const name = String(row?.name || '').trim();
+      if (!name) continue;
+      out.push({ name, phone: row.phone || '', email: row.email || '', section: sec.sectionName || '' });
+    }
+  }
+  return out;
+}
+
+/* A crew member opens their book only if they are also a member of the
+ * project — a crew row is a contact, not an account, and most crew never have
+ * one. Matched on email, the only thing the two records share. */
+function _bookLinkFor(email) {
+  const addr = String(email || '').trim().toLowerCase();
+  if (!addr) return null;
+  let members = [];
+  try { members = JSON.parse(localStorage.getItem('masterbook-members-cache')) || []; } catch { return null; }
+  const hit = members.find(m => String(m.email || '').trim().toLowerCase() === addr);
+  return hit?.userId || null;
+}
+
+function _crewBlockHTML(position) {
+  const people = _crewForPosition(position);
+  if (!people.length) return '';
+  const esc2 = v => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+  const chips = people.map(p => {
+    const uid = _bookLinkFor(p.email);
+    const contact = [p.phone, p.email].filter(Boolean).join(' · ') || 'No contact details on the crew list';
+    // The card is a title as well, so the information survives on touch and
+    // for a screen reader, where a hover card does not exist.
+    return `<span class="bud-crew-chip" title="${esc2(p.name)} — ${esc2(contact)}">
+      ${uid
+        ? `<a class="bud-crew-name bud-crew-name--link" href="#my-book?user=${esc2(uid)}">${esc2(p.name)}</a>`
+        : `<span class="bud-crew-name">${esc2(p.name)}</span>`}
+      <span class="bud-crew-card" aria-hidden="true">
+        <span class="bud-crew-card-name">${esc2(p.name)}</span>
+        ${p.section ? `<span class="bud-crew-card-row">${esc2(p.section)}</span>` : ''}
+        ${p.phone   ? `<span class="bud-crew-card-row">${esc2(p.phone)}</span>` : ''}
+        ${p.email   ? `<span class="bud-crew-card-row">${esc2(p.email)}</span>` : ''}
+        <span class="bud-crew-card-hint">${uid ? 'Click to open their book' : 'Not a project member — no book to open'}</span>
+      </span>
+    </span>`;
+  }).join('');
+  return `<div class="bud-crew-line">
+    <span class="bud-crew-label">On the crew list:</span>${chips}
+  </div>`;
+}
 
 /* ── Brief confirmation ───────────────────────────────────────────
  * Adding a row appends it below the fold of a long section, so the click had

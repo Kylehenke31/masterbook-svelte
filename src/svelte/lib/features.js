@@ -25,6 +25,13 @@ export const FEATURES = [
   { group: 'Accounting', key: 'insurance',       label: 'Insurance',       routes: ['insurance'] },
   { group: 'Accounting', key: 'files',           label: 'Files',           routes: ['files'] },
 
+  // Not a screen of its own — it widens My Book, which everyone already has,
+  // to cover other people's. Hence no `routes`: the route guard has nothing to
+  // gate, and the check lives where the other user's book is actually opened.
+  { group: 'Accounting', key: 'view_all_books',   label: "View Anyone's Book",
+    routes: [], financial: true,
+    help: 'See any member\u2019s cards and submissions, not only your own.' },
+
   // Creative is granted per department: a designer contributes to their own
   // and reads the others, which a single Creative grant cannot express.
   { group: 'Creative', key: 'creative_prod_design',  label: 'Production Design', routes: ['creative-prod-design'] },
