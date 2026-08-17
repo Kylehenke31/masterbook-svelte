@@ -1517,7 +1517,7 @@ function _openModal(secId, ri) {
   overlay.innerHTML = `
     <div class="bud-modal" role="dialog" aria-modal="true">
       <div class="bud-modal-header">
-        <span class="bud-modal-title">DETAIL — ${esc(lineNo)}${row.description ? ' · ' + esc(row.description) : ''} <span class="bud-modal-sub">${esc(_getSectionName(def))}</span></span>
+        <span class="bud-modal-title">${esc(lineNo)}${row.description ? ' · ' + esc(row.description) : ''} <span class="bud-modal-sub">${esc(_getSectionName(def))}</span></span>
         ${baseHrsSelect}
         <button class="bud-modal-close btn btn--ghost btn--sm" id="bud-modal-close">✕</button>
       </div>
@@ -1533,7 +1533,6 @@ function _openModal(secId, ri) {
         <div class="bud-modal-footer-info">
           <span class="bud-modal-subtotal-label">Sub-Line Total:</span>
           <span class="bud-modal-subtotal-val" id="bud-modal-subtotal">${_fmt(subTotal)}</span>
-          <span class="bud-modal-footnote">This total will be used as the Bid Total for this line on the main budget.</span>
         </div>
         <button class="btn btn--primary" id="bud-modal-save">Save &amp; Close</button>
       </div>
@@ -1581,6 +1580,29 @@ function _attachModalListeners(overlay, secId, ri, isLabor) {
     _updateSummaryRow(secId);
     _updateGrandTotals();
   }
+
+  /* The contact card is positioned here rather than in CSS because it has to
+   * escape two ancestors that clip: the modal body scrolls, and the modal
+   * itself is overflow:hidden. Only a fixed element gets out of both, and a
+   * fixed element cannot be placed relative to its trigger in CSS alone. */
+  overlay.addEventListener('mouseover', e => {
+    const chip = e.target.closest?.('.bud-crew-chip');
+    if (!chip) return;
+    const card = chip.querySelector('.bud-crew-card');
+    if (!card) return;
+    const r = chip.getBoundingClientRect();
+    // Measure while shown, otherwise display:none reports zero.
+    card.style.visibility = 'hidden';
+    card.style.display    = 'block';
+    const cw = card.offsetWidth, ch = card.offsetHeight;
+    card.style.display    = '';
+    card.style.visibility = '';
+    // Flip above or nudge left when the card would run off the viewport —
+    // budget lines near the bottom of a long list are the common case.
+    const below = r.bottom + 6;
+    card.style.top  = (below + ch > window.innerHeight - 8 ? r.top - ch - 6 : below) + 'px';
+    card.style.left = Math.max(8, Math.min(r.left, window.innerWidth - cw - 8)) + 'px';
+  });
 
   overlay.querySelector('#bud-modal-close').addEventListener('click', closeModal);
   overlay.querySelector('#bud-modal-save').addEventListener('click', closeModal);
