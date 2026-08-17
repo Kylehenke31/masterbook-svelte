@@ -53,6 +53,7 @@
   import { loadProjectsFromCloud, ensureProjectInCloud } from './stores/project.js';
 
   let authState      = $state(null);   // mirrors authUser store
+
   let authIsLoading  = $state(true);   // mirrors authLoading store
 
   authUser.subscribe(u    => { authState     = u; });
@@ -214,6 +215,20 @@
   /* ── Project state (reactive via store) ── */
   let _project = $state(null);
   projectStore.subscribe(p => { _project = p; });
+  /**
+   * The name above the address in the profile menu.
+   *
+   * It used to fall back to the email, which printed the same address on both
+   * lines for anyone who had not set a name. The account's own display name
+   * comes first — this is the account menu, and defaultSubmitter is a
+   * project-scoped setting that can disagree with it. Last resort is the local
+   * part of the address, which at least is not what the line below already says.
+   */
+  let profileName = $derived(
+    authState?.user_metadata?.display_name
+    || _project?.defaultSubmitter
+    || authState?.email?.split('@')[0]
+    || 'User');
 
   /* ── Sync problems ── */
   // Deduplicated by table+kind: a section failing on every retry should read
@@ -709,7 +724,7 @@
       <div class="profile-wrap">
         {#if showDropdown}
           <div class="profile-dropdown" role="menu">
-            <div class="pd-user">{_project?.defaultSubmitter || authState?.email || 'User'}</div>
+            <div class="pd-user">{profileName}</div>
             <div class="pd-email">{authState?.email || ''}</div>
             <div class="pd-divider"></div>
             <!-- The heading is the way to the project menu. Creating a project
@@ -737,11 +752,6 @@
               {/each}
             </div>
             <div class="pd-divider"></div>
-            <button class="pd-action-btn" role="menuitem"
-              onclick={() => { closeDropdown(); window.location.hash = '#account'; }}>
-              Account Settings
-            </button>
-            <div class="pd-divider"></div>
             <!-- The project menu is otherwise only reachable by signing out or
                  by knowing the URL: the sidebar that used to lead there is
                  stripped on that screen, and nothing inside a project points
@@ -749,6 +759,11 @@
             <button class="pd-action-btn" role="menuitem"
               onclick={() => { closeDropdown(); window.location.hash = '#home'; }}>
               Top Menu
+            </button>
+            <div class="pd-divider"></div>
+            <button class="pd-action-btn" role="menuitem"
+              onclick={() => { closeDropdown(); window.location.hash = '#account'; }}>
+              Account Settings
             </button>
             <div class="pd-divider"></div>
             <button class="pd-action-btn pd-action-btn--signout" role="menuitem" onclick={handleSignOut}>

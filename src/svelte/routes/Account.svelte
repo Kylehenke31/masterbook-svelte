@@ -197,6 +197,24 @@
     {#if leaveMsg}<p class="acct-msg">{leaveMsg}</p>{/if}
   </div>
 
+  <!-- Subscription — a placeholder, deliberately inert.
+       The section exists so the shape of the account screen does not have to
+       change when billing arrives, and so nobody goes looking for it in
+       Project Settings. The control is disabled rather than absent: an empty
+       heading reads as broken, a disabled button reads as not yet. -->
+  <div class="acct-block">
+    <h3 class="acct-h">Subscription</h3>
+    <p class="acct-note">
+      Billing is not switched on. Everything is open while the app is being
+      tested, and nothing here will start charging without asking first.
+    </p>
+    <div class="acct-row">
+      <span class="acct-chip">Not billed</span>
+      <button class="btn btn--ghost btn--sm" disabled
+        title="Subscriptions are not available yet">Manage subscription</button>
+    </div>
+  </div>
+
   <!-- Appearance -->
   <div class="acct-block">
     <h3 class="acct-h">Appearance</h3>
