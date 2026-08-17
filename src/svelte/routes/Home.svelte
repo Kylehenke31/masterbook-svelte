@@ -43,7 +43,14 @@
   }
 
   function openAccount() {
-    fadeTargets().forEach(el => el.classList.add('pm-faded'));
+    fadeTargets().forEach(el => {
+      // Drop the return animation before asking for the fade-out. A filled
+      // animation outranks a plain class in the cascade, so while pm-fade-in
+      // is still on the element it pins opacity at 1 and pm-faded does
+      // nothing — the menu stayed lit on every open after the first.
+      el.classList.remove('pm-fade-in');
+      el.classList.add('pm-faded');
+    });
     accountOpen = true;
   }
 
@@ -59,7 +66,12 @@
   function closeAccount() {
     accountOpen = false;
     _render();
-    fadeTargets().forEach(el => el.classList.add('pm-fade-in'));
+    fadeTargets().forEach(el => {
+      el.classList.add('pm-fade-in');
+      // Self-clean, so the spent animation is not left holding the element's
+      // opacity against whatever asks for it next.
+      el.addEventListener('animationend', () => el.classList.remove('pm-fade-in'), { once: true });
+    });
   }
 
   /**
