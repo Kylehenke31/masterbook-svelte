@@ -1573,6 +1573,7 @@ function _attachModalListeners(overlay, secId, ri, isLabor) {
 
   function closeModal() {
     _save();
+    document.removeEventListener('keydown', onKey);
     overlay.remove();
     _modalOpen = null;
     // Rerender section to reflect subline changes
@@ -1580,6 +1581,21 @@ function _attachModalListeners(overlay, secId, ri, isLabor) {
     _updateSummaryRow(secId);
     _updateGrandTotals();
   }
+
+  /* Escape closes the window — but not while a cell is being edited. Those
+   * cells answer Escape by blurring, so the first press leaves the field and
+   * the second closes the modal. Closing on the first would throw away the
+   * edit the user was backing out of, which is the opposite of what Escape
+   * is for. */
+  const onKey = e => {
+    if (e.key !== 'Escape') return;
+    const t = e.target;
+    if (t && t !== document.body && overlay.contains(t) &&
+        (t.isContentEditable || t.matches?.('input, select, textarea'))) return;
+    e.stopPropagation();
+    closeModal();
+  };
+  document.addEventListener('keydown', onKey);
 
   /* The contact card is positioned here rather than in CSS because it has to
    * escape two ancestors that clip: the modal body scrolls, and the modal

@@ -7523,10 +7523,12 @@ tr:hover .cse-row-del { opacity: 0.6; }
 
 .bud-crew-name { color: var(--text-secondary); }
 
+/* Reads as a name, not a link. The card that appears on hover is what tells
+   you it is worth clicking, so the underline was only adding noise to a line
+   that is already dense with numbers. */
 .bud-crew-name--link {
-  color: var(--accent);
+  color: var(--text-secondary);
   text-decoration: none;
-  border-bottom: 1px dotted currentColor;
   cursor: pointer;
 }
 
