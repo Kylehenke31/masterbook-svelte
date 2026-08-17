@@ -126,6 +126,9 @@
   ];
   let hiddenCols = $state([]);
 
+  /** Which document to print is now a choice, so the button carries a menu. */
+  let printMenuOpen = $state(false);
+
   /* ── Load ── */
   (function _load() {
     try { data      = JSON.parse(localStorage.getItem(CREW_KEY))     || _defaultData();    } catch { data = _defaultData(); }
@@ -723,7 +726,7 @@
      Hidden columns stay hidden. Putting Rate back into the printout would
      defeat the reason for hiding it, which is having something you can hand
      round a room. */
-  function exportCrewPdf() {
+  function exportCrewPdf(mode = 'roster') {
     const esc = v => String(v ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     const proj  = _getProject();
     const title = [proj?.productionNumber, proj?.title].filter(Boolean).join('_') || 'Crew List';
@@ -747,7 +750,7 @@
     }).join('');
 
     const html = `<!doctype html><html><head><meta charset="utf-8">
-<title>${esc(title)} — Crew List</title>
+<title>${esc(title)} — ${mode === 'grid' ? 'Day Grid' : 'Crew List'}</title>
 <style>
   @page { size: letter landscape; margin: 0.4in; }
   * { box-sizing: border-box; }
@@ -764,13 +767,46 @@
   tr.sec td { font-weight: 700; font-size: 10px; letter-spacing: 0.05em;
               background: #eee; border-bottom: 1px solid #999; padding: 4px 6px; }
   tr { break-inside: avoid; }
+
+  /* Each chunk of weeks starts a new sheet. The very first one only skips the
+     break when the grid is the whole document — printed after the roster it
+     has to start its own sheet, or it lands under the contact table. */
+  section.page { break-before: page; }
+  ${mode === 'grid' ? 'section.page:first-of-type { break-before: auto; }' : ''}
+  h2 { font-size: 12px; margin: 0 0 6px; }
+
+  /* Sized to its columns rather than to the page. At width:100% a final page
+     holding two weeks instead of four stretched its days to double width, so
+     the last sheet did not match the ones before it. */
+  table.grid { table-layout: fixed; width: auto; }
+  table.grid th.nm, table.grid td.nm {
+    width: 125px; font-size: 9px; text-align: left;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  table.grid th.wk { font-size: 8px; text-align: center; border-bottom: 1px solid #999; }
+  table.grid th.d, table.grid td.d {
+    width: 26px; text-align: center; font-size: 8px; padding: 2px 0;
+    border-left: 1px solid #e4e4e4;
+  }
+  table.grid th.d { border-bottom: 1px solid #111; }
+  table.grid td.d { font-size: 9px; }
+  .dt { font-size: 7px; color: #666; }
+  /* Weekends and day types are tints rather than colours — this is a document
+     that gets photocopied. */
+  .we    { background: #f2f2f2; }
+  .t-prep  { background: #e9eef4; }
+  .t-shoot { background: #dfe7ef; }
+  .t-wrap  { background: #eeeae4; }
+  .t-hold  { background: #f0f0f0; }
 </style></head><body>
 <h1>${esc(title)}</h1>
-<p class="sub">Crew List &middot; ${esc(rangeLabel)}</p>
+<p class="sub">${mode === 'grid' ? 'Day Grid' : 'Crew List'} &middot; ${esc(rangeLabel)}</p>
+${mode === 'grid' ? '' : `
 <table>
   <thead><tr>${cols.map(c => `<th>${esc(c.label)}</th>`).join('')}</tr></thead>
   <tbody>${body || `<tr><td colspan="${cols.length}">No crew entered yet.</td></tr>`}</tbody>
-</table>
+</table>`}
+${mode === 'roster' ? '' : gridPagesHTML(esc)}
 <script>window.onload = () => { window.print(); }<\/script>
 </body></html>`;
 
@@ -778,14 +814,69 @@
     if (w) { w.document.write(html); w.document.close(); }
   }
 
+  /**
+   * The day grid, four weeks to a page.
+   *
+   * Landscape Letter leaves about 980px inside the margins; Position and Name
+   * take 250 of it, so roughly 26px a day column — 28 days fits, and cutting on
+   * a week boundary means no week is ever split across two sheets. Longer jobs
+   * simply run to more pages, which is what a wall calendar does too.
+   *
+   * Position and Name repeat on every page. Without them the later sheets are
+   * columns of dots against nothing.
+   */
+  function gridPagesHTML(esc) {
+    const DAYS_PER_PAGE = 28;
+    const pages = [];
+    for (let i = 0; i < dateCols.length; i += DAYS_PER_PAGE) {
+      const chunk = dateCols.slice(i, i + DAYS_PER_PAGE);
+      const weeks = [];
+      for (let w = 0; w < chunk.length; w += 7) {
+        const wk = chunk.slice(w, w + 7);
+        weeks.push({ span: wk.length, label: `WK ${wk[0].weekNum} · ${wk[0].shortDate}–${wk[wk.length-1].shortDate}` });
+      }
+
+      const body = data.map(sec => {
+        const rows = (sec.rows ?? []).filter(r => String(r.position ?? '').trim() || String(r.name ?? '').trim());
+        if (!rows.length) return '';
+        return `
+          <tr class="sec"><td colspan="${chunk.length + 2}">${esc(sec.sectionName)}</td></tr>
+          ${rows.map(r => `<tr>
+            <td class="nm">${esc(r.position)}</td>
+            <td class="nm">${esc(r.name)}</td>
+            ${chunk.map(c => `<td class="d${c.isWeekend ? ' we' : ''}${dayTypes[c.key] ? ' t-' + dayTypes[c.key] : ''}">${r[c.key] === '1' ? '●' : ''}</td>`).join('')}
+          </tr>`).join('')}`;
+      }).join('');
+
+      pages.push(`
+        <section class="page">
+          <h2>${esc(chunk[0].shortDate)} – ${esc(chunk[chunk.length-1].shortDate)}</h2>
+          <table class="grid">
+            <thead>
+              <tr><th class="nm" rowspan="3">POSITION</th><th class="nm" rowspan="3">NAME</th>
+                  ${weeks.map(w => `<th class="wk" colspan="${w.span}">${esc(w.label)}</th>`).join('')}</tr>
+              <tr>${chunk.map(c => `<th class="d${c.isWeekend ? ' we' : ''}">${(dayTypes[c.key] || '').charAt(0).toUpperCase()}</th>`).join('')}</tr>
+              <tr>${chunk.map(c => `<th class="d${c.isWeekend ? ' we' : ''}">${c.dayLetter}<br><span class="dt">${esc(c.shortDate)}</span></th>`).join('')}</tr>
+            </thead>
+            <tbody>${body}</tbody>
+          </table>
+        </section>`);
+    }
+    return pages.join('');
+  }
+
+  const closePrintMenu = () => { printMenuOpen = false; };
+
   /* ── Mount / cleanup ── */
   onMount(() => {
     // Read once on open. The budget is not being edited from this screen, so
     // re-reading on every keystroke would parse the whole thing for nothing.
     loadBudgetPositions();
+    document.addEventListener('click',    closePrintMenu);
     document.addEventListener('mouseup',  handleCellMouseUp);
     document.addEventListener('keydown',  handleGlobalKey);
     return () => {
+      document.removeEventListener('click',    closePrintMenu);
       document.removeEventListener('mouseup',  handleCellMouseUp);
       document.removeEventListener('keydown',  handleGlobalKey);
     };
@@ -850,16 +941,33 @@
       {/each}
       <button class="btn btn--ghost btn--sm" onclick={() => { numWeeks++; save(); }}>+ Week</button>
       <button class="btn btn--ghost btn--sm" onclick={() => { if (numWeeks > 1) { numWeeks--; save(); } }} disabled={numWeeks <= 1}>− Week</button>
-      <!-- Same mark as the budget's print button, so the one thing that makes a
-           PDF looks the same wherever you meet it. -->
-      <button class="btn btn--ghost btn--sm bud-icon-btn" title="Print crew list" onclick={exportCrewPdf}>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
-          stroke-linecap="round" stroke-linejoin="round" width="15" height="15" aria-hidden="true">
-          <polyline points="6 9 6 2 18 2 18 9"/>
-          <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
-          <rect x="6" y="14" width="12" height="8"/>
-        </svg>
-      </button>
+      <!-- Same mark and the same menu shape as the budget's print button, so the
+           one control that makes a PDF looks and behaves the same wherever you
+           meet it. Two documents now, so which one is a choice made before
+           pressing rather than after. -->
+      <div class="bud-menu-wrap">
+        <button class="btn btn--ghost btn--sm bud-icon-btn" title="Print"
+          aria-haspopup="menu" aria-expanded={printMenuOpen}
+          onclick={e => { e.stopPropagation(); printMenuOpen = !printMenuOpen; }}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+            stroke-linecap="round" stroke-linejoin="round" width="15" height="15" aria-hidden="true">
+            <polyline points="6 9 6 2 18 2 18 9"/>
+            <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+            <rect x="6" y="14" width="12" height="8"/>
+          </svg>
+          <span class="bud-caret" aria-hidden="true">▾</span>
+        </button>
+        {#if printMenuOpen}
+          <div class="bud-menu" role="menu">
+            <button class="bud-menu-item" role="menuitem"
+              onclick={() => { printMenuOpen = false; exportCrewPdf('roster'); }}>Crew List</button>
+            <button class="bud-menu-item" role="menuitem"
+              onclick={() => { printMenuOpen = false; exportCrewPdf('grid'); }}>Day Grid</button>
+            <button class="bud-menu-item" role="menuitem"
+              onclick={() => { printMenuOpen = false; exportCrewPdf('both'); }}>Both</button>
+          </div>
+        {/if}
+      </div>
     </div>
   </div>
 
