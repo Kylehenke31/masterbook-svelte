@@ -1,8 +1,6 @@
 <script>
   import { onMount } from 'svelte';
   import { getBudgetLineMap } from '../../budget.js';
-  import { listMembersWithPermissions } from '../lib/db.js';
-  import { getActiveProjectId } from '../stores/project.js';
 
   let { tab = 'crew', setTab = () => {} } = $props();
 
@@ -12,9 +10,6 @@
   const DAYTYPES_KEY  = 'movie-ledger-crew-daytypes';
   const CHECKCOLS_KEY = 'movie-ledger-crew-checkcols';
   const HIDDENCOLS_KEY = 'movie-ledger-crew-hiddencols';
-  // Who has already been placed on the grid from the member list. Without it,
-  // a row a coordinator deliberately deleted would come back on the next visit.
-  const IMPORTED_KEY  = 'movie-ledger-crew-imported';
   const DEFAULT_START = '2026-03-16';
   const DEFAULT_WEEKS = 8;
   const HANDLE_W      = 10;
@@ -311,103 +306,7 @@
     save();
   }
 
-  function reImportStaff() {
-    // Deliberate re-import: forget what was placed before, so anyone missing
-    // comes back. That is the whole point of pressing the button.
-    localStorage.removeItem(IMPORTED_KEY);
-    _autoImportStaff();
-    _importMembers(true);
-    save();
-  }
-
-  /* ── People who have joined the project ──
-     A member arrives with the four things a crew row needs: the position an
-     admin invited them as, and the name, address and number from their own
-     account. Typing those in again, from information the person already gave,
-     is the job this replaces. */
-
-  function _importedIds() {
-    try { return new Set(JSON.parse(localStorage.getItem(IMPORTED_KEY)) || []); } catch { return new Set(); }
-  }
-
-  /**
-   * Where a person with this title goes.
-   *
-   * A production has one Gaffer until the day it has two. The second does not
-   * replace the first — that would erase someone who worked on the job and
-   * whose details are still needed — so they get a row of their own directly
-   * beneath, and the department stays in one piece.
-   *
-   * An empty row already carrying the title is filled rather than pushed down;
-   * that row is a placeholder somebody made for exactly this person.
-   */
-  function _placeFor(position_) {
-    const want = String(position_ || '').trim().toLowerCase();
-    if (want) {
-      for (let si = 0; si < data.length; si++) {
-        const rows = data[si].rows ?? [];
-        const held = rows
-          .map((r, ri) => ({ ri, match: String(r.position || '').trim().toLowerCase() === want }))
-          .filter(x => x.match);
-        if (!held.length) continue;
-        // Adopt the spelling already on the grid. Matching ignores case and
-        // spacing, so "  gaffer " finds Gaffer — but storing it as typed would
-        // put two spellings of one job on the list, and the budget links crew
-        // to lines by exactly this string.
-        const canonical = String(rows[held[0].ri].position || '').trim();
-        const empty = held.find(x => !String(rows[x.ri].name || '').trim());
-        if (empty) return { si, ri: empty.ri, insert: false, position: canonical };
-        // Under the last one holding the title, not the first, so a third
-        // stand-in lands below the second rather than between them.
-        return { si, ri: held[held.length - 1].ri + 1, insert: true, position: canonical };
-      }
-    }
-    // No such title on the grid yet. PRODUCTION is where the staff import
-    // already puts people it has no better place for.
-    let si = data.findIndex(sec => sec.sectionName === 'PRODUCTION');
-    if (si === -1) si = 0;
-    const rows = data[si]?.rows ?? [];
-    const blank = rows.findIndex(r => !String(r.position || '').trim() && !String(r.name || '').trim());
-    const position = String(position_ || '').trim();
-    return blank !== -1
-      ? { si, ri: blank,        insert: false, position }
-      : { si, ri: rows.length,  insert: true,  position };
-  }
-
-  async function _importMembers(force = false) {
-    const pid = getActiveProjectId();
-    if (!pid) return;
-    let list = [];
-    try { list = await listMembersWithPermissions(pid); } catch { return; }
-    if (!list.length) return;
-
-    const done = force ? new Set() : _importedIds();
-    let changed = false;
-
-    for (const m of list) {
-      if (done.has(m.userId)) continue;
-      const email = String(m.email || '').trim().toLowerCase();
-      // Matched on address, not name: two people can share a name, and the
-      // address is what they signed in with.
-      const already = data.some(sec => (sec.rows ?? []).some(
-        r => String(r.email || '').trim().toLowerCase() === email && email));
-      done.add(m.userId);
-      changed = true;
-      if (already) continue;
-
-      const spot = _placeFor(m.position);
-      const row  = spot.insert ? _blankRow() : data[spot.si].rows[spot.ri];
-      row.position = spot.position || row.position || '';
-      row.name     = m.displayName || '';
-      row.email    = m.email || '';
-      row.phone    = m.phone || '';
-      if (spot.insert) data[spot.si].rows.splice(spot.ri, 0, row);
-    }
-
-    if (!changed) return;
-    localStorage.setItem(IMPORTED_KEY, JSON.stringify([...done]));
-    save();
-  }
+  function reImportStaff() { _autoImportStaff(); save(); }
 
   /* ── Helpers ── */
   function _iso(d) {
@@ -1011,9 +910,6 @@ ${mode === 'roster' ? '' : gridPagesHTML(esc)}
     // Read once on open. The budget is not being edited from this screen, so
     // re-reading on every keystroke would parse the whole thing for nothing.
     loadBudgetPositions();
-    // Anyone who has joined since the last visit gets a row. Not awaited: the
-    // grid should paint from local data rather than wait on the network.
-    _importMembers();
     document.addEventListener('click',    closePrintMenu);
     document.addEventListener('mouseup',  handleCellMouseUp);
     document.addEventListener('keydown',  handleGlobalKey);

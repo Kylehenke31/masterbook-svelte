@@ -296,7 +296,7 @@ export async function loadMyProfile() {
   if (!user) return null;
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, email, display_name, phone')
+    .select('id, email, display_name')
     .eq('id', user.id)
     .maybeSingle();
   if (error) { console.warn('[db] loadMyProfile error:', error.message); return null; }
@@ -311,30 +311,6 @@ export async function loadMyProfile() {
  * falls back to before profiles has loaded). Keeping them in step avoids the
  * UI showing two different names for the same person.
  */
-/**
- * Correct your own number.
- *
- * Separate from the display name because they fail differently: a name cannot
- * be empty, a number can be — someone clearing a wrong one is fixing it, not
- * breaking it. Written to both the profile and the auth metadata, the same as
- * the name, so the two do not drift.
- */
-export async function updateMyPhone(phone) {
-  const user = await getUser();
-  if (!user) return null;
-  const value = String(phone || '').trim() || null;
-
-  const { error } = await supabase
-    .from('profiles')
-    .update({ phone: value })
-    .eq('id', user.id);
-  if (error) throw new Error(error.message);
-
-  const { error: authErr } = await supabase.auth.updateUser({ data: { phone: value } });
-  if (authErr) console.warn('[db] updateMyPhone auth metadata error:', authErr.message);
-  return value;
-}
-
 export async function updateMyDisplayName(displayName) {
   const user = await getUser();
   if (!user) return null;
@@ -400,7 +376,7 @@ export async function listMembersWithPermissions(projectId) {
   if (!projectId) return [];
   const { data, error } = await supabase
     .from('project_members')
-    .select('user_id, role, permissions, position, created_at, profiles ( display_name, email, phone )')
+    .select('user_id, role, permissions, created_at, profiles ( display_name, email )')
     .eq('project_id', projectId);
   if (error) { console.warn('[db] listMembersWithPermissions error:', error.message); return []; }
   const out = (data ?? []).map(r => ({
@@ -409,8 +385,6 @@ export async function listMembersWithPermissions(projectId) {
     permissions: r.permissions || {},
     displayName: r.profiles?.display_name || r.profiles?.email?.split('@')[0] || 'Unknown',
     email: r.profiles?.email || '',
-    phone: r.profiles?.phone || '',
-    position: r.position || '',
     since: r.created_at,
   })).sort((a, b) => a.displayName.localeCompare(b.displayName));
   // Budget print/detail code is plain synchronous DOM building outside the
@@ -428,7 +402,7 @@ export async function listPendingInvites(projectId) {
   if (!projectId) return [];
   const { data, error } = await supabase
     .from('project_invites')
-    .select('id, email, role, permissions, position, created_at')
+    .select('id, email, role, permissions, created_at')
     .eq('project_id', projectId)
     .is('accepted_at', null)
     .order('created_at');
@@ -446,14 +420,13 @@ export async function listPendingInvites(projectId) {
  * Upserts on (project_id, email) so re-inviting someone revises the pending
  * invite instead of failing on the unique constraint.
  */
-export async function inviteMember(projectId, email, role, permissions, position = '') {
+export async function inviteMember(projectId, email, role, permissions) {
   const user = await getUser();
   const clean = String(email || '').trim().toLowerCase();
   if (!clean) throw new Error('An email address is required');
   const { error } = await supabase
     .from('project_invites')
     .upsert({ project_id: projectId, email: clean, role, permissions: permissions || {},
-              position: String(position || '').trim() || null,
               invited_by: user?.id ?? null, accepted_at: null },
             { onConflict: 'project_id,email' });
   if (error) throw new Error(`Could not create the invite: ${error.message}`);
@@ -465,13 +438,10 @@ export async function cancelInvite(inviteId) {
 }
 
 /** Change what an existing member can reach. Admin-only, enforced by RLS. */
-export async function updateMemberAccess(projectId, userId, role, permissions, position = null) {
+export async function updateMemberAccess(projectId, userId, role, permissions) {
   const { data, error } = await supabase
     .from('project_members')
-    .update({ role, permissions: permissions || {},
-              // null means "leave it alone" — this is also called from places
-              // that have no business changing someone's job title.
-              ...(position === null ? {} : { position: String(position).trim() || null }) })
+    .update({ role, permissions: permissions || {} })
     .eq('project_id', projectId).eq('user_id', userId)
     .select();
   if (error) throw new Error(`Could not update permissions: ${error.message}`);

@@ -31,14 +31,12 @@ export async function signIn(email, password) {
  * Supabase validates it server-side and refuses the signup if it does not hold
  * up — which is the only place a check like this means anything.
  */
-export async function signUp(email, password, displayName, phone, captchaToken) {
+export async function signUp(email, password, displayName, captchaToken) {
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
-      // Both land on raw_user_meta_data, which the handle_new_user trigger
-      // reads when it creates the profile row.
-      data: { display_name: displayName, phone },
+      data: { display_name: displayName },
       ...(captchaToken ? { captchaToken } : {}),
     },
   });
