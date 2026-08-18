@@ -9,7 +9,7 @@
   import { onMount } from 'svelte';
   import { supabase } from '../lib/supabase.js';
   import { authUser, signOut } from '../stores/auth.js';
-  import { loadMyProfile, updateMyDisplayName, leaveProject } from '../lib/db.js';
+  import { loadMyProfile, updateMyDisplayName, updateMyPhone, leaveProject } from '../lib/db.js';
   import { getRegistry, saveRegistry, getActiveProjectId, setActiveProjectId } from '../stores/project.js';
   import { isDropboxConnected, startDropboxAuth, disconnectDropbox } from '../lib/dropbox.js';
 
@@ -26,6 +26,9 @@
   let name      = $state('');
   let nameMsg   = $state('');
   let nameBusy  = $state(false);
+  let phone     = $state('');
+  let phoneBusy = $state(false);
+  let phoneMsg  = $state('');
 
   let pw1       = $state('');
   let pw2       = $state('');
@@ -45,10 +48,24 @@
   onMount(async () => {
     profile = await loadMyProfile();
     name = profile?.display_name || '';
+    phone = profile?.phone || '';
     theme = document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
     projects = getRegistry().filter(r => !r._archived);
     try { dropboxOk = await isDropboxConnected(); } catch { dropboxOk = false; }
   });
+
+  async function savePhone() {
+    phoneBusy = true; phoneMsg = '';
+    try {
+      await updateMyPhone(phone);
+      phoneMsg = 'Saved.';
+      setTimeout(() => { phoneMsg = ''; }, 2500);
+    } catch (e) {
+      phoneMsg = e.message || 'Could not save that.';
+    } finally {
+      phoneBusy = false;
+    }
+  }
 
   async function saveName() {
     nameBusy = true; nameMsg = '';
@@ -154,6 +171,20 @@
       </button>
     </div>
     {#if nameMsg}<p class="acct-msg">{nameMsg}</p>{/if}
+  </div>
+
+  <!-- Phone -->
+  <div class="acct-block">
+    <h3 class="acct-h">Your phone</h3>
+    <p class="acct-note">What shows against your name on the crew list of every project you are on.</p>
+    <div class="acct-row">
+      <input class="acct-input" type="tel" bind:value={phone} placeholder="(555) 555-0100"
+        onkeydown={e => { if (e.key === 'Enter') savePhone(); }} />
+      <button class="btn btn--primary btn--sm" onclick={savePhone} disabled={phoneBusy}>
+        {phoneBusy ? '…' : 'Save'}
+      </button>
+    </div>
+    {#if phoneMsg}<p class="acct-msg">{phoneMsg}</p>{/if}
   </div>
 
   <!-- Password -->

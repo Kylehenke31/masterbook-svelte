@@ -19,6 +19,7 @@
     listMembersWithPermissions, listPendingInvites, inviteMember, cancelInvite,
     updateMemberAccess, removeMember, getMyProjectRole,
   } from '../lib/db.js';
+  import { getBudgetLineMap } from '../../budget.js';
   import { FEATURES, ACCOUNTING_PRESET, levelFor } from '../lib/features.js';
 
   let members = $state([]);
@@ -31,7 +32,25 @@
 
   // The editor works on one target at a time: either a new invite, or an
   // existing member whose access is being revised.
-  let editing = $state(null);   // { kind: 'invite' | 'member', email, userId, name }
+  let editing = $state(null);   // { kind: 'invite' | 'member', email, userId, name, position }
+
+  /**
+   * Job titles already in this project's budget, offered as suggestions.
+   *
+   * Same source the Crew List types against, so a position set here matches
+   * the budget line it is paid from rather than being a second spelling of it.
+   */
+  let budgetPositions = $state([]);
+  function loadBudgetPositions() {
+    try {
+      const seen = new Set();
+      for (const info of getBudgetLineMap().values()) {
+        const d = (info.description || '').trim();
+        if (d && !info.isFringeLine) seen.add(d);
+      }
+      budgetPositions = [...seen].sort((a, b) => a.localeCompare(b));
+    } catch { budgetPositions = []; }
+  }
   let draftRole = $state('crew');
   let draftPerms = $state({});
 
@@ -45,6 +64,9 @@
   async function load() {
     loading = true;
     error = '';
+    // Read once per visit, beside the members. The budget is not being edited
+    // from this screen.
+    loadBudgetPositions();
     try {
       const pid = getActiveProjectId();
       myRole = await getMyProjectRole(pid);
@@ -67,7 +89,7 @@
   const LEVELS = [['', 'None', 'none'], ['read', 'View', 'read'], ['edit', 'Edit', 'edit']];
 
   function startInvite() {
-    editing = { kind: 'invite', email: '', userId: null, name: '' };
+    editing = { kind: 'invite', email: '', userId: null, name: '', position: '' };
     draftRole = 'crew';
     draftPerms = {};
     notice = '';
@@ -81,7 +103,8 @@
       const lvl = levelFor(m, f.key);
       if (lvl) resolved[f.key] = lvl;
     }
-    editing = { kind: 'member', email: m.email, userId: m.userId, name: m.displayName };
+    editing = { kind: 'member', email: m.email, userId: m.userId, name: m.displayName,
+                position: m.position || '' };
     draftRole = m.role;
     draftPerms = resolved;
     notice = '';
@@ -141,14 +164,14 @@
     try {
       const pid = getActiveProjectId();
       if (editing.kind === 'invite') {
-        await inviteMember(pid, editing.email, draftRole, draftPerms);
+        await inviteMember(pid, editing.email, draftRole, draftPerms, editing.position);
         // The invite row is the thing that grants access; the message is just
         // how the person finds out. Compose it straight away so the admin is
         // not left wondering what to do next.
         openShare({ email: editing.email, role: draftRole, permissions: draftPerms });
         notice = '';
       } else {
-        await updateMemberAccess(pid, editing.userId, draftRole, draftPerms);
+        await updateMemberAccess(pid, editing.userId, draftRole, draftPerms, editing.position);
         notice = `Updated ${editing.name}'s access.`;
       }
       editing = null;
@@ -253,6 +276,22 @@
         {:else}
           <p class="pm-hint" style="margin-bottom:14px">{editing.email}</p>
         {/if}
+
+        <!-- Free text with suggestions rather than a fixed list: productions
+             invent titles, and the budget is where this one's wording already
+             lives. Typing a new one is not an error. -->
+        <div class="pm-field">
+          <label for="pm-position">Position</label>
+          <input id="pm-position" class="pm-input" type="text" list="pm-position-options"
+            bind:value={editing.position} placeholder="Gaffer" />
+          <datalist id="pm-position-options">
+            {#each budgetPositions as p}<option value={p}></option>{/each}
+          </datalist>
+          <span class="pm-hint">
+            Puts them on the Crew List under this title, with the name and number
+            from their account.
+          </span>
+        </div>
 
         <div class="pm-presets">
           <span class="pm-presets-label">Start from</span>

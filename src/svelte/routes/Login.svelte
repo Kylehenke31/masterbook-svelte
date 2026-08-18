@@ -8,6 +8,7 @@
   let password  = $state('');
   let confirm   = $state('');
   let name      = $state('');
+  let phone     = $state('');
   let error     = $state('');
   let busy      = $state(false);
 
@@ -57,6 +58,11 @@
     if (!email.trim() || !password.trim()) { error = 'Email and password are required.'; return; }
     if (view === 'signup') {
       if (!name.trim()) { error = 'Display name is required.'; return; }
+      // Counted in digits, not characters: people write numbers with brackets,
+      // spaces, dashes and a country code, and all of those are fine.
+      if (phone.replace(/\D/g, '').length < 10) {
+        error = 'A phone number is required — it goes on the crew list.'; return;
+      }
       // Checked here rather than left to a mismatch on the next sign-in, which
       // is where a typed-twice-wrong password otherwise surfaces: locked out
       // of an account you just made, with no idea which of the two took.
@@ -68,7 +74,7 @@
       if (view === 'signin') {
         await signIn(email.trim(), password);
       } else {
-        await signUp(email.trim(), password, name.trim());
+        await signUp(email.trim(), password, name.trim(), phone.trim());
       }
       onSuccess();
     } catch (e) {
@@ -132,6 +138,19 @@
             placeholder="Your name"
             bind:value={name}
             autocomplete="name"
+            disabled={busy}
+          />
+        </div>
+        <!-- Required, because this is what the crew list needs and asking the
+             coordinator to chase it down later is the thing this replaces. -->
+        <div class="login-field">
+          <label for="login-phone">Phone</label>
+          <input
+            id="login-phone"
+            type="tel"
+            placeholder="(555) 555-0100"
+            bind:value={phone}
+            autocomplete="tel"
             disabled={busy}
           />
         </div>

@@ -20,6 +20,7 @@
   let authEmail  = $state('');
   let authPass   = $state('');
   let authName   = $state('');
+  let authPhone  = $state('');
   let authError  = $state('');
   let authBusy   = $state(false);
 
@@ -171,8 +172,14 @@
 
   async function handleSignUp() {
     authBusy = true; authError = '';
+    // Same requirement as the main sign-up screen. Without it this panel is a
+    // second way into the app that skips the number the crew list needs.
+    if (authPhone.replace(/\D/g, '').length < 10) {
+      authError = 'A phone number is required — it goes on the crew list.';
+      authBusy = false; return;
+    }
     try {
-      await signUp(authEmail, authPass, authName);
+      await signUp(authEmail, authPass, authName, authPhone.trim());
       authError = 'Check your email to confirm your account, then sign in.';
       authView = 'signin';
     } catch (e) {
@@ -251,6 +258,8 @@
         {#if authView === 'signup'}
           <input class="chat-auth-input" type="text" placeholder="Display name"
             bind:value={authName} />
+          <input class="chat-auth-input" type="tel" placeholder="Phone"
+            bind:value={authPhone} />
         {/if}
         <input class="chat-auth-input" type="email" placeholder="Email"
           bind:value={authEmail} onkeydown={e => e.key === 'Enter' && (authView === 'signin' ? handleSignIn() : handleSignUp())} />

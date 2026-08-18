@@ -71,6 +71,7 @@ export const SECTIONS = {
       'movie-ledger-cast-checkcols',
       'movie-ledger-crew-checkcols',
       'movie-ledger-crew-hiddencols',
+      'movie-ledger-crew-imported',
       'movie-ledger-personnel-tab',
       'movie-ledger-cast-v1-backup',
       'movie-ledger-auto-prep',
