@@ -28,6 +28,7 @@ export const PROJECT_DATA_KEYS = [
   'movie-ledger-hot-costs', 'movie-ledger-fringe-actuals',
   'movie-ledger-auto-prep', 'anthropic-api-key',
   'movie-ledger-creative', 'movie-ledger-crew-checkcols',
+  'movie-ledger-crew-hiddencols',
   'movie-ledger-budget-versions', 'movie-ledger-budget-commits',
   'movie-ledger-credit-cards', 'movie-ledger-cc-log-counters-v1',
   'movie-ledger-petty-cash-envelopes',

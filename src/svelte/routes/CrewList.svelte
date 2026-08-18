@@ -196,9 +196,24 @@
   }
 
   /* ── Save ── */
-  function _notifyPersonnelChanged() {
-    window.dispatchEvent(new CustomEvent('masterbook-section-changed', { detail: { section: 'personnel' } }));
+  /**
+   * This screen writes into two sections, not one.
+   *
+   * The crew grid is `personnel`, but the week count and the day types belong
+   * to `calendars` — the Calendar screen writes the same day-type key, and the
+   * cloud stores them by section. Announcing only `personnel` meant those two
+   * were saved locally and never pushed, so the next pull brought the old
+   * values back down over them. Weeks reverted to whatever they were when the
+   * project was created; a prep day held until something refreshed calendars.
+   */
+  function _notify(...sections) {
+    for (const section of sections) {
+      window.dispatchEvent(new CustomEvent('masterbook-section-changed', { detail: { section } }));
+    }
   }
+
+  /** save() touches the crew grid, the week count and the day types. */
+  const _notifyPersonnelChanged = () => _notify('personnel', 'calendars');
 
   function save() {
     localStorage.setItem(CREW_KEY,     JSON.stringify(data));
@@ -212,6 +227,8 @@
       ? hiddenCols.filter(k => k !== key)
       : [...hiddenCols, key];
     localStorage.setItem(HIDDENCOLS_KEY, JSON.stringify(hiddenCols));
+    // Personnel only — this key touches nothing the calendar owns.
+    _notify('personnel');
   }
 
   function saveCheckCols() {
